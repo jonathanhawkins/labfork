@@ -121,10 +121,19 @@ def main():
     model = CsmForConditionalGeneration.from_pretrained(
         model_path,
         trust_remote_code=True,
-        torch_dtype=torch.float32,
+        dtype=torch.float32,  # Use dtype instead of deprecated torch_dtype
     ).to(device)
 
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+
+    # Enable gradient checkpointing to save memory
+    if hasattr(model, 'gradient_checkpointing_enable'):
+        model.gradient_checkpointing_enable()
+        print('Gradient checkpointing enabled')
+    elif hasattr(model.backbone, 'gradient_checkpointing_enable'):
+        model.backbone.gradient_checkpointing_enable()
+        print('Backbone gradient checkpointing enabled')
+    sys.stdout.flush()
 
     # Freeze codec
     model.codec_model.eval()
@@ -158,12 +167,23 @@ def main():
         collate_fn=collate_fn, num_workers=num_workers
     )
 
-    # Optimizer
-    optimizer = AdamW(
-        [p for p in model.parameters() if p.requires_grad],
-        lr=config.get('learning_rate', 1e-5),
-        weight_decay=config.get('weight_decay', 0.01),
-    )
+    # Optimizer - try 8-bit Adam to save memory, fallback to regular AdamW
+    try:
+        import bitsandbytes as bnb
+        optimizer = bnb.optim.AdamW8bit(
+            [p for p in model.parameters() if p.requires_grad],
+            lr=config.get('learning_rate', 1e-5),
+            weight_decay=config.get('weight_decay', 0.01),
+        )
+        print('Using 8-bit AdamW optimizer')
+    except ImportError:
+        optimizer = AdamW(
+            [p for p in model.parameters() if p.requires_grad],
+            lr=config.get('learning_rate', 1e-5),
+            weight_decay=config.get('weight_decay', 0.01),
+        )
+        print('Using standard AdamW optimizer')
+    sys.stdout.flush()
 
     # Training loop
     num_epochs = config.get('num_epochs', 10)
@@ -202,30 +222,39 @@ def main():
 
         pbar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs}')
         for batch_idx, batch in enumerate(pbar):
+            print(f'  Batch {batch_idx}: loading data...', end='', flush=True)
+
             # Move to device
             batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
+            print(f' to GPU...', end='', flush=True)
 
             optimizer.zero_grad()
 
             try:
+                print(f' forward...', end='', flush=True)
                 outputs = model(**batch)
                 loss = outputs.loss
+                print(f' loss={loss.item() if loss else None}...', end='', flush=True)
 
                 if loss is None:
-                    print(f'Batch {batch_idx}: loss is None, skipping')
+                    print(f' SKIPPED (None)')
                     sys.stdout.flush()
                     continue
 
+                print(f' backward...', end='', flush=True)
                 loss.backward()
+                print(f' clip...', end='', flush=True)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config.get('max_grad_norm', 1.0))
+                print(f' step...', end='', flush=True)
                 optimizer.step()
 
                 total_train_loss += loss.item()
                 num_batches += 1
+                print(f' DONE')
                 pbar.set_postfix({'loss': f'{loss.item():.4f}'})
 
             except Exception as e:
-                print(f'Train error batch {batch_idx}: {e}')
+                print(f' ERROR: {e}')
                 sys.stdout.flush()
                 import traceback
                 traceback.print_exc()
