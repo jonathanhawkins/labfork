@@ -1,0 +1,35 @@
+# CSM Fine-Tuning Configuration - RTX 4090 (24GB VRAM)
+# Optimized for NVIDIA RTX 4090
+
+# Model
+model_path: "sesame/csm-1b"  # Will download from HuggingFace
+
+# Data
+data_dir: "../data/splits"
+max_audio_length_ms: 30000  # 30 second max clips
+
+# Training
+num_epochs: 50
+batch_size: 4
+gradient_accumulation: 4  # Effective batch size = 16
+learning_rate: 1.0e-5
+weight_decay: 0.01
+warmup_steps: 500
+max_grad_norm: 1.0
+
+# Memory optimization
+gradient_checkpointing: true
+precision: "fp16"  # Use fp16 for RTX cards
+
+# Hardware
+device: "cuda"
+num_workers: 4
+
+# Checkpointing
+output_dir: "../models/checkpoints/voice_v1"
+save_every: 5  # Save checkpoint every N epochs
+early_stopping_patience: 10
+
+# Logging
+use_wandb: false  # Set true if you have wandb installed
+log_every: 10  # Log every N steps

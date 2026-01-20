@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Clone Training Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+        }
+        
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .glass {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(71, 85, 105, 0.3);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #34d399 0%, #22d3ee 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+        
+        .pulse-ring::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            animation: pulse-ring 1.5s ease-out infinite;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white">
+    <div id="app">
+        <!-- Header -->
+        <header class="border-b border-slate-800/50 glass sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <h1 class="text-xl font-bold gradient-text">Voice Clone Training</h1>
+                        <span id="status-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                            <span>◌</span> Waiting
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="connection-dot" class="w-2 h-2 rounded-full bg-red-500"></span>
+                        <span id="connection-text" class="text-xs text-slate-500">Disconnected</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-6 py-8">
+            <!-- Loading State -->
+            <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+                <div class="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+                <p class="text-slate-400">Waiting for training to start...</p>
+                <p class="text-xs text-slate-600 mt-2 mono">
+                    python train_deepseek.py --config config/m4_pro_deepseek.yaml --dashboard
+                </p>
+            </div>
+
+            <!-- Dashboard Content (hidden initially) -->
+            <div id="dashboard-content" class="hidden space-y-6">
+                <!-- Progress Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Main Progress -->
+                    <div class="lg:col-span-2 glass rounded-2xl p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 class="text-lg font-semibold">Training Progress</h2>
+                                <p class="text-sm text-slate-400">
+                                    Epoch <span id="epoch">0</span> • Step <span id="step">0</span>
+                                </p>
+                            </div>
+                            <!-- Progress Ring -->
+                            <div class="relative w-16 h-16">
+                                <svg class="transform -rotate-90" width="64" height="64">
+                                    <circle class="text-slate-700" stroke-width="6" stroke="currentColor" fill="transparent" r="26" cx="32" cy="32"/>
+                                    <circle id="progress-ring" class="text-emerald-500 transition-all duration-300" stroke-width="6" stroke-dasharray="163.36" stroke-dashoffset="163.36" stroke-linecap="round" stroke="currentColor" fill="transparent" r="26" cx="32" cy="32"/>
+                                </svg>
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <span id="progress-percent" class="text-sm font-bold">0%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Epoch Progress Bar -->
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-400">Epoch Progress</span>
+                                <span id="epoch-progress-text" class="text-white font-medium">0%</span>
+                            </div>
+                            <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                <div id="epoch-progress-bar" class="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Time Stats -->
+                        <div class="grid grid-cols-2 gap-4 mt-6">
+                            <div>
+                                <span class="text-xs text-slate-500 uppercase tracking-wider">Elapsed</span>
+                                <p id="elapsed" class="text-lg font-semibold text-white">0s</p>
+                            </div>
+                            <div>
+                                <span class="text-xs text-slate-500 uppercase tracking-wider">ETA</span>
+                                <p id="eta" class="text-lg font-semibold text-white">--</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Key Metrics -->
+                    <div class="space-y-4">
+                        <div class="glass rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Train Loss</span>
+                                <span class="text-lg">📉</span>
+                            </div>
+                            <div class="flex items-end gap-2">
+                                <span id="train-loss" class="text-2xl font-bold text-white">0.0000</span>
+                            </div>
+                            <span class="text-xs text-slate-500 mt-1 block">Val: <span id="val-loss">0.0000</span></span>
+                        </div>
+                        
+                        <div class="glass rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Learning Rate</span>
+                                <span class="text-lg">📈</span>
+                            </div>
+                            <span id="learning-rate" class="text-2xl font-bold text-white mono">0.00e+0</span>
+                        </div>
+                        
+                        <div class="glass rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Speed</span>
+                                <span class="text-lg">⚡</span>
+                            </div>
+                            <span id="speed" class="text-2xl font-bold text-white">0.0/s</span>
+                            <span class="text-xs text-slate-500 mt-1 block">samples per second</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Loss Chart -->
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-4">Loss Over Time</h3>
+                        <div class="chart-container">
+                            <canvas id="loss-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Memory & LR -->
+                    <div class="space-y-6">
+                        <div class="glass rounded-2xl p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-semibold text-slate-300">Memory Usage</h3>
+                                <span id="memory-text" class="text-xs text-slate-500">0 / 64 GB</span>
+                            </div>
+                            <div class="chart-container" style="height: 100px;">
+                                <canvas id="memory-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="glass rounded-2xl p-6">
+                            <h3 class="text-sm font-semibold text-slate-300 mb-4">Learning Rate Schedule</h3>
+                            <div class="chart-container" style="height: 100px;">
+                                <canvas id="lr-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Row -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Training Stats -->
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-4">Training Stats</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-slate-400">Gradient Norm</span>
+                                <span id="grad-norm" class="text-sm font-medium text-white">0.0000</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-slate-400">MTP Loss</span>
+                                <span id="mtp-loss" class="text-sm font-medium text-white">0.0000</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-slate-400">Batch Size</span>
+                                <span class="text-sm font-medium text-white">12 × 2 = 24</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DeepSeek Techniques -->
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-4">DeepSeek Techniques</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <span class="text-sm text-slate-300">Multi-Token Prediction</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <span class="text-sm text-slate-300">DeepSeek LR Schedule</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <span class="text-sm text-slate-300">Gradient Checkpointing</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <span class="text-sm text-slate-300">torch.compile (MPS)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Errors & Warnings -->
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-4">Errors & Warnings</h3>
+                        <div id="errors-container" class="text-center py-4 text-slate-500">
+                            <span class="text-2xl">✓</span>
+                            <p class="mt-2 text-sm">No errors or warnings</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ============== Chart Setup ==============
+        
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#64748b', font: { size: 10 } }
+                },
+                y: {
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#64748b', font: { size: 10 } }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#94a3b8', font: { size: 11 } }
+                }
+            },
+            animation: {
+                duration: 300
+            }
+        };
+
+        // Loss Chart
+        const lossCtx = document.getElementById('loss-chart').getContext('2d');
+        const lossChart = new Chart(lossCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Train Loss',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Val Loss',
+                        data: [],
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: chartOptions
+        });
+
+        // Memory Chart
+        const memoryCtx = document.getElementById('memory-chart').getContext('2d');
+        const memoryChart = new Chart(memoryCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Memory (GB)',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                ...chartOptions,
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // LR Chart
+        const lrCtx = document.getElementById('lr-chart').getContext('2d');
+        const lrChart = new Chart(lrCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Learning Rate',
+                    data: [],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                ...chartOptions,
+                plugins: { legend: { display: false } },
+                scales: {
+                    ...chartOptions.scales,
+                    y: {
+                        ...chartOptions.scales.y,
+                        ticks: {
+                            ...chartOptions.scales.y.ticks,
+                            callback: (v) => v.toExponential(0)
+                        }
+                    }
+                }
+            }
+        });
+
+        // ============== Utility Functions ==============
+
+        function formatTime(seconds) {
+            if (seconds < 60) return `${Math.round(seconds)}s`;
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+            const hours = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${mins}m`;
+        }
+
+        function updateStatus(status) {
+            const badge = document.getElementById('status-badge');
+            const colors = {
+                initializing: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+                training: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                validating: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                saving: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                error: 'bg-red-500/20 text-red-400 border-red-500/30',
+                complete: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+            };
+            const icons = {
+                initializing: '◌',
+                training: '●',
+                validating: '◐',
+                saving: '↓',
+                error: '✕',
+                complete: '✓',
+            };
+            badge.className = `inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${colors[status] || colors.initializing}`;
+            badge.innerHTML = `<span class="${status === 'training' ? 'animate-pulse' : ''}">${icons[status] || '○'}</span> ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+        }
+
+        function updateDashboard(metrics) {
+            // Show dashboard, hide loading
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+
+            // Status
+            updateStatus(metrics.status);
+
+            // Progress
+            document.getElementById('epoch').textContent = metrics.epoch;
+            document.getElementById('step').textContent = metrics.step.toLocaleString();
+            
+            const epochProgress = metrics.epoch_progress * 100;
+            document.getElementById('epoch-progress-text').textContent = `${epochProgress.toFixed(1)}%`;
+            document.getElementById('epoch-progress-bar').style.width = `${epochProgress}%`;
+
+            // Total progress (assuming 50 epochs)
+            const totalProgress = ((metrics.epoch - 1 + metrics.epoch_progress) / 50) * 100;
+            const circumference = 26 * 2 * Math.PI;
+            const offset = circumference - (totalProgress / 100) * circumference;
+            document.getElementById('progress-ring').style.strokeDashoffset = offset;
+            document.getElementById('progress-percent').textContent = `${Math.round(totalProgress)}%`;
+
+            // Time
+            document.getElementById('elapsed').textContent = formatTime(metrics.elapsed_seconds);
+            document.getElementById('eta').textContent = formatTime(metrics.eta_seconds);
+
+            // Metrics
+            document.getElementById('train-loss').textContent = metrics.train_loss.toFixed(4);
+            document.getElementById('val-loss').textContent = metrics.val_loss.toFixed(4);
+            document.getElementById('learning-rate').textContent = metrics.learning_rate.toExponential(2);
+            document.getElementById('speed').textContent = `${metrics.samples_per_second.toFixed(1)}/s`;
+            document.getElementById('grad-norm').textContent = metrics.grad_norm.toFixed(4);
+            document.getElementById('mtp-loss').textContent = metrics.mtp_loss.toFixed(4);
+            document.getElementById('memory-text').textContent = `${metrics.memory_used_gb.toFixed(1)} / 64 GB`;
+
+            // Update charts
+            if (metrics.loss_history && metrics.loss_history.length > 0) {
+                lossChart.data.labels = metrics.loss_history.map(d => d.step);
+                lossChart.data.datasets[0].data = metrics.loss_history.map(d => d.train_loss);
+                lossChart.data.datasets[1].data = metrics.loss_history.map(d => d.val_loss);
+                lossChart.update('none');
+            }
+
+            if (metrics.memory_history && metrics.memory_history.length > 0) {
+                memoryChart.data.labels = metrics.memory_history.map(d => d.step);
+                memoryChart.data.datasets[0].data = metrics.memory_history.map(d => d.used);
+                memoryChart.update('none');
+            }
+
+            if (metrics.lr_history && metrics.lr_history.length > 0) {
+                lrChart.data.labels = metrics.lr_history.map(d => d.step);
+                lrChart.data.datasets[0].data = metrics.lr_history.map(d => d.lr);
+                lrChart.update('none');
+            }
+
+            // Errors
+            if (metrics.errors.length > 0 || metrics.warnings.length > 0) {
+                const container = document.getElementById('errors-container');
+                container.innerHTML = '';
+                metrics.errors.forEach(e => {
+                    container.innerHTML += `<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-xs text-left mb-2"><span class="text-red-400 font-medium">Error:</span> <span class="text-red-300">${e}</span></div>`;
+                });
+                metrics.warnings.forEach(w => {
+                    container.innerHTML += `<div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 text-xs text-left mb-2"><span class="text-yellow-400 font-medium">Warning:</span> <span class="text-yellow-300">${w}</span></div>`;
+                });
+            }
+        }
+
+        // ============== Connection ==============
+
+        let ws = null;
+        let reconnectTimeout = null;
+
+        function connect() {
+            ws = new WebSocket('ws://localhost:8001/ws');
+
+            ws.onopen = () => {
+                console.log('Connected to training API');
+                document.getElementById('connection-dot').className = 'w-2 h-2 rounded-full bg-emerald-500';
+                document.getElementById('connection-text').textContent = 'Live';
+            };
+
+            ws.onmessage = (event) => {
+                const metrics = JSON.parse(event.data);
+                updateDashboard(metrics);
+            };
+
+            ws.onclose = () => {
+                document.getElementById('connection-dot').className = 'w-2 h-2 rounded-full bg-red-500';
+                document.getElementById('connection-text').textContent = 'Disconnected';
+                reconnectTimeout = setTimeout(connect, 3000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+        }
+
+        // Fallback polling
+        async function pollMetrics() {
+            try {
+                const res = await fetch('http://localhost:8001/metrics');
+                if (res.ok) {
+                    const metrics = await res.json();
+                    updateDashboard(metrics);
+                }
+            } catch (e) {
+                // Silent fail
+            }
+        }
+
+        // Start connection
+        connect();
+        setInterval(pollMetrics, 2000);
+
+        // ============== Demo Mode ==============
+        
+        // Simulate data for demo
+        let demoStep = 0;
+        function simulateTraining() {
+            demoStep++;
+            const epoch = Math.floor(demoStep / 100) + 1;
+            const epochProgress = (demoStep % 100) / 100;
+            
+            const mockMetrics = {
+                step: demoStep,
+                epoch: epoch,
+                epoch_progress: epochProgress,
+                train_loss: 0.5 * Math.exp(-demoStep / 500) + 0.1 + Math.random() * 0.02,
+                val_loss: 0.5 * Math.exp(-demoStep / 500) + 0.12 + Math.random() * 0.03,
+                mtp_loss: 0.3 * Math.exp(-demoStep / 400) + 0.05,
+                learning_rate: 2e-5 * (demoStep < 50 ? demoStep / 50 : Math.cos(Math.PI * (demoStep - 50) / 950) * 0.45 + 0.55),
+                samples_per_second: 2.5 + Math.random() * 0.5,
+                memory_used_gb: 25 + Math.random() * 5,
+                memory_peak_gb: 32,
+                grad_norm: 0.5 + Math.random() * 0.3,
+                elapsed_seconds: demoStep * 2,
+                eta_seconds: (5000 - demoStep) * 2,
+                loss_history: [],
+                lr_history: [],
+                memory_history: [],
+                errors: [],
+                warnings: [],
+                status: 'training'
+            };
+
+            // Build history
+            for (let i = Math.max(0, demoStep - 100); i <= demoStep; i++) {
+                mockMetrics.loss_history.push({
+                    step: i,
+                    train_loss: 0.5 * Math.exp(-i / 500) + 0.1 + (Math.sin(i / 10) * 0.01),
+                    val_loss: 0.5 * Math.exp(-i / 500) + 0.12 + (Math.sin(i / 10) * 0.015)
+                });
+                mockMetrics.lr_history.push({
+                    step: i,
+                    lr: 2e-5 * (i < 50 ? i / 50 : Math.cos(Math.PI * (i - 50) / 950) * 0.45 + 0.55)
+                });
+                mockMetrics.memory_history.push({
+                    step: i,
+                    used: 25 + Math.sin(i / 20) * 3,
+                    peak: 32
+                });
+            }
+
+            updateDashboard(mockMetrics);
+        }
+
+        // Start demo mode after 5 seconds if no real connection
+        setTimeout(() => {
+            if (document.getElementById('loading-state').classList.contains('hidden') === false) {
+                console.log('Starting demo mode...');
+                setInterval(simulateTraining, 500);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

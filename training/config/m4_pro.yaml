@@ -1,0 +1,37 @@
+# CSM Fine-Tuning Configuration - M4 Pro (64GB Unified Memory)
+# Optimized for Apple Silicon with large unified memory
+
+# Model
+model_path: "sesame/csm-1b"  # Will download from HuggingFace
+
+# Data
+data_dir: "../data/splits"
+max_audio_length_ms: 30000  # 30 second max clips
+
+# Training
+# M4 Pro can handle larger batches due to 64GB unified memory
+num_epochs: 50
+batch_size: 8
+gradient_accumulation: 2  # Effective batch size = 16
+learning_rate: 1.0e-5
+weight_decay: 0.01
+warmup_steps: 500
+max_grad_norm: 1.0
+
+# Memory optimization
+# With 64GB, we don't need as much memory optimization
+gradient_checkpointing: false
+precision: "fp32"  # MPS works better with fp32
+
+# Hardware
+device: "mps"
+num_workers: 0  # MPS doesn't work well with multiprocessing
+
+# Checkpointing
+output_dir: "../models/checkpoints/voice_v1"
+save_every: 5
+early_stopping_patience: 10
+
+# Logging
+use_wandb: false
+log_every: 10

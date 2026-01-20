@@ -1,0 +1,29 @@
+# Voice Clone Pipeline - Backend Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core API
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+pydantic>=2.5.0
+
+# Audio Processing
+torch>=2.1.0
+torchaudio>=2.1.0
+librosa>=0.10.1
+soundfile>=0.12.1
+pydub>=0.25.1
+scipy>=1.11.0
+
+# Prosody Analysis
+parselmouth>=0.4.3
+
+# Transcription
+openai-whisper>=20231117
+
+# Semantic Analysis (Qwen2-Audio)
+transformers>=4.36.0
+accelerate>=0.25.0
+
+# Utilities
+numpy>=1.24.0
