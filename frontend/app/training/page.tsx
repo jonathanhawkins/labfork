@@ -60,7 +60,8 @@ interface DataSample {
 
 // ============== Utility Functions ==============
 
-function formatTime(seconds: number): string {
+function formatTime(seconds: number | undefined | null): string {
+  if (seconds === undefined || seconds === null || isNaN(seconds)) return "—";
   if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
   const hours = Math.floor(seconds / 3600);
@@ -68,8 +69,9 @@ function formatTime(seconds: number): string {
   return `${hours}h ${mins}m`;
 }
 
-function formatNumber(num: number, decimals: number = 2): string {
-  if (num < 0.001) return num.toExponential(decimals);
+function formatNumber(num: number | undefined | null, decimals: number = 2): string {
+  if (num === undefined || num === null || isNaN(num)) return "—";
+  if (num < 0.001 && num > 0) return num.toExponential(decimals);
   return num.toFixed(decimals);
 }
 
@@ -177,8 +179,8 @@ function ProgressRing({ progress, size = 80, strokeWidth = 6 }: { progress: numb
   );
 }
 
-function LossChart({ data }: { data: Array<{ step: number; train_loss: number; val_loss: number }> }) {
-  if (data.length < 2) {
+function LossChart({ data }: { data?: Array<{ step: number; train_loss: number; val_loss: number }> }) {
+  if (!data || data.length < 2) {
     return (
       <div className="h-64 flex items-center justify-center text-slate-500">
         Waiting for data...
@@ -242,8 +244,8 @@ function LossChart({ data }: { data: Array<{ step: number; train_loss: number; v
   );
 }
 
-function LearningRateChart({ data }: { data: Array<{ step: number; lr: number }> }) {
-  if (data.length < 2) return null;
+function LearningRateChart({ data }: { data?: Array<{ step: number; lr: number }> }) {
+  if (!data || data.length < 2) return null;
 
   return (
     <ResponsiveContainer width="100%" height={120}>
@@ -276,8 +278,8 @@ function LearningRateChart({ data }: { data: Array<{ step: number; lr: number }>
   );
 }
 
-function MemoryChart({ data }: { data: Array<{ step: number; used: number; peak: number }> }) {
-  if (data.length < 2) return null;
+function MemoryChart({ data }: { data?: Array<{ step: number; used: number; peak: number }> }) {
+  if (!data || data.length < 2) return null;
 
   return (
     <ResponsiveContainer width="100%" height={120}>
@@ -326,8 +328,10 @@ function MemoryChart({ data }: { data: Array<{ step: number; used: number; peak:
   );
 }
 
-function ErrorsPanel({ errors, warnings }: { errors: string[]; warnings: string[] }) {
-  if (errors.length === 0 && warnings.length === 0) {
+function ErrorsPanel({ errors, warnings }: { errors?: string[]; warnings?: string[] }) {
+  const errorList = errors || [];
+  const warningList = warnings || [];
+  if (errorList.length === 0 && warningList.length === 0) {
     return (
       <div className="text-center py-8 text-slate-500">
         <span className="text-2xl">✓</span>
@@ -338,13 +342,13 @@ function ErrorsPanel({ errors, warnings }: { errors: string[]; warnings: string[
 
   return (
     <div className="space-y-2 max-h-48 overflow-y-auto">
-      {errors.map((error, i) => (
+      {errorList.map((error, i) => (
         <div key={`error-${i}`} className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm">
           <span className="text-red-400 font-medium">Error: </span>
           <span className="text-red-300">{error}</span>
         </div>
       ))}
-      {warnings.map((warning, i) => (
+      {warningList.map((warning, i) => (
         <div key={`warn-${i}`} className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm">
           <span className="text-yellow-400 font-medium">Warning: </span>
           <span className="text-yellow-300">{warning}</span>
@@ -492,7 +496,9 @@ export default function TrainingDashboard() {
   // Connect to WebSocket
   useEffect(() => {
     const connect = () => {
-      const ws = new WebSocket(`ws://localhost:8001/ws`);
+      // Use env var or default to localhost
+      const apiHost = process.env.NEXT_PUBLIC_TRAINING_API || "localhost:8001";
+      const ws = new WebSocket(`ws://${apiHost}/ws`);
       
       ws.onopen = () => {
         console.log("Connected to training API");
@@ -555,26 +561,22 @@ export default function TrainingDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      {/* Header */}
-      <header className="border-b border-slate-800/50 backdrop-blur-sm bg-slate-900/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-                Voice Clone Training
-              </h1>
-              {metrics && <StatusBadge status={metrics.status} />}
-            </div>
-            <div className="flex items-center gap-3">
-              <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
-              <span className="text-xs text-slate-500">
-                {connected ? "Live" : "Disconnected"}
-              </span>
-            </div>
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Page Header with Status */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            {metrics && <StatusBadge status={metrics.status} />}
           </div>
+          <div className="flex items-center gap-3">
+            <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+            <span className="text-xs text-slate-500">
+              {connected ? "Live" : "Disconnected"}
+            </span>
+          </div>
+        </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 mt-4">
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6">
             {(["overview", "data", "logs"] as const).map((tab) => (
               <button
                 key={tab}
@@ -588,11 +590,7 @@ export default function TrainingDashboard() {
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
-          </div>
         </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-8">
         {!metrics ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4" />
@@ -797,7 +795,7 @@ export default function TrainingDashboard() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,19 +1,115 @@
 """
 CSM Fine-Tuning Script - Uses processor with output_labels=True
 Optimized for RTX 4090 and CSM model from HuggingFace
+With Dashboard API support for real-time monitoring
 """
 
 import argparse
 import json
 import torch
 import torchaudio
+import threading
+import queue
+import time
 from pathlib import Path
+from dataclasses import dataclass, asdict, field
+from typing import Dict, List, Any
+from datetime import datetime
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import AdamW
 from tqdm import tqdm
 import yaml
 import sys
 
+
+# ============== Metrics for Dashboard ==============
+
+@dataclass
+class TrainingMetrics:
+    """Real-time training metrics for dashboard."""
+    step: int = 0
+    epoch: int = 0
+    epoch_progress: float = 0.0
+    total_epochs: int = 50
+
+    # Losses
+    train_loss: float = 0.0
+    val_loss: float = 0.0
+
+    # Learning rate
+    learning_rate: float = 0.0
+
+    # Performance
+    samples_per_second: float = 0.0
+    batch_time: float = 0.0
+
+    # Memory
+    memory_used_gb: float = 0.0
+    memory_peak_gb: float = 0.0
+
+    # History for charts
+    loss_history: List[Dict[str, float]] = field(default_factory=list)
+    lr_history: List[Dict[str, float]] = field(default_factory=list)
+
+    # Status
+    status: str = "initializing"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+class MetricsLogger:
+    """Thread-safe metrics logger with WebSocket support."""
+
+    def __init__(self, max_history: int = 1000):
+        self.metrics = TrainingMetrics()
+        self.max_history = max_history
+        self.lock = threading.Lock()
+        self.subscribers: List[queue.Queue] = []
+
+    def update(self, **kwargs):
+        """Update metrics and notify subscribers."""
+        with self.lock:
+            for key, value in kwargs.items():
+                if hasattr(self.metrics, key):
+                    setattr(self.metrics, key, value)
+
+            # Add to history
+            if 'train_loss' in kwargs:
+                self.metrics.loss_history.append({
+                    'step': self.metrics.step,
+                    'epoch': self.metrics.epoch,
+                    'train_loss': self.metrics.train_loss,
+                    'val_loss': self.metrics.val_loss,
+                })
+                if len(self.metrics.loss_history) > self.max_history:
+                    self.metrics.loss_history.pop(0)
+
+            # Notify subscribers
+            data = self.metrics.to_dict()
+            for q in self.subscribers:
+                try:
+                    q.put_nowait(data)
+                except queue.Full:
+                    pass
+
+    def subscribe(self) -> queue.Queue:
+        q = queue.Queue(maxsize=100)
+        with self.lock:
+            self.subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: queue.Queue):
+        with self.lock:
+            if q in self.subscribers:
+                self.subscribers.remove(q)
+
+    def get_metrics(self) -> Dict[str, Any]:
+        with self.lock:
+            return self.metrics.to_dict()
+
+
+# ============== Dataset ==============
 
 class CSMDataset(Dataset):
     """Dataset that uses processor with output_labels=True."""
@@ -60,7 +156,6 @@ class CSMDataset(Dataset):
             conversation, tokenize=True, return_dict=True, output_labels=True
         )
 
-        # Store sequence length for collation
         inputs['seq_len'] = inputs['input_ids'].shape[-1]
         inputs['audio_len'] = len(audio)
 
@@ -73,7 +168,6 @@ def collate_fn(batch):
     max_audio_len = max(b['audio_len'] for b in batch)
     batch_size = len(batch)
 
-    # Pad tensors
     input_ids = torch.zeros(batch_size, max_seq_len, dtype=torch.long)
     attention_mask = torch.zeros(batch_size, max_seq_len, dtype=torch.long)
     labels = torch.full((batch_size, max_seq_len), -100, dtype=torch.long)
@@ -99,17 +193,60 @@ def collate_fn(batch):
     }
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='config/rtx_4090_deepseek.yaml')
-    args = parser.parse_args()
+# ============== Dashboard API ==============
 
-    with open(args.config) as f:
-        config = yaml.safe_load(f)
+def create_dashboard_api(logger: MetricsLogger):
+    """Create FastAPI server for training dashboard."""
+    from fastapi import FastAPI, WebSocket
+    from fastapi.middleware.cors import CORSMiddleware
 
+    app = FastAPI(title="CSM Training Dashboard API")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/metrics")
+    async def get_metrics():
+        return logger.get_metrics()
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        await websocket.accept()
+        q = logger.subscribe()
+        try:
+            while True:
+                try:
+                    data = q.get(timeout=1)
+                    await websocket.send_json(data)
+                except queue.Empty:
+                    # Send heartbeat
+                    await websocket.send_json(logger.get_metrics())
+        except Exception:
+            pass
+        finally:
+            logger.unsubscribe(q)
+
+    return app
+
+
+# ============== Training ==============
+
+def train(config, logger: MetricsLogger = None):
+    """Main training function."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}')
     sys.stdout.flush()
+
+    if logger:
+        logger.update(status="loading_model")
 
     # Load model
     from transformers import CsmForConditionalGeneration, AutoProcessor
@@ -121,12 +258,12 @@ def main():
     model = CsmForConditionalGeneration.from_pretrained(
         model_path,
         trust_remote_code=True,
-        dtype=torch.float32,  # Use dtype instead of deprecated torch_dtype
+        dtype=torch.float32,
     ).to(device)
 
     processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
 
-    # Enable gradient checkpointing to save memory
+    # Enable gradient checkpointing
     if hasattr(model, 'gradient_checkpointing_enable'):
         model.gradient_checkpointing_enable()
         print('Gradient checkpointing enabled')
@@ -167,36 +304,45 @@ def main():
         collate_fn=collate_fn, num_workers=num_workers
     )
 
-    # Optimizer - try 8-bit Adam to save memory, fallback to regular AdamW
+    # Optimizer
+    learning_rate = config.get('learning_rate', 1e-5)
     try:
         import bitsandbytes as bnb
         optimizer = bnb.optim.AdamW8bit(
             [p for p in model.parameters() if p.requires_grad],
-            lr=config.get('learning_rate', 1e-5),
+            lr=learning_rate,
             weight_decay=config.get('weight_decay', 0.01),
         )
         print('Using 8-bit AdamW optimizer')
     except ImportError:
         optimizer = AdamW(
             [p for p in model.parameters() if p.requires_grad],
-            lr=config.get('learning_rate', 1e-5),
+            lr=learning_rate,
             weight_decay=config.get('weight_decay', 0.01),
         )
         print('Using standard AdamW optimizer')
     sys.stdout.flush()
 
-    # Training loop
+    # Training setup
     num_epochs = config.get('num_epochs', 10)
     save_dir = Path(config.get('output_dir', '../models/checkpoints/csm_final'))
     save_dir.mkdir(parents=True, exist_ok=True)
 
     best_val_loss = float('inf')
+    global_step = 0
+
+    if logger:
+        logger.update(
+            total_epochs=num_epochs,
+            learning_rate=learning_rate,
+            status="warming_up"
+        )
 
     print(f'\nStarting training for {num_epochs} epochs...')
     print(f'Batch size: {batch_size}, Steps/epoch: {len(train_loader)}')
     sys.stdout.flush()
 
-    # Warmup forward pass to compile any JIT code
+    # Warmup pass
     print('Running warmup pass...')
     sys.stdout.flush()
 
@@ -213,56 +359,68 @@ def main():
                 sys.stdout.flush()
             break
 
+    # Training loop
     for epoch in range(num_epochs):
-        # Train
+        if logger:
+            logger.update(epoch=epoch + 1, status="training")
+
         model.train()
-        model.codec_model.eval()  # Keep codec frozen
+        model.codec_model.eval()
         total_train_loss = 0
         num_batches = 0
+        epoch_start_time = time.time()
 
         pbar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs}')
         for batch_idx, batch in enumerate(pbar):
-            print(f'  Batch {batch_idx}: loading data...', end='', flush=True)
+            batch_start_time = time.time()
 
-            # Move to device
             batch = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-            print(f' to GPU...', end='', flush=True)
-
             optimizer.zero_grad()
 
             try:
-                print(f' forward...', end='', flush=True)
                 outputs = model(**batch)
                 loss = outputs.loss
-                print(f' loss={loss.item() if loss else None}...', end='', flush=True)
 
                 if loss is None:
-                    print(f' SKIPPED (None)')
-                    sys.stdout.flush()
                     continue
 
-                print(f' backward...', end='', flush=True)
                 loss.backward()
-                print(f' clip...', end='', flush=True)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), config.get('max_grad_norm', 1.0))
-                print(f' step...', end='', flush=True)
                 optimizer.step()
 
                 total_train_loss += loss.item()
                 num_batches += 1
-                print(f' DONE')
+                global_step += 1
+
+                batch_time = time.time() - batch_start_time
                 pbar.set_postfix({'loss': f'{loss.item():.4f}'})
 
+                # Update metrics
+                if logger:
+                    mem_used = torch.cuda.memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+                    mem_peak = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+                    logger.update(
+                        step=global_step,
+                        epoch=epoch + 1,
+                        epoch_progress=(batch_idx + 1) / len(train_loader),
+                        train_loss=loss.item(),
+                        batch_time=batch_time,
+                        samples_per_second=batch_size / batch_time,
+                        memory_used_gb=mem_used,
+                        memory_peak_gb=mem_peak,
+                    )
+
             except Exception as e:
-                print(f' ERROR: {e}')
+                print(f'Train error batch {batch_idx}: {e}')
                 sys.stdout.flush()
-                import traceback
-                traceback.print_exc()
                 continue
 
         avg_train_loss = total_train_loss / max(num_batches, 1)
 
         # Validate
+        if logger:
+            logger.update(status="validating")
+
         model.eval()
         total_val_loss = 0
         num_val_batches = 0
@@ -275,13 +433,19 @@ def main():
                         total_val_loss += outputs.loss.item()
                         num_val_batches += 1
                 except Exception as e:
-                    print(f'Val error: {e}')
-                    sys.stdout.flush()
+                    pass
 
         avg_val_loss = total_val_loss / max(num_val_batches, 1)
 
         print(f'Epoch {epoch+1}: train_loss={avg_train_loss:.4f}, val_loss={avg_val_loss:.4f}')
         sys.stdout.flush()
+
+        if logger:
+            logger.update(
+                train_loss=avg_train_loss,
+                val_loss=avg_val_loss,
+                status="saving" if avg_val_loss < best_val_loss else "training"
+            )
 
         # Save best
         if avg_val_loss < best_val_loss:
@@ -303,8 +467,45 @@ def main():
                 'loss': avg_train_loss,
             }, save_dir / f'checkpoint_epoch_{epoch+1}.pt')
 
+    if logger:
+        logger.update(status="complete")
+
     print(f'\nTraining complete! Best val_loss: {best_val_loss:.4f}')
     sys.stdout.flush()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', default='config/rtx_4090_deepseek.yaml')
+    parser.add_argument('--dashboard', action='store_true', help='Start dashboard API on port 8001')
+    parser.add_argument('--dashboard_port', type=int, default=8001)
+    args = parser.parse_args()
+
+    with open(args.config) as f:
+        config = yaml.safe_load(f)
+
+    # Create metrics logger
+    logger = MetricsLogger()
+
+    # Start dashboard if requested
+    if args.dashboard:
+        import uvicorn
+
+        api = create_dashboard_api(logger)
+
+        def run_api():
+            uvicorn.run(api, host="0.0.0.0", port=args.dashboard_port, log_level="warning")
+
+        api_thread = threading.Thread(target=run_api, daemon=True)
+        api_thread.start()
+        print(f'Dashboard API running on http://0.0.0.0:{args.dashboard_port}')
+        print(f'  WebSocket: ws://localhost:{args.dashboard_port}/ws')
+        print(f'  Metrics: http://localhost:{args.dashboard_port}/metrics')
+        sys.stdout.flush()
+        time.sleep(1)  # Let API start
+
+    # Run training
+    train(config, logger if args.dashboard else None)
 
 
 if __name__ == '__main__':
