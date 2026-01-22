@@ -204,6 +204,25 @@ class TemporalProsodyEncoder(nn.Module):
         # Layer norm
         self.norm = nn.LayerNorm(config.hidden_size)
 
+    def init_from_global_encoder(self, global_encoder: "ProsodyEncoder") -> None:
+        """
+        Initialize temporal encoder weights from a trained global ProsodyEncoder.
+
+        This provides a sensible starting point for temporal conditioning without
+        requiring a separate temporal training run.
+        """
+        self.semantic_encoder.load_state_dict(global_encoder.semantic_encoder.state_dict())
+        self.acoustic_encoder.load_state_dict(global_encoder.acoustic_encoder.state_dict())
+        self.rhythm_encoder.load_state_dict(global_encoder.rhythm_encoder.state_dict())
+        self.contour_encoder.load_state_dict(global_encoder.contour_encoder.state_dict())
+
+        # Copy the first fusion layer (shared shape). The global encoder's final
+        # projection differs, so we intentionally skip it.
+        self.fusion[0].load_state_dict(global_encoder.fusion[0].state_dict())
+
+        # Match layer norm parameters
+        self.norm.load_state_dict(global_encoder.norm.state_dict())
+
     def forward(
         self,
         semantic: torch.Tensor,      # [batch, num_segments, semantic_dim]

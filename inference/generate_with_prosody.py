@@ -151,9 +151,8 @@ class ControllableVoiceGenerator:
         try:
             ckpt = torch.load(checkpoint, map_location=self.device)
 
-            config = ProsodyConfig(
-                **ckpt.get('prosody_config', {})
-            )
+            config = ProsodyConfig(**ckpt.get('prosody_config', {}))
+            self.prosody_config = config
             encoder = ProsodyEncoder(config)
             encoder.load_state_dict(ckpt['prosody_encoder'])
             encoder = encoder.to(self.device)
@@ -169,7 +168,7 @@ class ControllableVoiceGenerator:
                 self.temporal_encoder.eval()
                 print("Loaded temporal encoder from checkpoint")
             else:
-                self._create_temporal_encoder()
+                self._create_temporal_encoder(global_encoder=encoder)
 
             return encoder
 
@@ -177,16 +176,42 @@ class ControllableVoiceGenerator:
             print(f"Could not load prosody encoder: {e}")
             return None
 
-    def _create_temporal_encoder(self):
+    def _create_temporal_encoder(self, global_encoder: Optional[ProsodyEncoder] = None):
         """Create a fresh temporal encoder for keyframe support."""
         try:
             self.temporal_encoder = TemporalProsodyEncoder(self.prosody_config)
             self.temporal_encoder = self.temporal_encoder.to(self.device)
             self.temporal_encoder.eval()
             print("Created temporal encoder for keyframe support")
+            if global_encoder is not None:
+                self._init_temporal_from_global(global_encoder)
         except Exception as e:
             print(f"Could not create temporal encoder: {e}")
             self.temporal_encoder = None
+
+    def _init_temporal_from_global(self, global_encoder: ProsodyEncoder) -> None:
+        """Initialize temporal encoder weights from the global prosody encoder."""
+        if self.temporal_encoder is None:
+            return
+        if hasattr(self.temporal_encoder, "init_from_global_encoder"):
+            self.temporal_encoder.init_from_global_encoder(global_encoder)
+            print("Initialized temporal encoder from global prosody encoder")
+
+    def _collapse_temporal_to_global(
+        self,
+        prosody: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """Collapse temporal prosody tokens into a single global vector per type."""
+        collapsed = {}
+        for key in ["semantic", "acoustic", "rhythm", "contour"]:
+            tensor = prosody[key]
+            if tensor.dim() == 2:
+                collapsed[key] = tensor.mean(dim=0, keepdim=True)
+            elif tensor.dim() == 3:
+                collapsed[key] = tensor.mean(dim=1)
+            else:
+                collapsed[key] = tensor
+        return collapsed
 
     def extract_prosody_from_reference(
         self,
@@ -308,6 +333,13 @@ class ControllableVoiceGenerator:
         """
         import json
 
+        max_segments = self.prosody_config.num_prosody_tokens * 4
+        if num_segments > max_segments:
+            raise ValueError(
+                f"num_segments ({num_segments}) exceeds max supported ({max_segments}). "
+                "Increase ProsodyConfig.num_prosody_tokens or reduce --segments."
+            )
+
         keyframes_data = json.loads(keyframes_json)
         keyframes = [ProsodyKeyframe(**kf) for kf in keyframes_data]
 
@@ -402,6 +434,11 @@ class ControllableVoiceGenerator:
 
             # If we have a trained prosody encoder, use it
             if self.prosody_encoder is not None:
+                if is_temporal and self.temporal_encoder is None:
+                    print("Temporal encoder unavailable; falling back to global prosody averaging.")
+                    prosody = self._collapse_temporal_to_global(prosody)
+                    is_temporal = False
+
                 if is_temporal and hasattr(self, 'temporal_encoder') and self.temporal_encoder is not None:
                     # TEMPORAL MODE: Use temporal encoder for per-segment control
                     # Add batch dimension if needed
@@ -465,6 +502,9 @@ class ControllableVoiceGenerator:
             else:
                 # Without trained encoder, just generate normally
                 # (prosody info is informational only)
+                if is_temporal:
+                    print("Warning: temporal prosody requested but no prosody encoder is loaded. "
+                          "Keyframe edits will be ignored.")
                 output = self.csm.generate(
                     **inputs,
                     output_audio=True,

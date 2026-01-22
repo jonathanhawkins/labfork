@@ -11,10 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+import base64
 import numpy as np
 import torch
 import torchaudio
@@ -2544,6 +2545,211 @@ async def stop_training():
         training_process.kill()
 
     return {"status": "stopped", "message": "Training process terminated"}
+
+
+# ============== Live Voice Transformation ==============
+
+# Global transformer instance (loaded lazily)
+live_transformer = None
+
+def get_live_transformer():
+    """Get or create the live voice transformer."""
+    global live_transformer
+    if live_transformer is None:
+        try:
+            from live_voice_transformer import LiveVoiceTransformer
+            live_transformer = LiveVoiceTransformer(
+                voice_samples_dir=DATA_DIR / "voice_samples"
+            )
+        except Exception as e:
+            print(f"Failed to load live transformer: {e}")
+            return None
+    return live_transformer
+
+
+@app.get("/live-transform/status")
+async def get_live_transform_status():
+    """Get live voice transformation status and available emotions."""
+    transformer = get_live_transformer()
+    if transformer is None:
+        return {
+            "ready": False,
+            "error": "Transformer not available (Seed-VC not installed or no voice samples)"
+        }
+    return transformer.get_stats()
+
+
+@app.post("/live-transform/set-emotion")
+async def set_live_transform_emotion(emotion: str = Form(...), intensity: float = Form(0.7)):
+    """Set the target emotion for live transformation."""
+    transformer = get_live_transformer()
+    if transformer is None:
+        raise HTTPException(status_code=503, detail="Transformer not available")
+
+    try:
+        transformer.set_emotion(emotion, intensity)
+        return {
+            "emotion": emotion,
+            "intensity": intensity,
+            "available_emotions": transformer.available_emotions
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/live-transform/convert")
+async def convert_voice_emotion(
+    audio: UploadFile = File(...),
+    emotion: str = Form(...),
+    intensity: float = Form(0.7),
+):
+    """Convert an audio file's emotion (non-streaming, for testing)."""
+    transformer = get_live_transformer()
+    if transformer is None:
+        raise HTTPException(status_code=503, detail="Transformer not available")
+
+    import tempfile
+    import scipy.io.wavfile as wavfile
+
+    # Save uploaded file
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        content = await audio.read()
+        f.write(content)
+        input_path = f.name
+
+    try:
+        # Set emotion
+        transformer.set_emotion(emotion, intensity)
+
+        # Convert
+        output_id = f"{uuid.uuid4().hex[:8]}"
+        output_path = PROCESSED_DIR / f"live_transform_{output_id}.wav"
+
+        inference_time = transformer.convert_file(input_path, str(output_path), emotion)
+
+        return FileResponse(
+            output_path,
+            media_type="audio/wav",
+            filename=f"transformed_{emotion}_{output_id}.wav",
+            headers={"X-Inference-Time": str(inference_time)}
+        )
+    finally:
+        os.unlink(input_path)
+
+
+@app.websocket("/ws/live-transform")
+async def websocket_live_transform(websocket: WebSocket):
+    """
+    WebSocket for real-time voice transformation.
+
+    Client sends:
+        {"type": "audio_chunk", "data": "<base64 PCM audio>", "sample_rate": 24000}
+        {"type": "set_emotion", "emotion": "happy", "intensity": 0.8}
+        {"type": "get_status"}
+
+    Server sends:
+        {"type": "audio_output", "data": "<base64 PCM audio>", "sample_rate": 22050, "latency_ms": 150}
+        {"type": "status", "emotion": "happy", "intensity": 0.8, "ready": true}
+        {"type": "error", "message": "..."}
+    """
+    await websocket.accept()
+
+    transformer = get_live_transformer()
+    if transformer is None:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Transformer not available. Check if Seed-VC is installed."
+        })
+        await websocket.close()
+        return
+
+    print(f"WebSocket connected for live transform")
+
+    try:
+        while True:
+            # Receive message
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+
+            if msg_type == "audio_chunk":
+                # Decode audio
+                try:
+                    audio_b64 = data.get("data", "")
+                    audio_bytes = base64.b64decode(audio_b64)
+                    sample_rate = data.get("sample_rate", 24000)
+
+                    # Convert bytes to numpy (assuming PCM int16)
+                    audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32767.0
+
+                    # Process
+                    import time
+                    start = time.time()
+                    converted, output_sr = transformer.convert_audio(audio_np, sample_rate)
+                    latency_ms = (time.time() - start) * 1000
+
+                    # Encode output
+                    if converted.dtype == np.float32 or converted.dtype == np.float64:
+                        converted_int16 = (converted * 32767).astype(np.int16)
+                    else:
+                        converted_int16 = converted.astype(np.int16)
+
+                    output_b64 = base64.b64encode(converted_int16.tobytes()).decode()
+
+                    await websocket.send_json({
+                        "type": "audio_output",
+                        "data": output_b64,
+                        "sample_rate": output_sr,
+                        "latency_ms": round(latency_ms, 1)
+                    })
+
+                except Exception as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Audio processing error: {str(e)}"
+                    })
+
+            elif msg_type == "set_emotion":
+                emotion = data.get("emotion", "neutral")
+                intensity = data.get("intensity", 0.7)
+
+                try:
+                    transformer.set_emotion(emotion, intensity)
+                    await websocket.send_json({
+                        "type": "status",
+                        "emotion": emotion,
+                        "intensity": intensity,
+                        "ready": True
+                    })
+                except ValueError as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": str(e)
+                    })
+
+            elif msg_type == "get_status":
+                stats = transformer.get_stats()
+                await websocket.send_json({
+                    "type": "status",
+                    **stats
+                })
+
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unknown message type: {msg_type}"
+                })
+
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": str(e)
+            })
+        except:
+            pass
 
 
 # ============== Startup/Shutdown ==============
