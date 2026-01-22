@@ -48,9 +48,11 @@ except ImportError:
 from prosody_conditioning import (
     ProsodyConfig,
     ProsodyEncoder,
+    TemporalProsodyEncoder,
     ProsodyControlledCSM,
     extract_prosody_for_conditioning,
 )
+from keyframe_prosody import get_temporal_prosody_tokens
 
 
 class ProsodyConditionedDataset(Dataset):
@@ -90,8 +92,10 @@ class ProsodyConditionedDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         sample = self.samples[idx]
 
-        # Load audio
-        audio_path = sample.get('audio_path') or sample.get('audio')
+        # Load audio (support multiple manifest formats)
+        audio_path = sample.get('audio_path') or sample.get('path') or sample.get('audio')
+        if not audio_path:
+            raise ValueError(f"Sample {idx} has no audio path. Keys: {sample.keys()}")
         waveform, sr = torchaudio.load(audio_path)
 
         # Resample if needed
@@ -193,13 +197,21 @@ class ProsodyConditionedTrainer:
     Trainer for prosody-conditioned voice cloning.
 
     This trains:
-    1. ProsodyEncoder: Maps prosody vectors → prefix embeddings
-    2. (Optional) LoRA adapters on CSM backbone
+    1. ProsodyEncoder: Maps prosody vectors → global prefix embeddings
+    2. TemporalProsodyEncoder: Maps per-segment prosody → temporal prefix embeddings
+    3. (Optional) LoRA adapters on CSM backbone
+
+    The temporal encoder enables keyframe-based emotion control where different
+    parts of the utterance can have different prosody (e.g., start neutral,
+    become happy, then calm down).
     """
 
     def __init__(self, config: dict):
         self.config = config
         self.device = self._setup_device()
+        self.train_temporal = config.get('train_temporal', True)
+        self.num_temporal_segments = config.get('num_temporal_segments', 4)
+
         self.prosody_config = ProsodyConfig(
             hidden_size=config.get('hidden_size', 2048),
             num_prosody_tokens=config.get('num_prosody_tokens', 4),
@@ -208,6 +220,7 @@ class ProsodyConditionedTrainer:
 
         # Setup models
         self.model = self._setup_model()
+        self.temporal_encoder = self._setup_temporal_encoder() if self.train_temporal else None
         self.optimizer = self._setup_optimizer()
 
         # Training state
@@ -270,15 +283,35 @@ class ProsodyConditionedTrainer:
         total_params = sum(p.numel() for p in model.parameters())
         trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-        print(f"Prosody encoder parameters: {prosody_params:,}")
+        print(f"Global prosody encoder parameters: {prosody_params:,}")
         print(f"Total parameters: {total_params:,}")
         print(f"Trainable parameters: {trainable:,} ({100*trainable/total_params:.2f}%)")
 
         return model
 
+    def _setup_temporal_encoder(self) -> TemporalProsodyEncoder:
+        """Setup temporal prosody encoder for keyframe control."""
+        print("Setting up temporal prosody encoder...")
+
+        temporal_encoder = TemporalProsodyEncoder(self.prosody_config)
+        temporal_encoder = temporal_encoder.to(self.device)
+
+        # Initialize from global encoder for better starting point
+        temporal_encoder.init_from_global_encoder(self.model.prosody_encoder)
+
+        temporal_params = sum(p.numel() for p in temporal_encoder.parameters())
+        print(f"Temporal prosody encoder parameters: {temporal_params:,}")
+
+        return temporal_encoder
+
     def _setup_optimizer(self) -> torch.optim.Optimizer:
         """Setup optimizer for trainable parameters."""
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+
+        # Add temporal encoder parameters if training temporal
+        if self.temporal_encoder is not None:
+            trainable_params.extend(list(self.temporal_encoder.parameters()))
+            print(f"Total trainable params (incl. temporal): {sum(p.numel() for p in trainable_params):,}")
 
         return torch.optim.AdamW(
             trainable_params,
@@ -287,8 +320,10 @@ class ProsodyConditionedTrainer:
         )
 
     def train_step(self, batch: Dict) -> Dict[str, float]:
-        """Single training step."""
+        """Single training step for both global and temporal encoders."""
         self.model.train()
+        if self.temporal_encoder is not None:
+            self.temporal_encoder.train()
 
         # Move to device
         audio = batch['audio'].to(self.device)
@@ -299,24 +334,11 @@ class ProsodyConditionedTrainer:
             'contour': batch['prosody_contour'].to(self.device),
         }
 
-        # Prepare text inputs
-        texts = batch['text']
-        conversations = [
-            [{"role": "0", "content": [{"type": "text", "text": t}]}]
-            for t in texts
-        ]
-
-        # Tokenize (simplified - full impl would use processor properly)
-        # This is a placeholder - actual implementation needs proper tokenization
-        input_ids = torch.zeros(len(texts), 32, dtype=torch.long, device=self.device)
-        attention_mask = torch.ones_like(input_ids)
-
-        # Forward pass - train prosody encoder only
         self.optimizer.zero_grad()
 
         try:
-            # For now, train the prosody encoder to produce consistent embeddings
-            # using a simple reconstruction loss
+            # ============ GLOBAL ENCODER LOSS ============
+            # Train the global prosody encoder to produce consistent embeddings
             prosody_prefix = self.model.get_prosody_prefix(
                 prosody_dict['semantic'],
                 prosody_dict['acoustic'],
@@ -324,8 +346,7 @@ class ProsodyConditionedTrainer:
                 prosody_dict['contour'],
             )
 
-            # Reconstruction target: prosody encoder should produce stable embeddings
-            # We use L2 loss between prosody embedding and a target based on the input
+            # Reconstruction target based on input prosody
             target_embedding = torch.cat([
                 prosody_dict['semantic'],
                 prosody_dict['acoustic'],
@@ -342,24 +363,113 @@ class ProsodyConditionedTrainer:
             target_embedding = target_embedding.unsqueeze(1).expand_as(prosody_prefix[:, :1, :])
 
             # L2 reconstruction loss on first token
-            loss = F.mse_loss(prosody_prefix[:, 0, :target_embedding.shape[-1]], target_embedding[:, 0, :])
+            global_loss = F.mse_loss(prosody_prefix[:, 0, :target_embedding.shape[-1]], target_embedding[:, 0, :])
+
+            # ============ TEMPORAL ENCODER LOSS ============
+            temporal_loss = torch.tensor(0.0, device=self.device)
+            if self.temporal_encoder is not None:
+                # Create temporal prosody by segmenting the global prosody
+                # This simulates having keyframe data by splitting into segments
+                batch_size = prosody_dict['semantic'].shape[0]
+                num_segments = self.num_temporal_segments
+
+                # Expand prosody to temporal format [batch, num_segments, dim]
+                # For training, we create "pseudo-keyframes" by slightly varying each segment
+                temporal_prosody = self._create_temporal_prosody(prosody_dict, num_segments)
+
+                # Forward through temporal encoder
+                temporal_prefix = self.temporal_encoder(
+                    temporal_prosody['semantic'],
+                    temporal_prosody['acoustic'],
+                    temporal_prosody['rhythm'],
+                    temporal_prosody['contour'],
+                )  # [batch, num_segments, hidden]
+
+                # Temporal reconstruction loss: each segment should encode its prosody
+                # The target is segment-wise prosody expanded to hidden size
+                temporal_target = torch.cat([
+                    temporal_prosody['semantic'],
+                    temporal_prosody['acoustic'],
+                    temporal_prosody['rhythm'],
+                    temporal_prosody['contour'][:, :, :8] if temporal_prosody['contour'].shape[-1] > 8
+                    else temporal_prosody['contour'],
+                ], dim=-1)  # [batch, num_segments, prosody_dim]
+
+                if temporal_target.shape[-1] < temporal_prefix.shape[-1]:
+                    temporal_target = F.pad(
+                        temporal_target,
+                        (0, temporal_prefix.shape[-1] - temporal_target.shape[-1])
+                    )
+
+                temporal_loss = F.mse_loss(
+                    temporal_prefix[:, :, :temporal_target.shape[-1]],
+                    temporal_target
+                )
+
+                # Consistency loss: temporal encoder should match global on averaged input
+                avg_temporal = temporal_prefix.mean(dim=1)  # [batch, hidden]
+                avg_global = prosody_prefix.mean(dim=1)      # [batch, hidden]
+                consistency_loss = F.mse_loss(avg_temporal, avg_global) * 0.1
+
+                temporal_loss = temporal_loss + consistency_loss
+
+            # Combined loss
+            loss = global_loss + temporal_loss
             loss.backward()
 
             # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(
-                self.model.parameters(),
-                self.config.get('max_grad_norm', 1.0)
-            )
+            max_grad_norm = self.config.get('max_grad_norm', 1.0)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_grad_norm)
+            if self.temporal_encoder is not None:
+                torch.nn.utils.clip_grad_norm_(self.temporal_encoder.parameters(), max_grad_norm)
 
             self.optimizer.step()
 
-            return {'loss': loss.item()}
+            return {
+                'loss': loss.item(),
+                'global_loss': global_loss.item(),
+                'temporal_loss': temporal_loss.item() if self.temporal_encoder else 0.0,
+            }
 
         except Exception as e:
             import traceback
             print(f"Training step error: {e}")
             traceback.print_exc()
-            return {'loss': 0.0}
+            return {'loss': 0.0, 'global_loss': 0.0, 'temporal_loss': 0.0}
+
+    def _create_temporal_prosody(
+        self,
+        prosody_dict: Dict[str, torch.Tensor],
+        num_segments: int,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Create temporal prosody from global prosody for training.
+
+        This simulates keyframe data by creating slightly varied segments.
+        In real usage, keyframes would be user-defined or extracted from
+        dense prosody contours.
+        """
+        batch_size = prosody_dict['semantic'].shape[0]
+
+        temporal = {}
+        for key in ['semantic', 'acoustic', 'rhythm', 'contour']:
+            global_vec = prosody_dict[key]  # [batch, dim]
+            dim = global_vec.shape[-1]
+
+            # Expand to [batch, num_segments, dim]
+            expanded = global_vec.unsqueeze(1).expand(batch_size, num_segments, dim).clone()
+
+            # Add small per-segment variation to encourage temporal learning
+            # Variation increases toward the middle segments (like a natural emotion arc)
+            for s in range(num_segments):
+                # Variation strength: peaks in middle, lower at ends
+                strength = 0.1 * (1.0 - abs(s - num_segments / 2) / (num_segments / 2))
+                noise = torch.randn_like(expanded[:, s, :]) * strength
+                expanded[:, s, :] = expanded[:, s, :] + noise
+
+            temporal[key] = expanded.clamp(0, 1)  # Keep in valid range
+
+        return temporal
 
     def train(
         self,
@@ -380,7 +490,10 @@ class ProsodyConditionedTrainer:
 
                 if self.global_step % self.config.get('log_every', 10) == 0:
                     avg_loss = sum(epoch_losses[-10:]) / min(10, len(epoch_losses))
-                    print(f"Epoch {epoch+1}, Step {self.global_step}: loss={avg_loss:.4f}")
+                    log_msg = f"Epoch {epoch+1}, Step {self.global_step}: loss={avg_loss:.4f}"
+                    if 'global_loss' in metrics:
+                        log_msg += f" (global={metrics['global_loss']:.4f}, temporal={metrics['temporal_loss']:.4f})"
+                    print(log_msg)
 
             # Epoch summary
             avg_epoch_loss = sum(epoch_losses) / len(epoch_losses)
@@ -416,7 +529,7 @@ class ProsodyConditionedTrainer:
         return total_loss / max(1, num_batches)
 
     def save_checkpoint(self, name: str):
-        """Save checkpoint."""
+        """Save checkpoint with both global and temporal encoders."""
         output_dir = Path(self.config.get('output_dir', 'checkpoints/prosody'))
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -435,8 +548,15 @@ class ProsodyConditionedTrainer:
             },
         }
 
+        # Save temporal encoder if trained
+        if self.temporal_encoder is not None:
+            checkpoint['temporal_encoder'] = self.temporal_encoder.state_dict()
+            checkpoint['num_temporal_segments'] = self.num_temporal_segments
+
         torch.save(checkpoint, output_dir / f'{name}.pt')
         print(f"Saved checkpoint: {output_dir / f'{name}.pt'}")
+        if self.temporal_encoder is not None:
+            print(f"  Includes temporal encoder ({self.num_temporal_segments} segments)")
 
 
 def main():
