@@ -57,12 +57,14 @@ python scripts/download_models.py
 # Backend API (Terminal 1)
 cd backend
 source venv/bin/activate
-python main.py  # Runs on http://localhost:8000
+python main.py --port 8003  # Runs on http://localhost:8003
 
 # Frontend (Terminal 2)
 cd frontend
-npm run dev  # Runs on http://localhost:3000
+npm run dev -- -p 3003  # Runs on http://localhost:3003
 ```
+
+**Default Ports**: Frontend 3003, Backend 8003
 
 ### Training
 
@@ -91,6 +93,73 @@ python generate.py \
   --output my_voice.wav
 ```
 
+## Pocket TTS (Zero-Shot Voice Cloning)
+
+**RECOMMENDED for quick voice cloning** - No training required!
+
+Pocket TTS (by Kyutai) is a 100M parameter TTS model that does zero-shot voice cloning at inference time. Just provide a reference audio file and it clones the voice instantly.
+
+### Setup
+
+```bash
+# Install (already in project venv)
+pip install pocket-tts
+
+# REQUIRED: Accept terms for voice cloning
+# Go to: https://huggingface.co/kyutai/pocket-tts
+# Click "Agree and access repository"
+```
+
+### Usage
+
+```bash
+cd inference
+
+# List available voice samples
+python test_pocket_tts.py --list-samples
+
+# Clone voice from a reference audio
+python test_pocket_tts.py -r ../data/voice_samples/session/calm_1.wav -t "Your text here"
+
+# Generate all emotional variations
+python test_pocket_tts.py --all-emotions
+
+# Use built-in voice (no cloning)
+python test_pocket_tts.py --builtin alba
+```
+
+### Python API
+
+```python
+from pocket_tts import TTSModel
+import scipy.io.wavfile as wav
+import numpy as np
+
+model = TTSModel.load_model()
+
+# Clone voice from reference audio
+voice_state = model.get_state_for_audio_prompt("path/to/reference.wav")
+audio = model.generate_audio(voice_state, "Text to synthesize")
+
+# Save output
+audio_np = (audio.cpu().numpy() * 32767).astype(np.int16)
+wav.write("output.wav", 24000, audio_np)
+```
+
+### Comparison: Pocket TTS vs CSM Fine-tuning
+
+| Aspect | Pocket TTS | CSM Fine-tuning |
+|--------|------------|-----------------|
+| Training required | No | Yes (hours) |
+| Parameters | 100M | 1.5B |
+| Hardware | CPU | GPU (24GB) |
+| Voice samples needed | 1 | 42+ |
+| Overfitting risk | None | High |
+| Quality | Good | Variable |
+| Prosody control | Limited | Custom (our goal) |
+
+**Recommendation**: Use Pocket TTS for quick voice cloning. Use CSM fine-tuning only if you need custom prosody conditioning.
+
 ### Frontend Development
 
 ```bash
@@ -100,11 +169,128 @@ npm run build    # Production build
 npm run lint     # ESLint
 ```
 
+## Remote Training on RTX 4090 (Windows WSL)
+
+A Windows 10 machine with RTX 4090 (24GB VRAM) is available for faster training via Tailscale VPN.
+
+**IMPORTANT**: Always use conda environment `voice` when running commands on the 4090 machine!
+
+### Connection Details
+- **Tailscale IP**: `100.83.78.111`
+- **User**: `doc`
+- **Project Path**: `~/dev/voice-clone-pipeline`
+- **Conda Environment**: `voice` (REQUIRED for all Python commands)
+
+### Connecting to Training Session
+
+```bash
+# SSH into WSL instance
+ssh doc@100.83.78.111
+
+# Or attach to existing tmux training session
+ssh doc@100.83.78.111 -t "source ~/miniconda3/bin/activate && conda activate voice && tmux attach -t training"
+
+# If no session exists, create one
+ssh doc@100.83.78.111 -t "tmux new-session -s training"
+```
+
+### Running Training on RTX 4090
+
+**IMPORTANT**: Use LoRA training for small datasets (< 500 samples) to prevent overfitting!
+
+```bash
+# On the Windows WSL machine
+source ~/miniconda3/bin/activate
+conda activate voice
+cd ~/dev/voice-clone-pipeline/training
+
+# RECOMMENDED: LoRA training (0.07% of params, prevents overfitting)
+python train_lora_deepseek.py --config config/rtx_4090_lora.yaml
+
+# Alternative: Full fine-tuning (only for large datasets 500+ samples)
+python train_csm_final.py --config config/rtx_4090_deepseek.yaml
+```
+
+**Training approach selection:**
+- < 100 samples: Use LoRA only
+- 100-500 samples: LoRA recommended, full fine-tune with early stopping
+- 500+ samples: Full fine-tuning is viable
+
+### Syncing Project Files
+
+```bash
+# From Mac to Windows (run on Mac)
+rsync -avz --progress --exclude 'node_modules' --exclude '.next' --exclude 'venv' \
+  /Users/light/dev/web-apps/voice-clone-pipeline/ \
+  doc@100.83.78.111:~/dev/voice-clone-pipeline/
+
+# Don't forget to update data paths after syncing
+# Mac paths (/Users/light/...) need to be changed to Linux paths (/home/doc/...)
+```
+
+### Monitoring GPU
+
+```bash
+# GPU usage (run in separate tmux pane) - USE WSL PATH!
+watch -n 1 /usr/lib/wsl/lib/nvidia-smi
+
+# Standard nvidia-smi won't work in WSL2 - always use the WSL path above
+```
+
+### Quick SSH Commands
+
+```bash
+# Simple SSH connection
+ssh doc@100.83.78.111
+
+# Run a command with conda environment
+ssh doc@100.83.78.111 "source ~/miniconda3/bin/activate && conda activate voice && <your_command>"
+
+# Check GPU status
+ssh doc@100.83.78.111 "/usr/lib/wsl/lib/nvidia-smi"
+
+# Check PyTorch CUDA
+ssh doc@100.83.78.111 "source ~/miniconda3/bin/activate && conda activate voice && python -c 'import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))'"
+```
+
+### Known Issues & Required Fixes for LoRA Training
+
+**CRITICAL**: These fixes are required for LoRA training to work on RTX 4090:
+
+1. **cuDNN Frontend Error with SDPA Attention**
+   - Error: `RuntimeError: cuDNN Frontend error: No execution plans support the graph`
+   - Fix: Add `attn_implementation="eager"` when loading the model in `train_lora_deepseek.py`:
+   ```python
+   base_model = CsmForConditionalGeneration.from_pretrained(
+       model_path,
+       trust_remote_code=True,
+       attn_implementation="eager",  # REQUIRED - fixes cuDNN error
+       torch_dtype=dtype,
+   )
+   ```
+
+2. **MTP Dtype Mismatch**
+   - Error: `RuntimeError: expected mat1 and mat2 to have the same dtype, but got: c10::Half != float`
+   - Fix: Disable MTP in `config/rtx_4090_lora.yaml`:
+   ```yaml
+   use_mtp: false  # MTP has dtype issues with LoRA
+   ```
+
+3. **Gradient Checkpointing Incompatibility**
+   - Issue: Gradient checkpointing conflicts with eager attention implementation
+   - Fix: Disable in `config/rtx_4090_lora.yaml`:
+   ```yaml
+   gradient_checkpointing: false
+   ```
+
+**Result**: With these fixes, LoRA training uses only 3.4GB VRAM (vs 22GB for full fine-tuning) and trains 0.07% of parameters (1.2M out of 1.5B), preventing overfitting on small datasets.
+
 ## Key Configuration Files
 
 - `training/config/m4_pro_deepseek.yaml`: M4 Pro training config with DeepSeek techniques
 - `training/config/m4_pro.yaml`: Standard M4 Pro config
-- `training/config/rtx_4090.yaml`: RTX 4090 config
+- `training/config/rtx_4090_deepseek.yaml`: RTX 4090 full fine-tuning config (500+ samples only)
+- `training/config/rtx_4090_lora.yaml`: RTX 4090 LoRA config (RECOMMENDED for <500 samples)
 
 ## Data Flow
 

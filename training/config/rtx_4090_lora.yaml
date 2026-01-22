@@ -1,0 +1,145 @@
+# LoRA Fine-Tuning Configuration for RTX 4090 (24GB)
+# Optimized for small datasets (50-500 samples)
+#
+# This configuration addresses severe overfitting by:
+# 1. Using LoRA to train only 0.5% of parameters
+# 2. Aggressive regularization (high weight decay, dropout, label smoothing)
+# 3. Data augmentation for effective dataset expansion
+# 4. Multi-Token Prediction for denser training signal
+# 5. Early stopping to prevent overtraining
+#
+# Expected results vs full fine-tuning:
+#   - Train loss: 1.4 -> ~2.0
+#   - Val loss: 7.0 -> ~2.5-3.0
+#   - Overfit ratio: 5.0x -> 1.2-1.5x
+#   - Training time: 2 hrs -> 30 min
+#   - VRAM: 22GB -> 12GB
+#
+# References:
+#   - DeepSeek-V3 Technical Report (arXiv:2412.19437)
+#   - LoRA (arXiv:2106.09685)
+#   - PEFT-TTS (Interspeech 2025)
+
+# ============== Model ==============
+model_path: "sesame/csm-1b"  # HuggingFace model or local path
+
+# ============== LoRA Configuration ==============
+# Conservative settings for small dataset (70 samples)
+
+use_lora: true
+lora_r: 8                    # Low rank prevents overfitting on small data
+                             # r=4-8 for <100 samples, r=16-32 for 100-500 samples
+lora_alpha: 16               # Standard 2x scaling (alpha = 2*r)
+lora_dropout: 0.15           # Sparsity regularizer from "LoRA Dropout" paper
+lora_target_modules:         # Only attention projections (not MLP)
+  - "q_proj"
+  - "v_proj"
+  # - "k_proj"               # Can add for more capacity if needed
+  # - "o_proj"               # Can add for more capacity if needed
+
+# ============== Data Augmentation ==============
+# Critical for small datasets - effectively expands training data
+
+augmentation:
+  enabled: true
+  augment_probability: 0.5   # 50% chance to augment each sample
+
+  # Speed perturbation (changes duration slightly)
+  speed_perturb_enabled: true
+  speed_perturb: [0.9, 1.1]  # 0.9x to 1.1x speed
+
+  # Pitch shifting (preserves duration)
+  pitch_shift_enabled: true
+  pitch_shift_semitones: [-2, 2]  # +/- 2 semitones
+
+  # Time masking (SpecAugment-style)
+  time_mask_enabled: true
+  time_mask_ratio: 0.1       # Max 10% of audio masked
+
+  # Background noise injection
+  noise_enabled: true
+  noise_snr_db: [25, 40]     # Signal-to-noise ratio in dB
+                             # Higher = less noise
+
+  # Volume perturbation
+  volume_enabled: true
+  volume_range: [0.85, 1.15]
+
+# ============== Training Configuration ==============
+# Aggressive regularization to prevent overfitting
+
+learning_rate: 1.0e-4        # Higher than full fine-tuning (LoRA can handle it)
+weight_decay: 0.2            # Strong regularization (DeepSeek uses 0.1)
+max_grad_norm: 0.5           # Tighter clipping for stability
+
+batch_size: 4                # Small batches with accumulation
+gradient_accumulation: 8     # Effective batch = 32
+                             # Smaller effective batches add regularization noise
+
+num_epochs: 30               # More epochs but with early stopping
+
+# ============== DeepSeek LR Schedule ==============
+# Warmup -> Stable -> Cosine Decay
+
+warmup_steps: 100            # ~3-4 epochs at 63 samples
+stable_steps: 200            # Hold at peak LR
+min_lr_ratio: 0.01           # Decay to 1% of peak LR
+
+# ============== Multi-Token Prediction ==============
+# DeepSeek technique for denser training signal
+
+use_mtp: true
+mtp_tokens: 2                # Predict 2 tokens ahead (conservative for small data)
+mtp_weight: 0.1              # Weight of MTP loss vs main loss
+
+# ============== Label Smoothing ==============
+# Prevents overconfident predictions
+
+label_smoothing: 0.1         # Standard value
+
+# ============== Early Stopping ==============
+# Critical for small datasets
+
+early_stopping_patience: 5   # Stop if no improvement for 5 validations
+early_stopping_min_delta: 0.01  # Minimum improvement threshold
+
+# ============== Evaluation & Checkpointing ==============
+
+eval_every: 50               # Validate every 50 steps (~every 2-3 epochs)
+save_every: 100              # Save checkpoint every 100 steps
+
+# ============== Hardware Configuration ==============
+
+device: "cuda"
+precision: "fp16"            # FP16 for RTX 4090 efficiency
+gradient_checkpointing: true # Save VRAM
+num_workers: 2               # Data loading workers
+
+# ============== Data Paths ==============
+
+data_dir: "../data/training"
+max_audio_length_ms: 30000   # 30 second max
+
+# ============== Output ==============
+
+output_dir: "../models/checkpoints/csm_lora"
+
+# ============== Expected Performance ==============
+#
+# On RTX 4090 with 70 training samples:
+#   - Trainable params: ~8M (0.5% of 1.5B)
+#   - VRAM usage: ~10-12GB
+#   - Training time: ~20-30 minutes for 30 epochs
+#   - Samples/sec: ~15-20
+#
+# If still overfitting:
+#   1. Reduce lora_r to 4
+#   2. Increase lora_dropout to 0.2
+#   3. Increase weight_decay to 0.3
+#   4. Reduce learning_rate to 5e-5
+#
+# If underfitting:
+#   1. Increase lora_r to 16
+#   2. Add "k_proj", "o_proj" to target_modules
+#   3. Reduce weight_decay to 0.1
+#   4. Increase learning_rate to 2e-4
