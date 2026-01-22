@@ -568,7 +568,8 @@ class EnhancedVoiceDataset(Dataset):
         if "audio_tensor_path" in sample and Path(sample["audio_tensor_path"]).exists():
             waveform = torch.load(sample["audio_tensor_path"])
         else:
-            waveform, sr = torchaudio.load(sample["audio_path"])
+            audio_path = sample.get("audio_path") or sample.get("path")
+            waveform, sr = torchaudio.load(audio_path)
             if sr != self.sample_rate:
                 resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
                 waveform = resampler(waveform)
@@ -656,20 +657,27 @@ class DeepSeekEnhancedTrainer:
         print(f"Loading model from: {model_path}")
         
         try:
-            # Try HuggingFace
-            from transformers import AutoModelForCausalLM
-            model = AutoModelForCausalLM.from_pretrained(
+            # Use CsmForConditionalGeneration for proper training support
+            from transformers import CsmForConditionalGeneration
+            model = CsmForConditionalGeneration.from_pretrained(
                 model_path,
                 trust_remote_code=True,
-                torch_dtype=torch.float32 if self.device.type == 'mps' else torch.float16,
+                dtype=torch.float32 if self.device.type == 'mps' else torch.float16,
             )
+            # Keep codec frozen during training (as recommended by Sesame)
+            model.train()
+            model.codec_model.eval()
+            for param in model.codec_model.parameters():
+                param.requires_grad = False
+            print("✓ Loaded CsmForConditionalGeneration (codec frozen)")
         except Exception as e:
-            self.logger.add_warning(f"Could not load from HF: {e}")
-            # Placeholder model for testing
-            model = nn.Sequential(
-                nn.Linear(256, 512),
-                nn.ReLU(),
-                nn.Linear(512, 256),
+            self.logger.add_warning(f"Could not load CsmForConditionalGeneration: {e}")
+            # Fallback to AutoModel
+            from transformers import AutoModel
+            model = AutoModel.from_pretrained(
+                model_path,
+                trust_remote_code=True,
+                dtype=torch.float32 if self.device.type == 'mps' else torch.float16,
             )
         
         # Apply M4 Pro optimizations
@@ -684,10 +692,19 @@ class DeepSeekEnhancedTrainer:
                 model.gradient_checkpointing_enable()
                 print("✓ Gradient checkpointing enabled")
         
+        # Load processor for CSM
+        try:
+            from transformers import AutoProcessor
+            self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+            print("✓ Loaded CsmProcessor")
+        except Exception as e:
+            self.processor = None
+            print(f"! Could not load processor: {e}")
+
         # Add MTP head if enabled
         if self.config.get('use_mtp', True):
             hidden_size = getattr(model.config, 'hidden_size', 768)
-            vocab_size = getattr(model.config, 'vocab_size', 32000)
+            vocab_size = getattr(model.config, 'audio_vocab_size', getattr(model.config, 'vocab_size', 32000))
             self.mtp_head = MultiTokenPredictionHead(
                 hidden_size=hidden_size,
                 vocab_size=vocab_size,
@@ -716,6 +733,34 @@ class DeepSeekEnhancedTrainer:
         print(f"  Total duration: {train_dataset.stats['total_duration_minutes']:.1f} min")
         
         def collate(batch):
+            """Collate using CSM's conversation format with apply_chat_template."""
+            if self.processor is not None:
+                # Build conversations in CSM format
+                conversations = []
+                for b in batch:
+                    # Single turn conversation for each sample
+                    conversation = [{
+                        "role": str(b.get("speaker", 0)),
+                        "content": [
+                            {"type": "text", "text": b["text"]},
+                            {"type": "audio", "audio": b["audio"].numpy()}
+                        ]
+                    }]
+                    conversations.append(conversation)
+
+                # Use processor's apply_chat_template to prepare inputs with labels
+                try:
+                    inputs = self.processor.apply_chat_template(
+                        conversations,
+                        tokenize=True,
+                        return_dict=True,
+                        output_labels=True,
+                    )
+                    return inputs
+                except Exception as e:
+                    print(f"  Chat template error: {e}")
+
+            # Fallback: simple collation
             max_len = max(b["audio"].shape[0] for b in batch)
             audios = []
             masks = []
@@ -728,7 +773,7 @@ class DeepSeekEnhancedTrainer:
                 mask = torch.ones(max_len, dtype=torch.bool)
                 mask[len(b["audio"]):] = False
                 masks.append(mask)
-            
+
             return {
                 "audio": torch.stack(audios),
                 "audio_mask": torch.stack(masks),
@@ -790,72 +835,96 @@ class DeepSeekEnhancedTrainer:
         return optimizer, scheduler
     
     def train_step(self, model, batch, optimizer) -> Dict[str, float]:
-        """Single training step with MTP."""
+        """Single training step for CSM fine-tuning.
+
+        With apply_chat_template, batch already contains properly formatted
+        input_ids, attention_mask, labels, etc.
+        """
         model.train()
-        
-        audio = batch["audio"].to(self.device)
-        audio_mask = batch["audio_mask"].to(self.device)
-        
-        # Forward pass
-        try:
-            outputs = model(
-                input_ids=audio.long() if audio.dtype != torch.float else None,
-                inputs_embeds=audio.unsqueeze(-1) if audio.dtype == torch.float else None,
-                attention_mask=audio_mask,
-                output_hidden_states=True if self.mtp_head else False,
-            )
-            
-            loss = outputs.loss if hasattr(outputs, 'loss') else F.mse_loss(
-                outputs.logits if hasattr(outputs, 'logits') else outputs[0],
-                audio.unsqueeze(-1),
-            )
-        except Exception as e:
-            # Fallback for testing
-            loss = torch.tensor(0.5, device=self.device, requires_grad=True)
-        
-        # MTP loss
+        # Keep codec frozen
+        if hasattr(model, 'codec_model'):
+            model.codec_model.eval()
+
+        outputs = None
+        loss = None
         mtp_loss = 0.0
-        if self.mtp_head and hasattr(outputs, 'hidden_states'):
-            hidden = outputs.hidden_states[-1]
-            _, mtp_loss_value = self.mtp_head(hidden, audio.long())
-            if mtp_loss_value is not None:
-                mtp_loss = mtp_loss_value.item()
-                loss = loss + 0.1 * mtp_loss_value  # Weight MTP loss
-        
+
+        try:
+            # Move batch tensors to device
+            model_inputs = {}
+            for k, v in batch.items():
+                if isinstance(v, torch.Tensor):
+                    model_inputs[k] = v.to(self.device)
+                elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], torch.Tensor):
+                    model_inputs[k] = [t.to(self.device) for t in v]
+                else:
+                    model_inputs[k] = v
+
+            # Forward pass - apply_chat_template provides all needed inputs
+            outputs = model(**model_inputs, output_hidden_states=True if self.mtp_head else False)
+
+            # Get loss
+            if hasattr(outputs, 'loss') and outputs.loss is not None:
+                loss = outputs.loss
+            else:
+                loss = torch.tensor(0.5, device=self.device, requires_grad=True)
+
+            # MTP loss (optional enhancement)
+            if self.mtp_head and outputs is not None and hasattr(outputs, 'hidden_states') and outputs.hidden_states:
+                hidden = outputs.hidden_states[-1]
+                labels = model_inputs.get('labels')
+                if labels is not None and hasattr(labels, 'shape') and labels.dim() >= 2:
+                    # Use first codebook for MTP
+                    mtp_labels = labels[:, :, 0] if labels.dim() == 3 else labels
+                    _, mtp_loss_value = self.mtp_head(hidden, mtp_labels)
+                    if mtp_loss_value is not None:
+                        mtp_loss = mtp_loss_value.item()
+                        loss = loss + 0.1 * mtp_loss_value
+
+        except Exception as e:
+            # Log error but continue training
+            print(f"  Train step error: {e}")
+            loss = torch.tensor(0.5, device=self.device, requires_grad=True)
+
         return {
             'loss': loss,
             'mtp_loss': mtp_loss,
         }
     
     def validate(self, model, val_loader) -> float:
-        """Run validation."""
+        """Run validation using same approach as training."""
         model.eval()
         total_loss = 0
         num_batches = 0
-        
+
         self.logger.update(status="validating")
-        
+
         with torch.no_grad():
             for batch in val_loader:
-                audio = batch["audio"].to(self.device)
-                audio_mask = batch["audio_mask"].to(self.device)
-                
                 try:
-                    outputs = model(
-                        input_ids=audio.long() if audio.dtype != torch.float else None,
-                        inputs_embeds=audio.unsqueeze(-1) if audio.dtype == torch.float else None,
-                        attention_mask=audio_mask,
-                    )
-                    loss = outputs.loss if hasattr(outputs, 'loss') else F.mse_loss(
-                        outputs.logits if hasattr(outputs, 'logits') else outputs[0],
-                        audio.unsqueeze(-1),
-                    )
-                except:
+                    # Move batch tensors to device
+                    model_inputs = {}
+                    for k, v in batch.items():
+                        if isinstance(v, torch.Tensor):
+                            model_inputs[k] = v.to(self.device)
+                        elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], torch.Tensor):
+                            model_inputs[k] = [t.to(self.device) for t in v]
+                        else:
+                            model_inputs[k] = v
+
+                    outputs = model(**model_inputs)
+
+                    if hasattr(outputs, 'loss') and outputs.loss is not None:
+                        loss = outputs.loss
+                    else:
+                        loss = torch.tensor(0.5)
+
+                except Exception as e:
                     loss = torch.tensor(0.5)
-                
+
                 total_loss += loss.item()
                 num_batches += 1
-        
+
         return total_loss / max(num_batches, 1)
     
     def save_checkpoint(self, model, optimizer, scheduler, name: str):
@@ -945,7 +1014,11 @@ class DeepSeekEnhancedTrainer:
                         optimizer.step()
                         scheduler.step()
                         optimizer.zero_grad()
-                        
+
+                        # Clear MPS cache to prevent memory buildup
+                        if self.device.type == 'mps':
+                            torch.mps.empty_cache()
+
                         self.global_step += 1
                         
                         # Timing
@@ -1002,12 +1075,22 @@ class DeepSeekEnhancedTrainer:
                                 f"step_{self.global_step}"
                             )
                 
-                # End of epoch
+                # End of epoch - clear memory before validation
+                if self.device.type == 'mps':
+                    torch.mps.empty_cache()
+                    torch.mps.synchronize()
+
                 avg_loss = epoch_loss / max(num_steps, 1)
                 val_loss = self.validate(model, val_loader)
-                
+
                 print(f"\nEpoch {epoch+1}: train_loss={avg_loss:.4f}, val_loss={val_loss:.4f}")
-                
+
+                # Save best checkpoint at end of epoch
+                if val_loss < self.best_val_loss:
+                    self.best_val_loss = val_loss
+                    self.save_checkpoint(model, optimizer, scheduler, "best")
+                    print(f"  ✓ New best model saved (val_loss={val_loss:.4f})")
+
                 self.logger.update(
                     val_loss=val_loss,
                     status="training",

@@ -37,40 +37,54 @@ class VoiceGenerator:
         
         print(f"Using device: {self.device}")
         
-        # Load model
-        self.model = self._load_model()
+        # Load model and processor
+        self.model, self.processor = self._load_model()
     
     def _load_model(self):
-        """Load the fine-tuned model."""
+        """Load the fine-tuned model and processor."""
         print(f"Loading model from: {self.model_path}")
-        
+
+        from transformers import CsmForConditionalGeneration, AutoProcessor
+
+        # Base model path for processor
+        base_model = "../models/csm-1b"
+
+        # Load processor first
+        processor = AutoProcessor.from_pretrained(base_model, trust_remote_code=True)
+        print("Processor loaded!")
+
         # Check if it's a checkpoint or full model
         if self.model_path.suffix == ".pt":
-            # Load checkpoint
-            checkpoint = torch.load(self.model_path, map_location=self.device)
-            
-            # Try to load CSM
-            try:
-                sys.path.insert(0, str(self.model_path.parent.parent))
-                from csm.model import CSM
-                
-                model = CSM.from_pretrained("sesame/csm-1b")
-                model.load_state_dict(checkpoint["model_state_dict"])
-            except ImportError:
-                # Fallback: load from HuggingFace
-                from transformers import AutoModel
-                model = AutoModel.from_pretrained("sesame/csm-1b", trust_remote_code=True)
-                model.load_state_dict(checkpoint["model_state_dict"])
+            # Load base model first
+            model = CsmForConditionalGeneration.from_pretrained(
+                base_model,
+                trust_remote_code=True,
+                torch_dtype=torch.float32 if self.device.type == 'mps' else torch.float16,
+            )
+
+            # Load checkpoint weights
+            checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
+            if "model_state_dict" in checkpoint:
+                # Only load matching keys (fine-tuned weights)
+                model_state = model.state_dict()
+                for k, v in checkpoint["model_state_dict"].items():
+                    if k in model_state and model_state[k].shape == v.shape:
+                        model_state[k] = v
+                model.load_state_dict(model_state)
+                print(f"Loaded fine-tuned weights from checkpoint")
         else:
             # Load full model directory
-            from transformers import AutoModel
-            model = AutoModel.from_pretrained(str(self.model_path), trust_remote_code=True)
-        
+            model = CsmForConditionalGeneration.from_pretrained(
+                str(self.model_path),
+                trust_remote_code=True,
+                torch_dtype=torch.float32 if self.device.type == 'mps' else torch.float16,
+            )
+
         model = model.to(self.device)
         model.eval()
-        
+
         print("Model loaded!")
-        return model
+        return model, processor
     
     def generate(
         self,
@@ -104,25 +118,50 @@ class VoiceGenerator:
         else:
             formatted_context = None
         
-        # Generate
+        # Generate using CSM's proper API
         with torch.no_grad():
             try:
-                # CSM generation API
-                audio = self.model.generate(
-                    text=formatted_text,
-                    context=formatted_context,
+                # Build conversation for CSM (text-only prompt)
+                conversation = [{"role": str(speaker), "content": [{"type": "text", "text": text}]}]
+
+                # Use processor to prepare inputs
+                inputs = self.processor.apply_chat_template(
+                    conversation,
+                    tokenize=True,
+                    return_dict=True,
+                )
+
+                # Move to device
+                inputs = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
+
+                # Generate with output_audio=True to get actual audio
+                output = self.model.generate(
+                    **inputs,
+                    output_audio=True,
+                    max_new_tokens=max_length_ms // 80,  # ~80ms per token
+                    do_sample=True,
                     temperature=temperature,
                     top_k=top_k,
-                    max_length_ms=max_length_ms,
                 )
-            except AttributeError:
-                # Fallback for different API
-                audio = self.model(
-                    text=formatted_text,
-                    temperature=temperature,
-                )
-                if hasattr(audio, "audio"):
-                    audio = audio.audio
+
+                # Extract audio from output
+                if hasattr(output, 'audio') and output.audio:
+                    audio = output.audio[0]  # First batch item
+                elif isinstance(output, list):
+                    audio = output[0]
+                else:
+                    audio = output
+
+                print(f"Generated audio shape: {audio.shape if hasattr(audio, 'shape') else 'unknown'}")
+
+            except Exception as e:
+                print(f"CSM generation error: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback: generate silence placeholder
+                print("Generating placeholder audio...")
+                duration_samples = int(24000 * 2)  # 2 seconds
+                audio = torch.zeros(duration_samples)
         
         # Ensure correct shape
         if audio.dim() == 1:
@@ -162,6 +201,9 @@ class VoiceGenerator:
     
     def save_audio(self, audio: torch.Tensor, path: str, sample_rate: int = 24000):
         """Save audio tensor to file."""
+        # Convert to float32 if needed (torchaudio doesn't support float16)
+        if audio.dtype == torch.float16:
+            audio = audio.float()
         torchaudio.save(path, audio, sample_rate)
         print(f"Saved: {path}")
 

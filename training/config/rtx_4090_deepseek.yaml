@@ -1,4 +1,4 @@
-# Enhanced Training Configuration - M4 Pro (64GB)
+# Enhanced Training Configuration - RTX 4090 (24GB)
 # With DeepSeek Techniques for Faster Convergence
 
 # Model
@@ -17,7 +17,7 @@ mtp_tokens: 4  # Predict 4 tokens ahead (DeepSeek uses 1-6)
 
 # Learning Rate Schedule (DeepSeek-style)
 # Warmup -> Stable -> Cosine decay
-learning_rate: 2.0e-5  # Slightly higher with MTP
+learning_rate: 3.0e-5  # Higher LR for faster convergence on 4090
 warmup_steps: 500
 stable_steps: 500  # Hold at peak LR before decay
 min_lr_ratio: 0.1  # Decay to 10% of peak
@@ -27,35 +27,35 @@ weight_decay: 0.1  # Higher than typical
 adam_beta1: 0.9
 adam_beta2: 0.95  # DeepSeek uses 0.95 (more momentum)
 
-# ============== M4 Pro Optimizations ==============
+# ============== RTX 4090 Optimizations ==============
 
-# M4 Pro has 64GB unified memory - but needs headroom for gradient checkpointing
-batch_size: 4  # Further reduced to avoid OOM during backward pass
-gradient_accumulation: 6  # Effective batch = 24 (same as before)
+# RTX 4090 has 24GB VRAM - can handle larger batches
+batch_size: 8  # Larger batch for faster training
+gradient_accumulation: 4  # Effective batch = 32
 
-# M4 works well with FP32 (unified memory reduces precision benefit)
-precision: "fp32"
+# FP16 for 2x speedup on Ampere/Ada
+precision: "fp16"
 
-# torch.compile for MPS
+# torch.compile for CUDA
 use_compile: true
 
-# No multiprocessing on MPS
-num_workers: 0
+# Multi-worker data loading
+num_workers: 4
 
 # Device
-device: "mps"
+device: "cuda"
 
 # ============== Training Settings ==============
 
-num_epochs: 3  # Testing with 3 epochs first
+num_epochs: 50  # Full training run
 max_grad_norm: 1.0
 
-# Gradient checkpointing (saves memory, slight speed cost)
+# Gradient checkpointing (saves memory for larger batches)
 gradient_checkpointing: true
 
 # ============== Logging & Checkpointing ==============
 
-output_dir: "../models/checkpoints/voice_deepseek_v1"
+output_dir: "../models/checkpoints/voice_deepseek_4090"
 log_every: 10
 eval_every: 100
 save_every: 500
@@ -65,8 +65,8 @@ use_wandb: false
 wandb_project: "voice-clone"
 
 # ============== Expected Performance ==============
-# M4 Pro with these settings:
-#   - ~2-3 samples/second
-#   - ~25-35GB memory usage
-#   - ~4-6 hours for 50 epochs on 60min data
+# RTX 4090 with these settings:
+#   - ~8-12 samples/second
+#   - ~18-22GB VRAM usage
+#   - ~1-2 hours for 50 epochs on 60min data
 #   - MTP should improve convergence by ~20-30%

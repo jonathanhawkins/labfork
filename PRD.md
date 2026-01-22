@@ -84,22 +84,24 @@ voice-clone-pipeline/
 ├── frontend/                 # Next.js web UI
 │   ├── app/
 │   │   ├── page.tsx         # Main recording interface
+│   │   ├── training/
+│   │   │   └── page.tsx     # Real-time training dashboard
 │   │   ├── layout.tsx       # App layout
 │   │   └── globals.css      # Styles
 │   ├── components/
-│   │   ├── ProsodyMatrixVisualizer.tsx  # 3D cube visualization
-│   │   └── ProsodyCubeVisualizer.tsx    # Alternative visualizer
+│   │   └── ProsodyMatrixVisualizer.tsx  # 3D cube visualization
 │   ├── package.json
 │   └── tailwind.config.js
 │
 ├── training/                 # Model training code
 │   ├── prepare_dataset.py   # Convert recordings to training format
-│   ├── finetune_csm.py      # Main training script
-│   ├── finetune_lora.py     # LoRA training (lower memory)
+│   ├── train_deepseek.py    # DeepSeek-enhanced training (recommended)
+│   ├── training_api.py      # Real-time training dashboard API
+│   ├── finetune_csm.py      # Standard training script
 │   ├── config/
-│   │   ├── base.yaml        # Base training config
-│   │   ├── m4_pro.yaml      # M4 Pro optimized settings
-│   │   └── rtx_4090.yaml    # RTX 4090 optimized settings
+│   │   ├── m4_pro_deepseek.yaml  # M4 Pro + DeepSeek config
+│   │   ├── m4_pro.yaml           # M4 Pro standard config
+│   │   └── rtx_4090.yaml         # RTX 4090 config
 │   └── requirements.txt     # Training dependencies
 │
 ├── inference/                # Voice generation
@@ -117,7 +119,7 @@ voice-clone-pipeline/
 │   ├── raw/                 # Original recordings
 │   ├── processed/           # Resampled & cleaned
 │   ├── labeled/             # With prosody labels
-│   └── splits/              # Train/val/test splits
+│   └── training/            # Train/val/test splits
 │
 ├── models/                   # Model checkpoints (created on setup)
 │   ├── csm-1b/              # Base CSM model
@@ -128,9 +130,10 @@ voice-clone-pipeline/
 ├── visualizer-demo.html      # Standalone 3D visualizer demo
 │
 └── docs/                     # Additional documentation
-    ├── ARCHITECTURE.md      # Technical deep-dive
-    ├── PROSODY_FEATURES.md  # Prosody feature reference
-    └── API_REFERENCE.md     # API documentation
+    ├── DEEPSEEK_TECHNIQUES.md  # DeepSeek innovations explained
+    ├── ARCHITECTURE.md         # Technical deep-dive
+    ├── PROSODY_FEATURES.md     # Prosody feature reference
+    └── API_REFERENCE.md        # API documentation
 ```
 
 ---
@@ -366,12 +369,12 @@ The web interface shows:
 # Convert labeled data to training format
 python training/prepare_dataset.py \
   --input data/labeled/ \
-  --output data/splits/ \
+  --output data/training/ \
   --val_split 0.1 \
   --test_split 0.05
 
 # Output structure:
-# data/splits/
+# data/training/
 #   train.json
 #   val.json
 #   test.json
@@ -382,23 +385,16 @@ python training/prepare_dataset.py \
 ```bash
 cd training
 
-# Full fine-tune (best quality)
+# DeepSeek-enhanced training (recommended)
+python train_deepseek.py \
+  --config config/rtx_4090.yaml \
+  --dashboard
+
+# Standard fine-tune (alternative)
 python finetune_csm.py \
   --config config/rtx_4090.yaml \
-  --data_dir ../data/splits/ \
-  --output_dir ../models/checkpoints/my_voice_v1 \
-  --epochs 50 \
-  --batch_size 4 \
-  --learning_rate 1e-5
-
-# Or LoRA (faster iteration)
-python finetune_lora.py \
-  --config config/rtx_4090.yaml \
-  --data_dir ../data/splits/ \
-  --output_dir ../models/checkpoints/my_voice_lora_v1 \
-  --epochs 30 \
-  --lora_rank 32 \
-  --lora_alpha 64
+  --data_dir ../data/training/ \
+  --output_dir ../models/checkpoints/my_voice_v1
 ```
 
 ### Training on M4 Pro Mac
@@ -406,14 +402,19 @@ python finetune_lora.py \
 ```bash
 cd training
 
-# M4 can do full fine-tune with its 64GB unified memory
+# DeepSeek-enhanced training with real-time dashboard
+python train_deepseek.py \
+  --config config/m4_pro_deepseek.yaml \
+  --dashboard
+
+# Dashboard runs at http://localhost:8001
+# Frontend dashboard at http://localhost:3000/training
+
+# Standard fine-tune (alternative)
 python finetune_csm.py \
   --config config/m4_pro.yaml \
-  --data_dir ../data/splits/ \
-  --output_dir ../models/checkpoints/my_voice_v1 \
-  --epochs 50 \
-  --batch_size 8 \
-  --device mps
+  --data_dir ../data/training/ \
+  --output_dir ../models/checkpoints/my_voice_v1
 
 # Note: M4 is ~3-4x slower per step than 4090, but larger batches help
 ```
@@ -421,43 +422,76 @@ python finetune_csm.py \
 ### Training Hyperparameters
 
 ```yaml
-# config/base.yaml
+# config/m4_pro_deepseek.yaml (example)
 
 # Model
-model_name: "sesame/csm-1b"
-freeze_backbone_layers: 0  # 0 = train all, 12+ = freeze early layers
+model_path: "../models/csm-1b"  # Local path to downloaded model
 
 # Data
-max_audio_length_ms: 30000  # 30 second clips max
-context_turns: 3            # How much conversation history
+data_dir: "../data/training"
+max_audio_length_ms: 30000
+
+# ============== DeepSeek Enhancements ==============
+
+# Multi-Token Prediction (denser training signal)
+use_mtp: true
+mtp_heads: 4          # Predict 4 tokens ahead
+
+# Multi-head Latent Attention (memory efficiency)
+use_mla: true
+mla_compression_ratio: 4
+
+# DeepSeek Learning Rate Schedule
+use_deepseek_lr: true
+lr_warmup_ratio: 0.1    # 10% warmup
+lr_stable_ratio: 0.6    # 60% stable
+lr_decay_ratio: 0.3     # 30% cosine decay
+
+# ============== M4 Pro Optimizations ==============
+
+batch_size: 12          # Larger batches on M4
+learning_rate: 2e-5
+gradient_accumulation: 2
+use_torch_compile: false  # MPS doesn't support compile yet
+device: "mps"
 
 # Training
-learning_rate: 1e-5
-weight_decay: 0.01
-warmup_steps: 500
-max_epochs: 50
-early_stopping_patience: 5
-
-# Batch
-batch_size: 4               # Adjust based on VRAM
-gradient_accumulation: 4    # Effective batch = batch_size * grad_accum
+num_epochs: 50
+max_grad_norm: 1.0
 gradient_checkpointing: true
 
-# LoRA (if using)
-lora_rank: 32
-lora_alpha: 64
-lora_dropout: 0.05
-lora_target_modules: ["q_proj", "v_proj", "k_proj", "o_proj"]
-
-# Prosody (experimental - use labeled data)
-use_prosody_supervision: false  # Set true to use prosody labels as auxiliary loss
-prosody_loss_weight: 0.1
+# CSM-specific
+freeze_codec: true      # Keep Mimi codec frozen (recommended)
 ```
+
+**Key DeepSeek Features:**
+- **MTP (Multi-Token Prediction):** Predicts 4 tokens ahead for denser training signal
+- **MLA (Multi-head Latent Attention):** Compresses KV cache for memory efficiency
+- **DeepSeek LR Schedule:** Warmup → Stable → Cosine decay phases
+- **Codec Freezing:** Keeps Mimi codec frozen, trains only backbone (recommended by Sesame)
 
 ### Monitoring Training
 
+**Using the Real-Time Dashboard (Recommended):**
+
 ```bash
-# Start TensorBoard
+# Run training with --dashboard flag
+python train_deepseek.py --config config/m4_pro_deepseek.yaml --dashboard
+
+# Dashboard API: http://localhost:8001
+# Frontend UI: http://localhost:3000/training
+```
+
+The dashboard shows:
+- Live training/validation loss curves
+- Learning rate schedule visualization
+- Memory usage and training speed
+- Current epoch and step progress
+- Real-time status updates via WebSocket
+
+**Using TensorBoard (Alternative):**
+
+```bash
 tensorboard --logdir models/checkpoints/my_voice_v1/logs
 
 # Watch for:
@@ -529,7 +563,7 @@ curl -X POST http://localhost:8001/generate \
 # Run evaluation suite
 python evaluate.py \
   --model ../models/checkpoints/my_voice_v1/best.pt \
-  --test_data ../data/splits/test.json \
+  --test_data ../data/training/test.json \
   --output_dir ../evaluation/
 
 # Generates:

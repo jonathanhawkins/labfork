@@ -17,6 +17,7 @@ import {
 } from "recharts";
 
 const TRAINING_API = process.env.NEXT_PUBLIC_TRAINING_API || "http://localhost:8001";
+const BACKEND_API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
 
 // ============== Types ==============
 
@@ -56,6 +57,26 @@ interface DataSample {
       energy_level?: string;
     };
   };
+}
+
+interface VoiceDataStats {
+  has_training_data: boolean;
+  manifest_path?: string;
+  sample_count?: number;
+  total_duration_seconds?: number;
+  total_duration_minutes?: number;
+  emotion_distribution?: Record<string, number>;
+  samples_preview?: DataSample[];
+  sessions_available?: Array<{ session_id: string; recording_count: number }>;
+  message?: string;
+}
+
+interface TrainingStatus {
+  status: string;
+  pid?: number;
+  log_tail?: string;
+  exit_code?: number;
+  message?: string;
 }
 
 // ============== Utility Functions ==============
@@ -362,7 +383,7 @@ function DataViewer({ samples }: { samples: DataSample[] }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<string>("all");
 
-  const emotions = [...new Set(samples.map(s => s.prosody?.semantic?.emotion).filter(Boolean))];
+  const emotions = Array.from(new Set(samples.map(s => s.prosody?.semantic?.emotion).filter(Boolean)));
   
   const filtered = samples.filter(s => {
     if (search && !s.text.toLowerCase().includes(search.toLowerCase())) return false;
@@ -493,6 +514,17 @@ export default function TrainingDashboard() {
   const [activeTab, setActiveTab] = useState<"overview" | "data" | "logs">("overview");
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Voice data and training state
+  const [voiceStats, setVoiceStats] = useState<VoiceDataStats | null>(null);
+  const [trainingStatus, setTrainingStatus] = useState<TrainingStatus | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [trainingConfig, setTrainingConfig] = useState({
+    epochs: 50,
+    batchSize: 4,
+    config: "m4_pro.yaml",
+  });
+
   // Connect to WebSocket
   useEffect(() => {
     const connect = () => {
@@ -541,12 +573,40 @@ export default function TrainingDashboard() {
     }, 2000);
 
     // Load sample data
-    fetch("http://localhost:8000/samples")
+    fetch(`${BACKEND_API}/samples`)
       .then(res => res.json())
       .then(data => setSamples(data.samples || []))
       .catch(() => {});
 
+    // Load voice data stats
+    const fetchVoiceStats = async () => {
+      try {
+        const res = await fetch(`${BACKEND_API}/training/data-stats`);
+        if (res.ok) {
+          const data = await res.json();
+          setVoiceStats(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch voice stats:", e);
+      }
+    };
+    fetchVoiceStats();
+
+    // Poll training status
+    const statusInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${BACKEND_API}/training/status`);
+        if (res.ok) {
+          const data = await res.json();
+          setTrainingStatus(data);
+        }
+      } catch (e) {
+        // Ignore
+      }
+    }, 3000);
+
     return () => {
+      clearInterval(statusInterval);
       clearInterval(pollInterval);
       if (wsRef.current) {
         wsRef.current.close();
@@ -591,13 +651,214 @@ export default function TrainingDashboard() {
               </button>
             ))}
         </div>
-        {!metrics ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4" />
-            <p className="text-slate-400">Waiting for training to start...</p>
-            <p className="text-xs text-slate-600 mt-2">
-              Run: python train_deepseek.py --config config/m4_pro_deepseek.yaml --dashboard
-            </p>
+        {!metrics && trainingStatus?.status !== "running" ? (
+          <div className="space-y-6">
+            {/* Start Training Section */}
+            <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl font-bold mb-2">Train Your Voice Model</h2>
+                <p className="text-slate-400">Fine-tune CSM-1B on your recorded voice samples</p>
+              </div>
+
+              {/* Voice Data Stats */}
+              {voiceStats ? (
+                voiceStats.has_training_data ? (
+                  <div className="space-y-6">
+                    {/* Data Ready */}
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl">✓</span>
+                        <div>
+                          <h3 className="font-semibold text-emerald-400">Training Data Ready</h3>
+                          <p className="text-sm text-slate-400">{voiceStats.sample_count} samples • {voiceStats.total_duration_minutes} minutes</p>
+                        </div>
+                      </div>
+
+                      {/* Emotion Distribution */}
+                      {voiceStats.emotion_distribution && (
+                        <div className="mt-4">
+                          <p className="text-sm text-slate-400 mb-2">Emotion Distribution:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(voiceStats.emotion_distribution).map(([emotion, count]) => (
+                              <span key={emotion} className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">
+                                {emotion}: {count}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Training Config */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-sm text-slate-400 mb-1 block">Epochs</label>
+                        <input
+                          type="number"
+                          value={trainingConfig.epochs}
+                          onChange={(e) => setTrainingConfig(prev => ({ ...prev, epochs: parseInt(e.target.value) || 50 }))}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-slate-400 mb-1 block">Batch Size</label>
+                        <input
+                          type="number"
+                          value={trainingConfig.batchSize}
+                          onChange={(e) => setTrainingConfig(prev => ({ ...prev, batchSize: parseInt(e.target.value) || 4 }))}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-slate-400 mb-1 block">Config</label>
+                        <select
+                          value={trainingConfig.config}
+                          onChange={(e) => setTrainingConfig(prev => ({ ...prev, config: e.target.value }))}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white"
+                        >
+                          <option value="m4_pro.yaml">M4 Pro (Mac)</option>
+                          <option value="rtx_4090.yaml">RTX 4090</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Start Button */}
+                    <button
+                      onClick={async () => {
+                        setIsStarting(true);
+                        try {
+                          const res = await fetch(`${BACKEND_API}/training/start?config=${trainingConfig.config}&epochs=${trainingConfig.epochs}&batch_size=${trainingConfig.batchSize}`, {
+                            method: "POST",
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            setTrainingStatus(data);
+                          } else {
+                            alert(data.detail || "Failed to start training");
+                          }
+                        } catch (e) {
+                          alert("Failed to start training");
+                        } finally {
+                          setIsStarting(false);
+                        }
+                      }}
+                      disabled={isStarting}
+                      className="w-full py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
+                    >
+                      {isStarting ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Starting Training...
+                        </span>
+                      ) : (
+                        "Start Training on Mac"
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  /* No Training Data - Need to Prepare */
+                  <div className="space-y-6">
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl">⚠</span>
+                        <div>
+                          <h3 className="font-semibold text-yellow-400">No Training Data</h3>
+                          <p className="text-sm text-slate-400">{voiceStats.message}</p>
+                        </div>
+                      </div>
+
+                      {voiceStats.sessions_available && voiceStats.sessions_available.length > 0 && (
+                        <div className="mt-4">
+                          <p className="text-sm text-slate-400 mb-2">Available recording sessions:</p>
+                          <div className="space-y-2">
+                            {voiceStats.sessions_available.map((session) => (
+                              <div key={session.session_id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
+                                <span className="text-sm text-white">{session.session_id}</span>
+                                <span className="text-sm text-slate-400">{session.recording_count} recordings</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            onClick={async () => {
+                              setIsPreparing(true);
+                              try {
+                                const res = await fetch(`${BACKEND_API}/training/prepare`, {
+                                  method: "POST",
+                                });
+                                const data = await res.json();
+                                if (res.ok) {
+                                  // Refresh stats
+                                  const statsRes = await fetch(`${BACKEND_API}/training/data-stats`);
+                                  if (statsRes.ok) {
+                                    setVoiceStats(await statsRes.json());
+                                  }
+                                } else {
+                                  alert(data.detail || "Failed to prepare training data");
+                                }
+                              } catch (e) {
+                                alert("Failed to prepare training data");
+                              } finally {
+                                setIsPreparing(false);
+                              }
+                            }}
+                            disabled={isPreparing}
+                            className="mt-4 w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-xl transition-all disabled:opacity-50"
+                          >
+                            {isPreparing ? "Preparing..." : "Prepare Training Data"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-center">
+                      <p className="text-slate-500 text-sm">
+                        Go to the <a href="/perform" className="text-emerald-400 hover:underline">Perform page</a> to record voice samples first.
+                      </p>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="flex justify-center py-8">
+                  <div className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+
+            {/* Training Status */}
+            {trainingStatus && trainingStatus.status !== "not_started" && (
+              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+                <h3 className="text-lg font-semibold mb-4">Training Status</h3>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className={`w-3 h-3 rounded-full ${
+                    trainingStatus.status === "running" ? "bg-emerald-500 animate-pulse" :
+                    trainingStatus.status === "completed" ? "bg-emerald-500" :
+                    trainingStatus.status === "failed" ? "bg-red-500" : "bg-slate-500"
+                  }`} />
+                  <span className="font-medium capitalize">{trainingStatus.status}</span>
+                  {trainingStatus.pid && <span className="text-sm text-slate-500">PID: {trainingStatus.pid}</span>}
+                </div>
+
+                {trainingStatus.log_tail && (
+                  <pre className="bg-slate-900 rounded-lg p-4 text-xs text-slate-300 overflow-auto max-h-64 font-mono">
+                    {trainingStatus.log_tail}
+                  </pre>
+                )}
+
+                {trainingStatus.status === "running" && (
+                  <button
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to stop training?")) {
+                        await fetch(`${BACKEND_API}/training/stop`, { method: "POST" });
+                      }
+                    }}
+                    className="mt-4 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30"
+                  >
+                    Stop Training
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : activeTab === "overview" ? (
           <div className="space-y-6">
