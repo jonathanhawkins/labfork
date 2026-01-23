@@ -61,6 +61,8 @@ class ProsodyConditionedDataset(Dataset):
     Dataset that provides (audio, text, prosody) triplets.
 
     The prosody is pre-extracted and cached for efficiency.
+    Supports energy augmentation to create better contrast between
+    high-energy (angry/excited) and low-energy (sad/calm) emotions.
     """
 
     def __init__(
@@ -69,11 +71,23 @@ class ProsodyConditionedDataset(Dataset):
         prosody_cache_dir: str,
         max_audio_length_ms: int = 30000,
         sample_rate: int = 24000,
+        energy_augmentation: Optional[dict] = None,
     ):
         self.manifest_path = Path(manifest_path)
         self.prosody_cache_dir = Path(prosody_cache_dir)
         self.max_audio_length = int(max_audio_length_ms * sample_rate / 1000)
         self.sample_rate = sample_rate
+
+        # Energy augmentation config
+        # Default: boost angry by +6dB, reduce sad by -6dB
+        self.energy_aug = energy_augmentation or {}
+        self.energy_aug_enabled = self.energy_aug.get('enabled', False)
+        self.angry_boost_db = self.energy_aug.get('angry_boost_db', 6.0)
+        self.sad_reduce_db = self.energy_aug.get('sad_reduce_db', -6.0)
+        self.energy_aug_prob = self.energy_aug.get('probability', 0.5)
+
+        if self.energy_aug_enabled:
+            print(f"Energy augmentation enabled: angry +{self.angry_boost_db}dB, sad {self.sad_reduce_db}dB (p={self.energy_aug_prob})")
 
         # Load manifest
         with open(manifest_path) as f:
@@ -158,6 +172,14 @@ class ProsodyConditionedDataset(Dataset):
         # Load or extract prosody
         prosody = self._get_prosody(sample, idx, audio_path)
 
+        # Apply energy augmentation based on emotion
+        if self.energy_aug_enabled:
+            import random
+            if random.random() < self.energy_aug_prob:
+                waveform, prosody = self._apply_energy_augmentation(
+                    waveform, prosody, sample
+                )
+
         return {
             'audio': waveform,
             'text': text,
@@ -166,6 +188,65 @@ class ProsodyConditionedDataset(Dataset):
             'prosody_rhythm': prosody['rhythm'].squeeze(0),
             'prosody_contour': prosody['contour'].squeeze(0),
         }
+
+    def _apply_energy_augmentation(
+        self,
+        waveform: torch.Tensor,
+        prosody: Dict[str, torch.Tensor],
+        sample: dict,
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """
+        Apply energy augmentation based on emotion.
+
+        High-energy emotions (angry, excited) get boosted.
+        Low-energy emotions (sad, calm) get reduced.
+
+        This creates clearer contrast in the training data.
+        """
+        import math
+
+        # Detect emotion from sample metadata
+        semantic = sample.get('prosody', {}).get('semantic', {})
+        emotion = semantic.get('emotion', '').lower()
+
+        if not emotion:
+            # Try to get from emotions dict
+            emotions = semantic.get('emotions', {})
+            if emotions:
+                emotion = max(emotions.items(), key=lambda kv: kv[1])[0].lower()
+
+        if not emotion:
+            return waveform, prosody
+
+        # Determine gain adjustment
+        gain_db = 0.0
+        if emotion in ['angry', 'excited', 'surprised']:
+            gain_db = self.angry_boost_db
+        elif emotion in ['sad', 'calm', 'fearful']:
+            gain_db = self.sad_reduce_db
+
+        if gain_db == 0.0:
+            return waveform, prosody
+
+        # Apply gain to audio
+        gain_linear = 10 ** (gain_db / 20.0)
+        waveform = waveform * gain_linear
+
+        # Clip to prevent clipping
+        waveform = torch.clamp(waveform, -1.0, 1.0)
+
+        # Update prosody acoustic intensity (index 2)
+        prosody = {k: v.clone() for k, v in prosody.items()}
+        if prosody['acoustic'].shape[-1] > 2:
+            # Intensity is normalized to [0, 1], adjust proportionally
+            # +6dB roughly doubles intensity, so add ~0.15 to normalized value
+            intensity_delta = gain_db / 40.0  # Rough mapping: ±6dB -> ±0.15
+            prosody['acoustic'][..., 2] = torch.clamp(
+                prosody['acoustic'][..., 2] + intensity_delta,
+                0.0, 1.0
+            )
+
+        return waveform, prosody
 
     def _get_prosody(
         self,
@@ -274,6 +355,45 @@ class EnergyPredictor(nn.Module):
         return self.predictor(prosody_embedding).squeeze(-1)
 
 
+class EmotionPredictor(nn.Module):
+    """
+    Auxiliary head that predicts discrete emotion from prosody embeddings.
+
+    This enforces separability between emotions (e.g., angry vs sad).
+    """
+
+    def __init__(self, hidden_size: int = 2048, num_emotions: int = 8, dropout: float = 0.1):
+        super().__init__()
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 4),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size // 4, num_emotions),
+        )
+
+    def forward(self, prosody_embedding: torch.Tensor, reduce: bool = True) -> torch.Tensor:
+        """
+        Predict emotion logits from prosody embedding.
+
+        Args:
+            prosody_embedding: [batch, hidden_size] or [batch, num_tokens, hidden_size]
+
+        Returns:
+            Logits of shape [batch, num_emotions] or [batch, num_segments, num_emotions]
+        """
+        if prosody_embedding.dim() == 3:
+            if reduce:
+                prosody_embedding = prosody_embedding.mean(dim=1)
+                return self.classifier(prosody_embedding)
+
+            batch_size, num_segments, hidden = prosody_embedding.shape
+            flattened = prosody_embedding.reshape(batch_size * num_segments, hidden)
+            logits = self.classifier(flattened)
+            return logits.view(batch_size, num_segments, -1)
+
+        return self.classifier(prosody_embedding)
+
+
 class ProsodyConditionedTrainer:
     """
     Trainer for prosody-conditioned voice cloning.
@@ -302,6 +422,7 @@ class ProsodyConditionedTrainer:
         self.prosody_loss_weight = config.get('prosody_loss_weight', 2.0)  # Boost prosody loss
         self.energy_loss_weight = config.get('energy_loss_weight', 1.0)   # Energy auxiliary loss
         self.temporal_loss_weight = config.get('temporal_loss_weight', 1.0)
+        self.emotion_loss_weight = config.get('emotion_loss_weight', 1.0)
 
         self.prosody_config = ProsodyConfig(
             hidden_size=config.get('hidden_size', 2048),
@@ -319,6 +440,7 @@ class ProsodyConditionedTrainer:
         self.model = self._setup_model()
         self.temporal_encoder = self._setup_temporal_encoder() if self.train_temporal else None
         self.energy_predictor = self._setup_energy_predictor()
+        self.emotion_predictor = self._setup_emotion_predictor()
         self.optimizer = self._setup_optimizer()
 
         # Training state
@@ -419,6 +541,23 @@ class ProsodyConditionedTrainer:
 
         return energy_predictor
 
+    def _setup_emotion_predictor(self) -> EmotionPredictor:
+        """Setup auxiliary emotion predictor for emotion separability."""
+        print("Setting up emotion predictor (auxiliary loss)...")
+
+        emotion_predictor = EmotionPredictor(
+            hidden_size=self.prosody_config.hidden_size,
+            num_emotions=self.prosody_config.semantic_dim,
+            dropout=self.prosody_config.dropout,
+        )
+        emotion_predictor = emotion_predictor.to(self.device)
+
+        emotion_params = sum(p.numel() for p in emotion_predictor.parameters())
+        print(f"Emotion predictor parameters: {emotion_params:,}")
+        print(f"Emotion loss weight: {self.emotion_loss_weight}")
+
+        return emotion_predictor
+
     def _segment_contour(
         self,
         contour: torch.Tensor,
@@ -469,6 +608,10 @@ class ProsodyConditionedTrainer:
         if self.energy_predictor is not None:
             trainable_params.extend(list(self.energy_predictor.parameters()))
 
+        # Add emotion predictor parameters
+        if self.emotion_predictor is not None:
+            trainable_params.extend(list(self.emotion_predictor.parameters()))
+
         total_trainable = sum(p.numel() for p in trainable_params)
         print(f"Total trainable params (all modules): {total_trainable:,}")
 
@@ -485,6 +628,8 @@ class ProsodyConditionedTrainer:
             self.temporal_encoder.train()
         if self.energy_predictor is not None:
             self.energy_predictor.train()
+        if self.emotion_predictor is not None:
+            self.emotion_predictor.train()
 
         # Move to device
         audio = batch['audio'].to(self.device)
@@ -542,6 +687,16 @@ class ProsodyConditionedTrainer:
 
                 # L2 loss on energy prediction
                 energy_loss = F.mse_loss(predicted_energy, target_energy)
+
+            # ============ EMOTION CLASSIFICATION AUXILIARY LOSS ============
+            emotion_loss = torch.tensor(0.0, device=self.device)
+            if self.emotion_predictor is not None:
+                semantic = prosody_dict['semantic']  # [batch, semantic_dim]
+                semantic_confidence, semantic_target = semantic.max(dim=1)
+                valid_mask = semantic_confidence > 0
+                if valid_mask.any():
+                    logits = self.emotion_predictor(prosody_prefix)  # [batch, num_emotions]
+                    emotion_loss = F.cross_entropy(logits[valid_mask], semantic_target[valid_mask])
 
             # ============ AUDIO RECONSTRUCTION LOSS ============
             audio_loss = torch.tensor(0.0, device=self.device)
@@ -620,6 +775,7 @@ class ProsodyConditionedTrainer:
             # ============ TEMPORAL ENCODER LOSS ============
             temporal_loss = torch.tensor(0.0, device=self.device)
             temporal_energy_loss = torch.tensor(0.0, device=self.device)
+            temporal_emotion_loss = torch.tensor(0.0, device=self.device)
             if self.temporal_encoder is not None:
                 # Create temporal prosody by segmenting the global prosody
                 # This simulates having keyframe data by splitting into segments
@@ -672,13 +828,30 @@ class ProsodyConditionedTrainer:
                     temporal_energy_pred = self.energy_predictor(temporal_prefix, reduce=False)
                     temporal_energy_loss = F.mse_loss(temporal_energy_pred, temporal_energy_target)
 
+                if self.emotion_predictor is not None:
+                    # Temporal emotion loss per segment
+                    temporal_semantic = temporal_prosody['semantic']  # [batch, segments, semantic_dim]
+                    temporal_confidence, temporal_target = temporal_semantic.max(dim=2)
+                    valid_mask = temporal_confidence > 0
+                    if valid_mask.any():
+                        logits = self.emotion_predictor(temporal_prefix, reduce=False)
+                        flat_logits = logits.view(-1, logits.shape[-1])
+                        flat_target = temporal_target.view(-1)
+                        flat_mask = valid_mask.view(-1)
+                        temporal_emotion_loss = F.cross_entropy(
+                            flat_logits[flat_mask],
+                            flat_target[flat_mask],
+                        )
+
             # Combined loss (now includes energy auxiliary loss)
             total_energy_loss = (energy_loss + temporal_energy_loss) * self.energy_loss_weight
+            total_emotion_loss = (emotion_loss + temporal_emotion_loss) * self.emotion_loss_weight
             loss = (
                 global_loss
                 + (temporal_loss * self.temporal_loss_weight)
                 + audio_loss
                 + total_energy_loss
+                + total_emotion_loss
             )
             loss.backward()
 
@@ -689,6 +862,8 @@ class ProsodyConditionedTrainer:
                 torch.nn.utils.clip_grad_norm_(self.temporal_encoder.parameters(), max_grad_norm)
             if self.energy_predictor is not None:
                 torch.nn.utils.clip_grad_norm_(self.energy_predictor.parameters(), max_grad_norm)
+            if self.emotion_predictor is not None:
+                torch.nn.utils.clip_grad_norm_(self.emotion_predictor.parameters(), max_grad_norm)
 
             self.optimizer.step()
 
@@ -698,13 +873,21 @@ class ProsodyConditionedTrainer:
                 'temporal_loss': temporal_loss.item() if self.temporal_encoder else 0.0,
                 'audio_loss': audio_loss.item() if isinstance(audio_loss, torch.Tensor) else 0.0,
                 'energy_loss': total_energy_loss.item() if isinstance(total_energy_loss, torch.Tensor) else 0.0,
+                'emotion_loss': total_emotion_loss.item() if isinstance(total_emotion_loss, torch.Tensor) else 0.0,
             }
 
         except Exception as e:
             import traceback
             print(f"Training step error: {e}")
             traceback.print_exc()
-            return {'loss': 0.0, 'global_loss': 0.0, 'temporal_loss': 0.0, 'audio_loss': 0.0, 'energy_loss': 0.0}
+            return {
+                'loss': 0.0,
+                'global_loss': 0.0,
+                'temporal_loss': 0.0,
+                'audio_loss': 0.0,
+                'energy_loss': 0.0,
+                'emotion_loss': 0.0,
+            }
 
     def _create_temporal_prosody(
         self,
@@ -774,6 +957,8 @@ class ProsodyConditionedTrainer:
                         log_msg += f" (global={metrics['global_loss']:.4f}, temporal={metrics['temporal_loss']:.4f}"
                         if metrics.get('energy_loss', 0) > 0:
                             log_msg += f", energy={metrics['energy_loss']:.4f}"
+                        if metrics.get('emotion_loss', 0) > 0:
+                            log_msg += f", emotion={metrics['emotion_loss']:.4f}"
                         if metrics.get('audio_loss', 0) > 0:
                             log_msg += f", audio={metrics['audio_loss']:.4f}"
                         log_msg += ")"
@@ -833,6 +1018,7 @@ class ProsodyConditionedTrainer:
             'prosody_loss_weight': self.prosody_loss_weight,
             'energy_loss_weight': self.energy_loss_weight,
             'temporal_loss_weight': self.temporal_loss_weight,
+            'emotion_loss_weight': self.emotion_loss_weight,
         }
 
         # Save temporal encoder if trained
@@ -843,6 +1029,9 @@ class ProsodyConditionedTrainer:
         # Save energy predictor if trained
         if self.energy_predictor is not None:
             checkpoint['energy_predictor'] = self.energy_predictor.state_dict()
+        # Save emotion predictor if trained
+        if self.emotion_predictor is not None:
+            checkpoint['emotion_predictor'] = self.emotion_predictor.state_dict()
 
         torch.save(checkpoint, output_dir / f'{name}.pt')
         print(f"Saved checkpoint: {output_dir / f'{name}.pt'}")
@@ -892,6 +1081,7 @@ def main():
         dataset = ProsodyConditionedDataset(
             manifest_path,
             config.get('prosody_cache_dir', '../data/prosody_cache'),
+            energy_augmentation=config.get('energy_augmentation'),
         )
         balance_emotions = config.get('balance_emotions', True)
         sampler = None

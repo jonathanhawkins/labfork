@@ -10,6 +10,7 @@ output_dir: ../models/checkpoints/prosody_conditioned
 prosody_loss_weight: 2.0
 energy_loss_weight: 1.0
 temporal_loss_weight: 1.0
+emotion_loss_weight: 1.0
 
 # Temporal prosody settings
 train_temporal: true
