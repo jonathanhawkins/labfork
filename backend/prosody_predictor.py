@@ -335,6 +335,8 @@ Respond with JSON only, no other text:
             "acoustic": {
                 "pitch_mean": pitch_map.get(prosody.pitch_tendency, 0.5) * 200,  # ~100-150 Hz
                 "pitch_std": prosody.energy * 30,
+                "intensity_mean": 50 + prosody.energy * 30,
+                "intensity_std": 5 + prosody.energy * 5,
                 "hnr": 15 + prosody.energy * 10,
             },
             "rhythm": {

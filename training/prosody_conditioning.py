@@ -776,19 +776,28 @@ def extract_prosody_for_conditioning(
                     semantic[i] = score
 
     # Extract acoustic features
-    # prosody_analyzer outputs: pitch_mean, pitch_std, hnr, jitter, shimmer, f1_mean, f2_mean, f3_mean
+    # prosody_analyzer outputs: pitch_mean, pitch_std, intensity_mean/std, hnr, jitter, shimmer, f1_mean, f2_mean, f3_mean
     acoustic = torch.zeros(config.acoustic_dim)
     if 'acoustic' in prosody_dict:
         aco = prosody_dict['acoustic']
         acoustic[0] = aco.get('pitch_mean', 0) / 300  # Normalize
         acoustic[1] = aco.get('pitch_std', 0) / 50
-        acoustic[2] = aco.get('hnr', 0) / 30
-        acoustic[3] = aco.get('jitter', 0) * 100
-        acoustic[4] = aco.get('shimmer', 0) * 10
+        # Energy proxy from intensity (dB). Use a conservative normalization.
+        intensity_mean = aco.get('intensity_mean', None)
+        if intensity_mean is None:
+            intensity_mean = aco.get('energy', 50)
+        acoustic[2] = float(intensity_mean) / 100
+
+        intensity_std = aco.get('intensity_std', 5.0)
+        acoustic[3] = float(intensity_std) / 20
+
+        acoustic[4] = aco.get('hnr', 0) / 30
+        acoustic[5] = aco.get('jitter', 0) * 100
+        acoustic[6] = aco.get('shimmer', 0) * 10
         # Formants - prosody_analyzer uses f1_mean, f2_mean, f3_mean (not nested)
-        acoustic[5] = aco.get('f1_mean', aco.get('formants', {}).get('f1', 500)) / 1000
-        acoustic[6] = aco.get('f2_mean', aco.get('formants', {}).get('f2', 1500)) / 3000
-        acoustic[7] = aco.get('f3_mean', aco.get('formants', {}).get('f3', 2500)) / 4000
+        acoustic[7] = aco.get('f1_mean', aco.get('formants', {}).get('f1', 500)) / 1000
+        acoustic[8] = aco.get('f2_mean', aco.get('formants', {}).get('f2', 1500)) / 3000
+        acoustic[9] = aco.get('f3_mean', aco.get('formants', {}).get('f3', 2500)) / 4000
 
     # Extract rhythm features
     # prosody_analyzer outputs: speaking_rate, articulation_rate, speech_to_pause_ratio, syllable_count, etc.
