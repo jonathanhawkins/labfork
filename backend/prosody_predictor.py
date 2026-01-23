@@ -320,8 +320,13 @@ Respond with JSON only, no other text:
         pace_map = {"slow": 0.3, "medium": 0.5, "fast": 0.7}
         pitch_map = {"low": 0.3, "neutral": 0.5, "high": 0.7}
 
+        contour = self._generate_contour(prosody)
+
         return {
             "semantic": {
+                "emotion": prosody.emotion,
+                "emotion_confidence": prosody.emotion_intensity,
+                # Legacy map for compatibility
                 "emotions": {
                     prosody.emotion: prosody.emotion_intensity,
                 },
@@ -337,7 +342,10 @@ Respond with JSON only, no other text:
                 "pause_ratio": 0.4 - prosody.energy * 0.2,
             },
             "contour": {
-                "pitch_trajectory": self._generate_contour(prosody),
+                "pitch_trajectory": contour,
+                # Canonical fields used by prosody_analyzer
+                "values": contour,
+                "smoothed": contour,
             },
         }
 

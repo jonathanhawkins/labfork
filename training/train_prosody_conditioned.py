@@ -217,6 +217,12 @@ class ProsodyConditionedTrainer:
             num_prosody_tokens=config.get('num_prosody_tokens', 4),
             dropout=config.get('dropout', 0.1),
         )
+        max_segments = self.prosody_config.num_prosody_tokens * 4
+        if self.num_temporal_segments > max_segments:
+            raise ValueError(
+                f"num_temporal_segments ({self.num_temporal_segments}) exceeds max supported "
+                f"({max_segments}). Increase num_prosody_tokens or reduce num_temporal_segments."
+            )
 
         # Setup models
         self.model = self._setup_model()
@@ -304,6 +310,44 @@ class ProsodyConditionedTrainer:
 
         return temporal_encoder
 
+    def _segment_contour(
+        self,
+        contour: torch.Tensor,
+        num_segments: int,
+    ) -> torch.Tensor:
+        """
+        Split contour into segments and resample each segment to contour_dim.
+
+        Args:
+            contour: [batch, contour_dim] pitch trajectory
+            num_segments: number of temporal segments
+
+        Returns:
+            Tensor of shape [batch, num_segments, contour_dim]
+        """
+        batch_size, contour_dim = contour.shape
+        segment_size = max(1, contour_dim // num_segments)
+        segments = []
+
+        for s in range(num_segments):
+            start = s * segment_size
+            end = contour_dim if s == num_segments - 1 else start + segment_size
+            segment = contour[:, start:end]
+            if segment.shape[1] < 2:
+                # Ensure at least two points for interpolation
+                segment = segment.repeat(1, 2)
+
+            # Resample each segment back to contour_dim
+            segment = F.interpolate(
+                segment.unsqueeze(1),
+                size=contour_dim,
+                mode="linear",
+                align_corners=False,
+            ).squeeze(1)
+            segments.append(segment)
+
+        return torch.stack(segments, dim=1)
+
     def _setup_optimizer(self) -> torch.optim.Optimizer:
         """Setup optimizer for trainable parameters."""
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
@@ -320,13 +364,14 @@ class ProsodyConditionedTrainer:
         )
 
     def train_step(self, batch: Dict) -> Dict[str, float]:
-        """Single training step for both global and temporal encoders."""
+        """Single training step for both global and temporal encoders with optional audio loss."""
         self.model.train()
         if self.temporal_encoder is not None:
             self.temporal_encoder.train()
 
         # Move to device
         audio = batch['audio'].to(self.device)
+        texts = batch['text']
         prosody_dict = {
             'semantic': batch['prosody_semantic'].to(self.device),
             'acoustic': batch['prosody_acoustic'].to(self.device),
@@ -335,6 +380,8 @@ class ProsodyConditionedTrainer:
         }
 
         self.optimizer.zero_grad()
+        use_audio_loss = self.config.get('use_audio_loss', False)
+        audio_loss_weight = self.config.get('audio_loss_weight', 0.1)
 
         try:
             # ============ GLOBAL ENCODER LOSS ============
@@ -364,6 +411,70 @@ class ProsodyConditionedTrainer:
 
             # L2 reconstruction loss on first token
             global_loss = F.mse_loss(prosody_prefix[:, 0, :target_embedding.shape[-1]], target_embedding[:, 0, :])
+
+            # ============ AUDIO RECONSTRUCTION LOSS ============
+            audio_loss = torch.tensor(0.0, device=self.device)
+            if use_audio_loss and hasattr(self, 'processor'):
+                try:
+                    # Prepare inputs with prosody prefix
+                    batch_size = len(texts)
+
+                    # Build conversation format for CSM
+                    conversations = []
+                    for i, text in enumerate(texts):
+                        audio_np = audio[i].cpu().numpy()
+                        conversations.append([{
+                            'role': '0',
+                            'content': [
+                                {'type': 'text', 'text': text},
+                                {'type': 'audio', 'audio': audio_np}
+                            ]
+                        }])
+
+                    # Process through CSM's processor
+                    inputs = self.processor.apply_chat_template(
+                        conversations,
+                        tokenize=True,
+                        return_dict=True,
+                        return_tensors='pt',
+                    )
+                    inputs = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                             for k, v in inputs.items()}
+
+                    # Get text embeddings and prepend prosody prefix
+                    if hasattr(self.model.csm, 'get_input_embeddings'):
+                        text_embeds = self.model.csm.get_input_embeddings()(inputs['input_ids'])
+                    else:
+                        text_embeds = self.model.csm.embed_text_tokens(inputs['input_ids'])
+
+                    # Scale prosody prefix to avoid dominating
+                    prosody_scale = self.config.get('prosody_scale', 0.1)
+                    scaled_prefix = prosody_prefix * prosody_scale
+
+                    # Concatenate: [prosody_prefix | text_embeddings]
+                    inputs_embeds = torch.cat([scaled_prefix, text_embeds], dim=1)
+
+                    # Extend attention mask
+                    prosody_mask = torch.ones(
+                        batch_size, prosody_prefix.shape[1],
+                        device=self.device, dtype=inputs['attention_mask'].dtype
+                    )
+                    extended_mask = torch.cat([prosody_mask, inputs['attention_mask']], dim=1)
+
+                    # Forward with labels for loss computation
+                    outputs = self.model.csm(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=extended_mask,
+                        labels=inputs.get('labels', inputs['input_ids']),
+                    )
+
+                    if hasattr(outputs, 'loss') and outputs.loss is not None:
+                        audio_loss = outputs.loss * audio_loss_weight
+
+                except Exception as e:
+                    # Audio loss failed, continue with embedding loss only
+                    if self.global_step % 100 == 0:
+                        print(f"Audio loss skipped: {e}")
 
             # ============ TEMPORAL ENCODER LOSS ============
             temporal_loss = torch.tensor(0.0, device=self.device)
@@ -414,7 +525,7 @@ class ProsodyConditionedTrainer:
                 temporal_loss = temporal_loss + consistency_loss
 
             # Combined loss
-            loss = global_loss + temporal_loss
+            loss = global_loss + temporal_loss + audio_loss
             loss.backward()
 
             # Gradient clipping
@@ -429,13 +540,14 @@ class ProsodyConditionedTrainer:
                 'loss': loss.item(),
                 'global_loss': global_loss.item(),
                 'temporal_loss': temporal_loss.item() if self.temporal_encoder else 0.0,
+                'audio_loss': audio_loss.item() if isinstance(audio_loss, torch.Tensor) else 0.0,
             }
 
         except Exception as e:
             import traceback
             print(f"Training step error: {e}")
             traceback.print_exc()
-            return {'loss': 0.0, 'global_loss': 0.0, 'temporal_loss': 0.0}
+            return {'loss': 0.0, 'global_loss': 0.0, 'temporal_loss': 0.0, 'audio_loss': 0.0}
 
     def _create_temporal_prosody(
         self,
@@ -452,22 +564,32 @@ class ProsodyConditionedTrainer:
         batch_size = prosody_dict['semantic'].shape[0]
 
         temporal = {}
-        for key in ['semantic', 'acoustic', 'rhythm', 'contour']:
+
+        # Semantic + rhythm: repeat global values (no artificial noise)
+        for key in ["semantic", "rhythm"]:
             global_vec = prosody_dict[key]  # [batch, dim]
             dim = global_vec.shape[-1]
-
-            # Expand to [batch, num_segments, dim]
             expanded = global_vec.unsqueeze(1).expand(batch_size, num_segments, dim).clone()
+            temporal[key] = expanded.clamp(0, 1)
 
-            # Add small per-segment variation to encourage temporal learning
-            # Variation increases toward the middle segments (like a natural emotion arc)
-            for s in range(num_segments):
-                # Variation strength: peaks in middle, lower at ends
-                strength = 0.1 * (1.0 - abs(s - num_segments / 2) / (num_segments / 2))
-                noise = torch.randn_like(expanded[:, s, :]) * strength
-                expanded[:, s, :] = expanded[:, s, :] + noise
+        # Contour: split the time series into segments and resample each
+        contour = prosody_dict["contour"]  # [batch, contour_dim]
+        temporal_contour = self._segment_contour(contour, num_segments)
+        temporal["contour"] = temporal_contour.clamp(0, 1)
 
-            temporal[key] = expanded.clamp(0, 1)  # Keep in valid range
+        # Acoustic: repeat global, then adjust pitch_mean/std to follow contour segments
+        acoustic = prosody_dict["acoustic"]  # [batch, acoustic_dim]
+        acoustic_dim = acoustic.shape[-1]
+        acoustic_expanded = acoustic.unsqueeze(1).expand(batch_size, num_segments, acoustic_dim).clone()
+
+        # Derive per-segment pitch mean/std from contour
+        segment_means = temporal_contour.mean(dim=2)
+        segment_stds = temporal_contour.std(dim=2)
+        acoustic_expanded[:, :, 0] = segment_means
+        if acoustic_dim > 1:
+            acoustic_expanded[:, :, 1] = segment_stds
+
+        temporal["acoustic"] = acoustic_expanded.clamp(0, 1)
 
         return temporal
 
@@ -492,7 +614,10 @@ class ProsodyConditionedTrainer:
                     avg_loss = sum(epoch_losses[-10:]) / min(10, len(epoch_losses))
                     log_msg = f"Epoch {epoch+1}, Step {self.global_step}: loss={avg_loss:.4f}"
                     if 'global_loss' in metrics:
-                        log_msg += f" (global={metrics['global_loss']:.4f}, temporal={metrics['temporal_loss']:.4f})"
+                        log_msg += f" (global={metrics['global_loss']:.4f}, temporal={metrics['temporal_loss']:.4f}"
+                        if metrics.get('audio_loss', 0) > 0:
+                            log_msg += f", audio={metrics['audio_loss']:.4f}"
+                        log_msg += ")"
                     print(log_msg)
 
             # Epoch summary

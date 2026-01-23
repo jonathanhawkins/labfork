@@ -22,10 +22,11 @@ Usage:
 """
 
 import math
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -33,6 +34,94 @@ import torch
 # Add training directory to path for importing prosody_conditioning
 sys.path.insert(0, str(Path(__file__).parent.parent / 'training'))
 from prosody_conditioning import ProsodyConfig, EmotionToProody as EmotionToProsody
+
+_WORD_RE = re.compile(r"[A-Za-z0-9']+")
+
+
+def _tokenize_text(text: str) -> List[Dict[str, int]]:
+    """Tokenize text into words with character offsets."""
+    words = []
+    for match in _WORD_RE.finditer(text):
+        words.append({
+            "word": match.group(0),
+            "start": match.start(),
+            "end": match.end(),
+        })
+    return words
+
+
+def resolve_keyframe_times(
+    keyframes: List[Dict[str, Any]],
+    text: str,
+    word_timestamps: Optional[List[Dict[str, float]]] = None,
+) -> List[Dict[str, any]]:
+    """
+    Resolve keyframe times from text-aligned anchors.
+
+    Supports keyframes with:
+      - time: explicit time in seconds or normalized (0-1)
+      - word_index: zero-based word index in the text
+      - word: word string (case-insensitive) with optional occurrence (1-based)
+      - char_index: character index in the text
+
+    If word_timestamps are provided (from Whisper), they are preferred for timing.
+    Otherwise, word positions are approximated from character offsets.
+    """
+    if not text:
+        return keyframes
+
+    tokens = _tokenize_text(text)
+    text_len = max(1, len(text))
+
+    # Build normalized word time map
+    if word_timestamps:
+        # Use real timestamps if available
+        duration = max((w.get("end", 0.0) for w in word_timestamps), default=0.0)
+        duration = max(duration, 1e-6)
+        word_times = [w.get("start", 0.0) / duration for w in word_timestamps]
+    else:
+        # Approximate by character position
+        word_times = [tok["start"] / text_len for tok in tokens]
+
+    def _resolve_by_word_index(idx: int) -> float:
+        if idx < 0 or idx >= len(word_times):
+            raise ValueError(f"word_index {idx} out of range for {len(word_times)} words")
+        return float(word_times[idx])
+
+    def _resolve_by_word(word: str, occurrence: int) -> float:
+        if not tokens:
+            raise ValueError("No words found in text to resolve keyframe word anchor")
+        needle = word.lower()
+        matches = [i for i, tok in enumerate(tokens) if tok["word"].lower() == needle]
+        if not matches:
+            raise ValueError(f"word '{word}' not found in text")
+        occ_idx = max(1, occurrence) - 1
+        if occ_idx >= len(matches):
+            raise ValueError(f"word '{word}' occurrence {occurrence} out of range")
+        return _resolve_by_word_index(matches[occ_idx])
+
+    resolved = []
+    for kf in keyframes:
+        if "time" in kf and kf["time"] is not None:
+            resolved.append(kf)
+            continue
+
+        if "word_index" in kf:
+            time = _resolve_by_word_index(int(kf["word_index"]))
+        elif "word" in kf:
+            occurrence = int(kf.get("occurrence", 1))
+            time = _resolve_by_word(kf["word"], occurrence)
+        elif "char_index" in kf:
+            char_index = int(kf["char_index"])
+            time = max(0.0, min(1.0, char_index / text_len))
+        else:
+            raise ValueError("Keyframe missing time/word_index/word/char_index")
+
+        resolved_kf = dict(kf)
+        resolved_kf["time"] = time
+        resolved.append(resolved_kf)
+
+    return resolved
 
 
 @dataclass

@@ -167,16 +167,32 @@ export default function AuthorPage() {
       return;
     }
 
+    const wordCount = text.split(/\s+/).filter((word) => word.length > 0).length;
+
     setIsGenerating(true);
     const toastId = toast.loading("Generating with keyframe prosody...");
 
     try {
       // Convert keyframes to API format (time in seconds)
-      const apiKeyframes = keyframes.map((kf) => ({
-        time: kf.time * duration,
-        emotion: kf.emotion,
-        intensity: kf.intensity / 100, // API expects 0-1
-      }));
+      const apiKeyframes = keyframes.map((kf) => {
+        if (kf.anchor === "word" && typeof kf.wordIndex === "number") {
+          if (kf.wordIndex < 0 || kf.wordIndex >= wordCount) {
+            throw new Error(
+              `Keyframe word index ${kf.wordIndex} is out of range for ${wordCount} words`
+            );
+          }
+          return {
+            word_index: kf.wordIndex,
+            emotion: kf.emotion,
+            intensity: kf.intensity / 100,
+          };
+        }
+        return {
+          time: kf.time * duration,
+          emotion: kf.emotion,
+          intensity: kf.intensity / 100, // API expects 0-1
+        };
+      });
 
       const response = await fetch(`${API_BASE}/generate-keyframes`, {
         method: "POST",

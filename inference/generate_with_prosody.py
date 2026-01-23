@@ -53,7 +53,12 @@ from training.prosody_conditioning import (
     EmotionToProody,
     extract_prosody_for_conditioning,
 )
-from keyframe_prosody import ProsodyKeyframe, keyframes_to_prosody, get_temporal_prosody_tokens
+from keyframe_prosody import (
+    ProsodyKeyframe,
+    keyframes_to_prosody,
+    get_temporal_prosody_tokens,
+    resolve_keyframe_times,
+)
 
 
 class ControllableVoiceGenerator:
@@ -304,6 +309,7 @@ class ControllableVoiceGenerator:
     def get_keyframe_prosody(
         self,
         keyframes_json: str,
+        text: Optional[str] = None,
         duration_seconds: float = 5.0,
         use_temporal: bool = True,
         num_segments: int = 4,
@@ -341,6 +347,11 @@ class ControllableVoiceGenerator:
             )
 
         keyframes_data = json.loads(keyframes_json)
+        if text:
+            keyframes_data = resolve_keyframe_times(keyframes_data, text)
+        else:
+            if any("time" not in kf or kf.get("time") is None for kf in keyframes_data):
+                raise ValueError("Text is required to resolve keyframes without explicit time")
         keyframes = [ProsodyKeyframe(**kf) for kf in keyframes_data]
 
         # Get dense prosody from keyframes
@@ -555,7 +566,12 @@ def main():
     parser.add_argument("--intensity", type=float, default=1.0, help="Emotion intensity 0-1")
     parser.add_argument(
         "--keyframes",
-        help='Keyframes as JSON array, e.g. \'[{"time":0,"emotion":"neutral","intensity":0.5},{"time":1,"emotion":"happy","intensity":0.9}]\''
+        help="Keyframes as JSON array. Supports time or text anchors. "
+             "Examples: "
+             "'[{\"time\":0,\"emotion\":\"neutral\",\"intensity\":0.5},"
+             "{\"time\":1,\"emotion\":\"happy\",\"intensity\":0.9}]' or "
+             "'[{\"word_index\":0,\"emotion\":\"neutral\",\"intensity\":0.5},"
+             "{\"word\":\"happy\",\"occurrence\":1,\"intensity\":0.9}]'"
     )
     parser.add_argument("--duration", type=float, default=5.0, help="Duration in seconds for keyframe interpolation")
     parser.add_argument(
@@ -593,6 +609,7 @@ def main():
         use_temporal = not args.no_temporal
         prosody = generator.get_keyframe_prosody(
             args.keyframes,
+            text=args.text,
             duration_seconds=args.duration,
             use_temporal=use_temporal,
             num_segments=args.segments,

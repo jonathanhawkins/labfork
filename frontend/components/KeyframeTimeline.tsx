@@ -29,6 +29,8 @@ export interface Keyframe {
   time: number; // 0.0 to 1.0
   emotion: string;
   intensity: number; // 0 to 100
+  anchor?: "time" | "word";
+  wordIndex?: number;
 }
 
 export interface KeyframeTimelineProps {
@@ -119,12 +121,29 @@ function getEmotionColors(emotion: string) {
   return EMOTION_COLORS[emotion] || EMOTION_COLORS.neutral;
 }
 
+function buildWordPositions(text: string) {
+  if (!text) return [];
+  const wordList = text.split(/\s+/).filter((word) => word.length > 0);
+  const totalWords = wordList.length;
+  const startPad = 0.02;
+  const endPad = 0.02;
+  const usableWidth = 1 - startPad - endPad;
+
+  return wordList.map((word, index) => {
+    const position =
+      startPad + (index / Math.max(1, totalWords - 1)) * usableWidth;
+    const finalPosition = totalWords === 1 ? 0.5 : position;
+    return { word, position: finalPosition, index };
+  });
+}
+
 // ============================================================================
 // Keyframe Marker Component
 // ============================================================================
 
 interface KeyframeMarkerProps {
   keyframe: Keyframe;
+  displayTime: number;
   isSelected: boolean;
   onSelect: () => void;
   onDrag: (newTime: number) => void;
@@ -133,6 +152,7 @@ interface KeyframeMarkerProps {
 
 function KeyframeMarker({
   keyframe,
+  displayTime,
   isSelected,
   onSelect,
   onDrag,
@@ -191,7 +211,7 @@ function KeyframeMarker({
         isSelected && "z-10"
       )}
       style={{
-        left: `${keyframe.time * 100}%`,
+        left: `${displayTime * 100}%`,
         transform: `translateX(-50%) translateY(-50%)`,
       }}
       onMouseDown={handleMouseDown}
@@ -255,6 +275,8 @@ interface KeyframeEditorProps {
   onChange: (updated: Keyframe) => void;
   onDelete: () => void;
   duration?: number;
+  displayTime?: number;
+  wordLabel?: string | null;
 }
 
 function KeyframeEditor({
@@ -262,8 +284,11 @@ function KeyframeEditor({
   onChange,
   onDelete,
   duration = 1,
+  displayTime,
+  wordLabel,
 }: KeyframeEditorProps) {
   const colors = getEmotionColors(keyframe.emotion);
+  const displaySeconds = (displayTime ?? keyframe.time) * duration;
 
   return (
     <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 border border-border">
@@ -271,8 +296,13 @@ function KeyframeEditor({
       <div className="flex items-center gap-2 text-muted-foreground">
         <GripVertical className="h-4 w-4" />
         <span className="text-xs font-mono w-16">
-          {formatTime(keyframe.time * duration)}
+          {formatTime(displaySeconds)}
         </span>
+        {keyframe.anchor === "word" && (
+          <span className="text-[10px] text-muted-foreground ml-1">
+            {wordLabel ? `@${wordLabel}` : "word"}
+          </span>
+        )}
       </div>
 
       {/* Emotion selector */}
@@ -395,29 +425,7 @@ interface TextOverlayProps {
 function TextOverlay({ text, playbackTime, isPlaying }: TextOverlayProps) {
   // Split text into words and calculate positions
   const words = useMemo(() => {
-    if (!text) return [];
-
-    const wordList = text.split(/\s+/).filter(w => w.length > 0);
-    const totalWords = wordList.length;
-
-    // Distribute words evenly across the timeline
-    // Add small padding at start/end
-    const startPad = 0.02;
-    const endPad = 0.02;
-    const usableWidth = 1 - startPad - endPad;
-
-    return wordList.map((word, index) => {
-      // Position based on word index
-      const position = startPad + (index / Math.max(1, totalWords - 1)) * usableWidth;
-      // For single word, center it
-      const finalPosition = totalWords === 1 ? 0.5 : position;
-
-      return {
-        word,
-        position: finalPosition,
-        index,
-      };
-    });
+    return buildWordPositions(text);
   }, [text]);
 
   // Find current word based on playback position
@@ -491,12 +499,64 @@ export default function KeyframeTimeline({
 }: KeyframeTimelineProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showTextOverlay, setShowTextOverlay] = useState(true);
+  const [anchorMode, setAnchorMode] = useState<"time" | "word">("time");
   const trackRef = useRef<HTMLDivElement>(null);
+
+  const wordPositions = useMemo(() => buildWordPositions(text), [text]);
+  const wordCount = wordPositions.length;
+
+  const getKeyframeDisplayTime = useCallback(
+    (keyframe: Keyframe) => {
+      if (
+        keyframe.anchor === "word" &&
+        typeof keyframe.wordIndex === "number" &&
+        wordPositions[keyframe.wordIndex]
+      ) {
+        return wordPositions[keyframe.wordIndex].position;
+      }
+      return keyframe.time;
+    },
+    [wordPositions]
+  );
+
+  const getWordLabel = useCallback(
+    (keyframe: Keyframe) => {
+      if (
+        keyframe.anchor === "word" &&
+        typeof keyframe.wordIndex === "number" &&
+        wordPositions[keyframe.wordIndex]
+      ) {
+        return wordPositions[keyframe.wordIndex].word;
+      }
+      return null;
+    },
+    [wordPositions]
+  );
+
+  const findNearestWordIndex = useCallback(
+    (position: number) => {
+      if (wordPositions.length === 0) return null;
+      let nearestIndex = 0;
+      let smallestDelta = Infinity;
+      wordPositions.forEach((word) => {
+        const delta = Math.abs(word.position - position);
+        if (delta < smallestDelta) {
+          smallestDelta = delta;
+          nearestIndex = word.index;
+        }
+      });
+      return nearestIndex;
+    },
+    [wordPositions]
+  );
 
   // Sort keyframes by time for consistent rendering
   const sortedKeyframes = useMemo(
-    () => [...keyframes].sort((a, b) => a.time - b.time),
-    [keyframes]
+    () =>
+      [...keyframes].sort(
+        (a, b) => getKeyframeDisplayTime(a) - getKeyframeDisplayTime(b)
+      ),
+    [keyframes, getKeyframeDisplayTime]
   );
 
   const selectedKeyframe = useMemo(
@@ -513,6 +573,17 @@ export default function KeyframeTimeline({
       onChange(updated);
     },
     [keyframes, onChange]
+  );
+
+  const handleKeyframeTimeUpdate = useCallback(
+    (id: string, time: number) => {
+      handleKeyframeUpdate(id, {
+        time,
+        anchor: "time",
+        wordIndex: undefined,
+      });
+    },
+    [handleKeyframeUpdate]
   );
 
   // Handle keyframe deletion
@@ -536,17 +607,22 @@ export default function KeyframeTimeline({
       const x = e.clientX - rect.left;
       const time = Math.max(0, Math.min(1, x / rect.width));
 
+      const wordIndex = anchorMode === "word" ? findNearestWordIndex(time) : null;
       const newKeyframe: Keyframe = {
         id: generateId(),
-        time,
+        time: wordIndex !== null && wordIndex !== undefined
+          ? wordPositions[wordIndex].position
+          : time,
         emotion: "neutral",
         intensity: 75,
+        anchor: wordIndex !== null && wordIndex !== undefined ? "word" : "time",
+        wordIndex: wordIndex ?? undefined,
       };
 
       onChange([...keyframes, newKeyframe]);
       setSelectedId(newKeyframe.id);
     },
-    [keyframes, onChange]
+    [keyframes, onChange, anchorMode, findNearestWordIndex, wordPositions]
   );
 
   // Handle adding keyframe via button
@@ -556,21 +632,27 @@ export default function KeyframeTimeline({
     if (keyframes.length > 0) {
       // Place at the end if there's space, otherwise at 0.5
       const lastKeyframe = sortedKeyframes[sortedKeyframes.length - 1];
-      if (lastKeyframe.time < 0.9) {
-        time = Math.min(1, lastKeyframe.time + 0.1);
+      const lastTime = getKeyframeDisplayTime(lastKeyframe);
+      if (lastTime < 0.9) {
+        time = Math.min(1, lastTime + 0.1);
       }
     }
 
+    const wordIndex = anchorMode === "word" ? findNearestWordIndex(time) : null;
     const newKeyframe: Keyframe = {
       id: generateId(),
-      time,
+      time: wordIndex !== null && wordIndex !== undefined
+        ? wordPositions[wordIndex].position
+        : time,
       emotion: "neutral",
       intensity: 75,
+      anchor: wordIndex !== null && wordIndex !== undefined ? "word" : "time",
+      wordIndex: wordIndex ?? undefined,
     };
 
     onChange([...keyframes, newKeyframe]);
     setSelectedId(newKeyframe.id);
-  }, [keyframes, sortedKeyframes, onChange]);
+  }, [keyframes, sortedKeyframes, onChange, anchorMode, findNearestWordIndex, wordPositions, getKeyframeDisplayTime]);
 
   // Handle clicking outside to deselect
   const handleTrackClick = useCallback((e: React.MouseEvent) => {
@@ -604,6 +686,22 @@ export default function KeyframeTimeline({
               <EyeOff className="h-4 w-4 mr-1" />
             )}
             Script
+          </Button>
+          <Button
+            variant={anchorMode === "word" ? "secondary" : "outline"}
+            size="sm"
+            onClick={() =>
+              setAnchorMode(anchorMode === "word" ? "time" : "word")
+            }
+            title={
+              anchorMode === "word"
+                ? "Click track to snap to nearest word"
+                : "Anchor new keyframes to words"
+            }
+            disabled={wordCount === 0}
+          >
+            <Type className="h-4 w-4 mr-1" />
+            {anchorMode === "word" ? "Word Anchor" : "Time Anchor"}
           </Button>
           <Button
             variant="outline"
@@ -666,10 +764,11 @@ export default function KeyframeTimeline({
               <KeyframeMarker
                 key={keyframe.id}
                 keyframe={keyframe}
+                displayTime={getKeyframeDisplayTime(keyframe)}
                 isSelected={keyframe.id === selectedId}
                 onSelect={() => setSelectedId(keyframe.id)}
                 onDrag={(newTime) =>
-                  handleKeyframeUpdate(keyframe.id, { time: newTime })
+                  handleKeyframeTimeUpdate(keyframe.id, newTime)
                 }
                 containerRef={trackRef as React.RefObject<HTMLDivElement>}
               />
@@ -709,6 +808,8 @@ export default function KeyframeTimeline({
           }
           onDelete={() => handleKeyframeDelete(selectedKeyframe.id)}
           duration={duration}
+          displayTime={getKeyframeDisplayTime(selectedKeyframe)}
+          wordLabel={getWordLabel(selectedKeyframe)}
         />
       )}
 
@@ -717,6 +818,8 @@ export default function KeyframeTimeline({
         <div className="flex flex-wrap gap-2">
           {sortedKeyframes.map((keyframe) => {
             const colors = getEmotionColors(keyframe.emotion);
+            const displayTime = getKeyframeDisplayTime(keyframe);
+            const wordLabel = getWordLabel(keyframe);
             return (
               <button
                 key={keyframe.id}
@@ -734,8 +837,11 @@ export default function KeyframeTimeline({
                   style={{ opacity: 0.3 + (keyframe.intensity / 100) * 0.7 }}
                 />
                 <span className="font-mono text-muted-foreground">
-                  {Math.round(keyframe.time * 100)}%
+                  {Math.round(displayTime * 100)}%
                 </span>
+                {keyframe.anchor === "word" && wordLabel && (
+                  <span className="text-muted-foreground">@{wordLabel}</span>
+                )}
                 <span className="capitalize">{keyframe.emotion}</span>
               </button>
             );

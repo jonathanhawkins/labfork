@@ -94,7 +94,7 @@ class ProsodyGenerateRequest(BaseModel):
 class KeyframeRequest(BaseModel):
     """Request for keyframe-based voice generation."""
     text: str
-    keyframes: List[Dict[str, Any]]  # [{time: 0.0, emotion: "neutral", intensity: 0.8}, ...]
+    keyframes: List[Dict[str, Any]]  # [{time|word_index|word|char_index: ..., emotion: "...", intensity: ...}, ...]
     temperature: float = 0.8
 
 
@@ -800,8 +800,11 @@ async def generate_keyframes(request: KeyframeRequest):
     Keyframes define prosody at specific timestamps, which are then
     interpolated to create smooth prosody transitions throughout the audio.
 
-    Each keyframe should have:
-    - time: float (seconds from start)
+    Each keyframe should have one of:
+    - time: float (seconds from start or normalized 0-1)
+    - word_index: int (zero-based word index in text)
+    - word: str (word text, with optional occurrence)
+    - char_index: int (character index in text)
     - emotion: str (e.g., "neutral", "happy", "sad", "angry", "excited")
     - intensity: float (0.0 to 1.0, controls emotion strength)
 
@@ -820,29 +823,59 @@ async def generate_keyframes(request: KeyframeRequest):
 
     # Validate keyframes
     for i, kf in enumerate(request.keyframes):
-        if "time" not in kf:
+        has_time = "time" in kf and kf.get("time") is not None
+        has_word_index = "word_index" in kf
+        has_word = "word" in kf
+        has_char_index = "char_index" in kf
+        if not (has_time or has_word_index or has_word or has_char_index):
             raise HTTPException(
                 status_code=400,
-                detail=f"Keyframe {i} missing 'time' field"
+                detail=f"Keyframe {i} missing time/word_index/word/char_index"
             )
         if "emotion" not in kf:
             raise HTTPException(
                 status_code=400,
                 detail=f"Keyframe {i} missing 'emotion' field"
             )
-        if not isinstance(kf.get("time"), (int, float)):
+        if has_time and not isinstance(kf.get("time"), (int, float)):
             raise HTTPException(
                 status_code=400,
                 detail=f"Keyframe {i} 'time' must be a number"
             )
-        if kf["time"] < 0:
+        if has_time and kf["time"] < 0:
             raise HTTPException(
                 status_code=400,
                 detail=f"Keyframe {i} 'time' must be non-negative"
             )
+        if has_word_index and not isinstance(kf.get("word_index"), int):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Keyframe {i} 'word_index' must be an integer"
+            )
+        if has_char_index and not isinstance(kf.get("char_index"), int):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Keyframe {i} 'char_index' must be an integer"
+            )
+        if has_word and not isinstance(kf.get("word"), str):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Keyframe {i} 'word' must be a string"
+            )
+
+    # Resolve keyframe times (supports word_index/word/char_index anchors)
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        sys.path.insert(0, str(Path(__file__).parent.parent / "inference"))
+
+        from keyframe_prosody import resolve_keyframe_times
+        resolved_keyframes = resolve_keyframe_times(request.keyframes, request.text)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to resolve keyframes: {e}")
 
     # Sort keyframes by time
-    sorted_keyframes = sorted(request.keyframes, key=lambda x: x["time"])
+    sorted_keyframes = sorted(resolved_keyframes, key=lambda x: x["time"])
 
     print(f"Generating with {len(sorted_keyframes)} keyframes: {sorted_keyframes}")
 
@@ -853,10 +886,15 @@ async def generate_keyframes(request: KeyframeRequest):
     try:
         # Import required modules
         import sys
+        sys.path.insert(0, str(Path(__file__).parent))
         sys.path.insert(0, str(Path(__file__).parent.parent / "inference"))
 
         # Import keyframe prosody interpolation module
-        from keyframe_prosody import keyframes_to_prosody, ProsodyKeyframe
+        from keyframe_prosody import (
+            ProsodyKeyframe,
+            keyframes_to_prosody,
+            get_temporal_prosody_tokens,
+        )
 
         # Paths for models
         lora_adapter = Path(__file__).parent.parent / "models" / "checkpoints" / "csm_lora_450" / "best"
@@ -895,10 +933,19 @@ async def generate_keyframes(request: KeyframeRequest):
         duration_seconds = max(max_time, 1.0)  # At least 1 second
 
         # Convert keyframes to dense prosody tensors
-        prosody_tensors = keyframes_to_prosody(
+        prosody_dense = keyframes_to_prosody(
             keyframes=prosody_keyframes,
             duration_seconds=duration_seconds,
         )
+
+        # Convert to temporal tokens (preserves keyframe edits)
+        num_segments = generator.prosody_config.num_prosody_tokens
+        prosody_tensors = get_temporal_prosody_tokens(
+            prosody_dense,
+            num_segments=num_segments,
+        )
+        prosody_tensors["_is_temporal"] = True
+        prosody_tensors["_num_segments"] = num_segments
 
         # Move prosody tensors to the same device as the model
         device = generator.device
@@ -2725,6 +2772,16 @@ async def websocket_live_transform(websocket: WebSocket):
                         "type": "error",
                         "message": str(e)
                     })
+
+            elif msg_type == "set_quality":
+                # Adjust diffusion steps for quality/speed tradeoff
+                steps = data.get("diffusion_steps", 6)
+                transformer.set_diffusion_steps(steps)
+                await websocket.send_json({
+                    "type": "status",
+                    "diffusion_steps": transformer.config.diffusion_steps,
+                    "message": f"Quality set to {steps} diffusion steps"
+                })
 
             elif msg_type == "get_status":
                 stats = transformer.get_stats()
