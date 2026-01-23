@@ -31,6 +31,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import WeightedRandomSampler
 import torchaudio
 
 # Add parent to path for imports
@@ -88,6 +89,44 @@ class ProsodyConditionedDataset(Dataset):
 
     def __len__(self):
         return len(self.samples)
+
+    def get_emotion_weights(self) -> Optional[List[float]]:
+        """
+        Compute per-sample weights to balance emotions during training.
+
+        Returns:
+            List of weights (len = dataset size) or None if no emotion labels.
+        """
+        emotions = []
+        for sample in self.samples:
+            semantic = sample.get('prosody', {}).get('semantic', {})
+            emotion = semantic.get('emotion')
+            if not emotion and isinstance(semantic.get('emotions'), dict):
+                # Pick the top-scoring emotion if present
+                scores = semantic.get('emotions', {})
+                if scores:
+                    emotion = max(scores.items(), key=lambda kv: kv[1])[0]
+            emotions.append(emotion)
+
+        counts = {}
+        for emotion in emotions:
+            if emotion:
+                counts[emotion] = counts.get(emotion, 0) + 1
+
+        if not counts:
+            return None
+
+        # Inverse frequency weighting with mild smoothing
+        max_count = max(counts.values())
+        weights = []
+        for emotion in emotions:
+            if not emotion:
+                weights.append(1.0)
+                continue
+            weight = max_count / counts[emotion]
+            weights.append(weight)
+
+        return weights
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         sample = self.samples[idx]
@@ -854,10 +893,25 @@ def main():
             manifest_path,
             config.get('prosody_cache_dir', '../data/prosody_cache'),
         )
+        balance_emotions = config.get('balance_emotions', True)
+        sampler = None
+        if balance_emotions:
+            weights = dataset.get_emotion_weights()
+            if weights is not None:
+                sampler = WeightedRandomSampler(
+                    weights=weights,
+                    num_samples=len(weights),
+                    replacement=True,
+                )
+                print("Using weighted sampler to balance emotions")
+            else:
+                print("Emotion labels not found; falling back to shuffled sampling")
+
         train_loader = DataLoader(
             dataset,
             batch_size=config.get('batch_size', 4),
-            shuffle=True,
+            shuffle=sampler is None,
+            sampler=sampler,
             collate_fn=collate_fn,
         )
         trainer.train(train_loader, num_epochs=config.get('num_epochs', 10))

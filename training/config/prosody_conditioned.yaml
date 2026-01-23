@@ -1,0 +1,23 @@
+model_path: ../models/csm-1b
+use_lora: true
+lora_r: 8
+learning_rate: 1.0e-4
+num_epochs: 10
+batch_size: 4
+output_dir: ../models/checkpoints/prosody_conditioned
+
+# Prosody learning weights
+prosody_loss_weight: 2.0
+energy_loss_weight: 1.0
+temporal_loss_weight: 1.0
+
+# Temporal prosody settings
+train_temporal: true
+num_temporal_segments: 4
+
+# Emotion balancing
+balance_emotions: true
+
+# Optional audio loss (slow)
+use_audio_loss: false
+audio_loss_weight: 0.1
