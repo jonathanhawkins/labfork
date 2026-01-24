@@ -1,0 +1,89 @@
+#!/bin/bash
+# 4090 Lab Manager - Remote control from Mac
+# Connects to RTX 4090 via Tailscale
+
+HOST="doc@100.83.78.111"
+
+usage() {
+    echo "4090 Lab Manager"
+    echo ""
+    echo "Usage: $0 <command>"
+    echo ""
+    echo "Commands:"
+    echo "  start     Start lab manager session on 4090"
+    echo "  attach    Attach to running lab manager"
+    echo "  status    Check GPU and Ollama status"
+    echo "  stop      Stop lab manager session"
+    echo "  setup     Run initial setup (Ollama, model download)"
+    echo "  sync      Sync project files to 4090"
+    echo "  ssh       Open SSH shell to 4090"
+    echo "  send <msg> Send a command to lab manager"
+    echo ""
+}
+
+case "$1" in
+    start)
+        echo "Starting lab manager on 4090..."
+        ssh $HOST 'source ~/miniconda3/bin/activate && ~/bin/start-lab-session'
+        echo ""
+        echo "Attach with: $0 attach"
+        ;;
+
+    attach)
+        echo "Attaching to lab manager..."
+        ssh $HOST -t 'tmux attach -t lab-manager'
+        ;;
+
+    status)
+        ssh $HOST '~/bin/gpu-status'
+        ;;
+
+    stop)
+        echo "Stopping lab manager..."
+        ssh $HOST 'tmux kill-session -t lab-manager 2>/dev/null' && echo "Stopped" || echo "Not running"
+        ;;
+
+    setup)
+        echo "Running setup on 4090..."
+        # First sync the setup script
+        rsync -avz scripts/setup-4090-lab.sh $HOST:~/
+        # Then run it
+        ssh $HOST 'bash ~/setup-4090-lab.sh'
+        ;;
+
+    sync)
+        echo "Syncing project to 4090..."
+        rsync -avz --progress \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude 'venv' \
+            --exclude '__pycache__' \
+            --exclude '.git' \
+            --exclude 'data/' \
+            --exclude 'models/' \
+            --exclude 'checkpoints/' \
+            . $HOST:~/dev/voice-clone-pipeline/
+        echo "Done!"
+        ;;
+
+    ssh)
+        ssh $HOST
+        ;;
+
+    send)
+        shift
+        if [ -z "$1" ]; then
+            echo "Usage: $0 send <message>"
+            exit 1
+        fi
+        echo "Sending to lab manager: $*"
+        ssh $HOST "tmux send-keys -t lab-manager '$*' Enter"
+        sleep 2
+        ssh $HOST "tmux send-keys -t lab-manager Enter"
+        ;;
+
+    *)
+        usage
+        exit 1
+        ;;
+esac
