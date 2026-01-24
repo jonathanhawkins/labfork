@@ -87,6 +87,9 @@ class LiveVoiceTransformer:
             elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 return torch.device("mps")
             return torch.device("cpu")
+        # Handle both string and torch.device input
+        if isinstance(device, torch.device):
+            return device
         return torch.device(device)
 
     def _find_voice_samples(self) -> Optional[Path]:
@@ -178,6 +181,15 @@ class LiveVoiceTransformer:
 
         # Adjust config based on intensity
         self.config.inference_cfg_rate = 0.5 + (self.current_intensity * 0.4)
+
+    def set_diffusion_steps(self, steps: int):
+        """
+        Set diffusion steps (quality vs speed tradeoff).
+
+        Args:
+            steps: Number of diffusion steps (4=fast, 6=balanced, 10=quality)
+        """
+        self.config.diffusion_steps = max(2, min(25, steps))
 
     def convert_audio(
         self,

@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> ⚠️ **DO NOT ADD TO THIS FILE** - Keep it under 500 lines. Document new features in module docstrings, config comments, or `docs/` directory instead.
+
 ## Project Overview
 
 Voice Clone Pipeline is a system for creating personalized voice models by recording voice samples, auto-labeling prosody features, fine-tuning Sesame's CSM-1B model, and generating speech. Target hardware is M4 Pro Mac (64GB) and RTX 4090 (24GB).
@@ -315,3 +317,85 @@ ssh doc@100.83.78.111 "source ~/miniconda3/bin/activate && conda activate voice 
 - **Frontend**: Next.js 14, React 18, Three.js, Recharts, Tailwind CSS
 - **Backend**: FastAPI, PyTorch, torchaudio, Whisper, Parselmouth, Transformers
 - **Training**: PyTorch, PEFT (LoRA), Accelerate, WandB
+
+## FREE Local Claude Code (claude-free)
+
+Run Claude Code for FREE using local Ollama models instead of paid Anthropic API.
+
+### Setup (One-time)
+
+```bash
+# 1. Install Ollama (if not installed)
+brew install ollama
+
+# 2. Download qwen3-coder model (18GB)
+ollama pull qwen3-coder:30b
+
+# 3. Create 32k context model (REQUIRED - Claude Code needs 20k+ tokens for tools)
+cat > /tmp/Modelfile.qwen3-coder-32k << 'EOF'
+FROM qwen3-coder:30b
+PARAMETER num_ctx 32768
+EOF
+ollama create qwen3-coder-32k -f /tmp/Modelfile.qwen3-coder-32k
+```
+
+### Usage
+
+```bash
+# Start Ollama (if not running)
+ollama serve &
+
+# Run FREE Claude Code
+./scripts/claude-free
+
+# Or in tmux
+tmux new-session -s claude-free "./scripts/claude-free"
+```
+
+### Key Details
+
+- **Model**: qwen3-coder-32k (30B MoE, ~3B active params)
+- **Memory**: ~21GB GPU (fits on 48GB M4 Pro)
+- **Context**: 32768 tokens (required for tool definitions)
+- **Tools**: All Claude Code tools work (Bash, Read, Write, Edit, etc.)
+
+### Troubleshooting
+
+If tools don't work, check context size:
+```bash
+ollama ps  # Should show CONTEXT: 32768
+```
+
+If context is 4096, the model needs to be recreated with `num_ctx 32768`.
+
+## AI Cost Optimization Strategy
+
+Use FREE local models for most tasks, reserve paid APIs only when necessary.
+
+### Task Routing
+
+| Task Type | Tool | Cost |
+|-----------|------|------|
+| Lab management, research | `./scripts/claude-free` | FREE |
+| Code writing, analytics | `./scripts/codex-free` | FREE |
+| Complex multi-file refactors | Paid Claude (only if needed) | $$$ |
+
+### Available FREE Tools
+
+```bash
+# Lab manager (Claude Code + Ollama)
+./scripts/claude-free
+tmux new-session -s claude-free "./scripts/claude-free"
+
+# Code writing (Codex + Ollama)
+./scripts/codex-free
+```
+
+### When to Use Paid Claude
+
+Only use paid Anthropic API for:
+- Complex architectural decisions requiring deep reasoning
+- Multi-file refactors across 10+ files
+- Time-critical tasks where 3-min response is too slow
+
+For everything else, use the FREE local tools.
