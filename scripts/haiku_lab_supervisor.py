@@ -33,6 +33,10 @@ TASKS_API = "http://localhost:3003/api/tasks"
 MAX_ITERATIONS = 50
 ITERATION_DELAY = 30  # seconds between supervision cycles
 
+# Remote 4090 configuration
+REMOTE_HOST = "doc@100.83.78.111"
+USE_REMOTE = True  # Set to True to use remote 4090 lab manager
+
 # Cost tracking
 cost_tracker = {
     "input_tokens": 0,
@@ -91,20 +95,35 @@ def ask_haiku(prompt: str, system: str = "") -> str:
 
 
 def send_to_lab_manager(instruction: str) -> bool:
-    """Send instruction to lab manager tmux session"""
+    """Send instruction to lab manager tmux session (local or remote)"""
     try:
-        # Send the instruction
-        subprocess.run(
-            ["tmux", "send-keys", "-t", OLLAMA_SESSION, instruction, "Enter"],
-            check=True,
-            capture_output=True
-        )
-        # Send extra Enter to submit
-        time.sleep(1)
-        subprocess.run(
-            ["tmux", "send-keys", "-t", OLLAMA_SESSION, "Enter"],
-            capture_output=True
-        )
+        # Escape single quotes in instruction for shell
+        escaped = instruction.replace("'", "'\"'\"'")
+
+        if USE_REMOTE:
+            # Send via SSH to remote 4090
+            subprocess.run(
+                ["ssh", REMOTE_HOST, f"tmux send-keys -t {OLLAMA_SESSION} '{escaped}' Enter"],
+                check=True,
+                capture_output=True
+            )
+            time.sleep(1)
+            subprocess.run(
+                ["ssh", REMOTE_HOST, f"tmux send-keys -t {OLLAMA_SESSION} Enter"],
+                capture_output=True
+            )
+        else:
+            # Local tmux
+            subprocess.run(
+                ["tmux", "send-keys", "-t", OLLAMA_SESSION, instruction, "Enter"],
+                check=True,
+                capture_output=True
+            )
+            time.sleep(1)
+            subprocess.run(
+                ["tmux", "send-keys", "-t", OLLAMA_SESSION, "Enter"],
+                capture_output=True
+            )
         return True
     except subprocess.CalledProcessError as e:
         log(f"Failed to send to tmux: {e}", "ERR")
@@ -112,25 +131,38 @@ def send_to_lab_manager(instruction: str) -> bool:
 
 
 def get_lab_manager_output(lines: int = 100) -> str:
-    """Capture recent output from lab manager tmux session"""
+    """Capture recent output from lab manager tmux session (local or remote)"""
     try:
-        result = subprocess.run(
-            ["tmux", "capture-pane", "-t", OLLAMA_SESSION, "-p", "-S", f"-{lines}"],
-            capture_output=True,
-            text=True
-        )
+        if USE_REMOTE:
+            result = subprocess.run(
+                ["ssh", REMOTE_HOST, f"tmux capture-pane -t {OLLAMA_SESSION} -p -S -{lines}"],
+                capture_output=True,
+                text=True
+            )
+        else:
+            result = subprocess.run(
+                ["tmux", "capture-pane", "-t", OLLAMA_SESSION, "-p", "-S", f"-{lines}"],
+                capture_output=True,
+                text=True
+            )
         return result.stdout
     except:
         return ""
 
 
 def check_lab_manager_running() -> bool:
-    """Check if lab manager tmux session exists"""
+    """Check if lab manager tmux session exists (local or remote)"""
     try:
-        result = subprocess.run(
-            ["tmux", "has-session", "-t", OLLAMA_SESSION],
-            capture_output=True
-        )
+        if USE_REMOTE:
+            result = subprocess.run(
+                ["ssh", REMOTE_HOST, f"tmux has-session -t {OLLAMA_SESSION}"],
+                capture_output=True
+            )
+        else:
+            result = subprocess.run(
+                ["tmux", "has-session", "-t", OLLAMA_SESSION],
+                capture_output=True
+            )
         return result.returncode == 0
     except:
         return False
@@ -143,19 +175,35 @@ def start_lab_manager() -> bool:
         return True
 
     log("Starting lab manager...")
-    try:
-        # Kill any existing session
-        subprocess.run(["tmux", "kill-session", "-t", OLLAMA_SESSION],
-                      capture_output=True)
-    except:
-        pass
 
-    # Start new session with claude-free
-    script_path = PROJECT_ROOT / "scripts" / "claude-free"
-    subprocess.run([
-        "tmux", "new-session", "-d", "-s", OLLAMA_SESSION,
-        "-x", "140", "-y", "40", str(script_path)
-    ])
+    if USE_REMOTE:
+        # Start on remote 4090 via SSH
+        try:
+            subprocess.run(
+                ["ssh", REMOTE_HOST, f"tmux kill-session -t {OLLAMA_SESSION} 2>/dev/null || true"],
+                capture_output=True
+            )
+        except:
+            pass
+
+        # Start the lab manager on 4090
+        subprocess.run([
+            "ssh", REMOTE_HOST,
+            f"source ~/miniconda3/bin/activate && ~/bin/start-lab-session"
+        ])
+    else:
+        # Local start
+        try:
+            subprocess.run(["tmux", "kill-session", "-t", OLLAMA_SESSION],
+                          capture_output=True)
+        except:
+            pass
+
+        script_path = PROJECT_ROOT / "scripts" / "claude-free"
+        subprocess.run([
+            "tmux", "new-session", "-d", "-s", OLLAMA_SESSION,
+            "-x", "140", "-y", "40", str(script_path)
+        ])
 
     # Wait for initialization
     log("Waiting for Claude Code to initialize...")
@@ -164,10 +212,9 @@ def start_lab_manager() -> bool:
     # Send initial prompt
     init_prompt = """You are the LAB MANAGER. Your job is to execute tasks I give you.
 When I give you a task:
-1. Use TaskList to check current tasks
-2. Execute the specific instruction I give
-3. Report back what you did
-4. Wait for my next instruction
+1. Execute the specific instruction I give
+2. Report back what you did
+3. Wait for my next instruction
 
 Confirm you're ready by saying READY."""
 
@@ -178,19 +225,35 @@ Confirm you're ready by saying READY."""
 
 
 def get_pending_tasks() -> list:
-    """Get pending tasks from the tasks API"""
+    """Get pending tasks from the tasks API or fallback to known tasks"""
+    # Known pending tasks (fallback if API unavailable)
+    FALLBACK_TASKS = [
+        {"id": "36", "subject": "Add DDGAN-accelerated prosody diffusion (DiffProsody approach)"},
+        {"id": "37", "subject": "Add word-level latent prosody vectors (ProsoSpeech approach)"},
+        {"id": "38", "subject": "Add intonation template clustering (Into-TTS approach)"},
+        {"id": "39", "subject": "Add TTScore-pro FACodec-based prosody evaluation metric"},
+        {"id": "42", "subject": "Implement WeSCon word-level self-training emotion control"},
+        {"id": "43", "subject": "Add DisCo-Speech two-stage disentanglement codec"},
+        {"id": "73", "subject": "Add ParaStyleTTS efficient paralinguistic control (30x faster)"},
+    ]
+
     try:
         result = subprocess.run(
             ["curl", "-s", TASKS_API],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=5
         )
         data = json.loads(result.stdout)
         tasks = data.get("tasks", [])
-        return [t for t in tasks if t.get("status") == "pending"]
+        pending = [t for t in tasks if t.get("status") == "pending"]
+        if pending:
+            return pending
+        log("No pending tasks from API, using fallback list", "WARN")
+        return FALLBACK_TASKS
     except Exception as e:
-        log(f"Failed to get tasks: {e}", "ERR")
-        return []
+        log(f"Tasks API unavailable ({e}), using fallback list", "WARN")
+        return FALLBACK_TASKS
 
 
 def parse_json_response(text: str) -> Optional[dict]:
@@ -365,6 +428,8 @@ def run_supervisor(max_iterations: int = MAX_ITERATIONS, continuous: bool = Fals
 
 
 def main():
+    global ITERATION_DELAY  # Allow modifying the global delay
+
     parser = argparse.ArgumentParser(
         description="Haiku-supervised Ollama lab manager",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -416,7 +481,6 @@ Cost: ~$0.03-0.10 per 100 tasks (Haiku) + $0 (Ollama)
         print("   export ANTHROPIC_API_KEY='sk-ant-...'")
         exit(1)
 
-    global ITERATION_DELAY
     ITERATION_DELAY = args.delay
 
     if args.check:
