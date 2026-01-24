@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -10,7 +10,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -96,74 +95,72 @@ function formatNumber(num: number | undefined | null, decimals: number = 2): str
   return num.toFixed(decimals);
 }
 
+// ============== Section Component ==============
+
+function Section({
+  title,
+  defaultOpen = false,
+  badge,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <div className="border-b border-border">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between py-3 px-4 text-foreground-bright hover:text-foreground transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm">{title}</span>
+          {badge}
+        </div>
+        <span className="text-muted-foreground">{isOpen ? "-" : "+"}</span>
+      </button>
+      {isOpen && <div className="px-4 pb-4 animate-fade-in">{children}</div>}
+    </div>
+  );
+}
+
+// ============== StatRow Component ==============
+
+function StatRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex items-center justify-between py-1.5">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground">{value}</span>
+    </div>
+  );
+}
+
 // ============== Components ==============
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    initializing: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    training: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    validating: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    saving: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-    error: "bg-red-500/20 text-red-400 border-red-500/30",
-    complete: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  };
-
   const icons: Record<string, string> = {
-    initializing: "◌",
+    initializing: "○",
     training: "●",
     validating: "◐",
     saving: "↓",
-    error: "✕",
+    error: "×",
     complete: "✓",
   };
 
+  const isActive = status === "training" || status === "validating";
+
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${colors[status] || colors.initializing}`}>
+    <span className={`inline-flex items-center gap-1.5 text-xs ${isActive ? "text-foreground-bright" : "text-muted-foreground"}`}>
       <span className={status === "training" ? "animate-pulse" : ""}>{icons[status] || "○"}</span>
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 }
 
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  trend,
-  icon,
-}: {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  trend?: "up" | "down" | "neutral";
-  icon?: string;
-}) {
-  return (
-    <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</span>
-        {icon && <span className="text-lg">{icon}</span>}
-      </div>
-      <div className="flex items-end gap-2">
-        <span className="text-2xl font-bold text-white">{value}</span>
-        {trend && (
-          <span className={`text-sm ${
-            trend === "up" ? "text-red-400" : 
-            trend === "down" ? "text-emerald-400" : 
-            "text-slate-400"
-          }`}>
-            {trend === "up" ? "↑" : trend === "down" ? "↓" : "→"}
-          </span>
-        )}
-      </div>
-      {subtitle && (
-        <span className="text-xs text-slate-500 mt-1 block">{subtitle}</span>
-      )}
-    </div>
-  );
-}
-
-function ProgressRing({ progress, size = 80, strokeWidth = 6 }: { progress: number; size?: number; strokeWidth?: number }) {
+function ProgressRing({ progress, size = 64, strokeWidth = 4 }: { progress: number; size?: number; strokeWidth?: number }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const offset = circumference - (progress / 100) * circumference;
@@ -172,7 +169,7 @@ function ProgressRing({ progress, size = 80, strokeWidth = 6 }: { progress: numb
     <div className="relative" style={{ width: size, height: size }}>
       <svg className="transform -rotate-90" width={size} height={size}>
         <circle
-          className="text-slate-700"
+          className="text-border"
           strokeWidth={strokeWidth}
           stroke="currentColor"
           fill="transparent"
@@ -181,7 +178,7 @@ function ProgressRing({ progress, size = 80, strokeWidth = 6 }: { progress: numb
           cy={size / 2}
         />
         <circle
-          className="text-emerald-500 transition-all duration-300"
+          className="text-foreground transition-all duration-300"
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
@@ -194,7 +191,7 @@ function ProgressRing({ progress, size = 80, strokeWidth = 6 }: { progress: numb
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-bold text-white">{Math.round(progress)}%</span>
+        <span className="text-xs text-foreground-bright">{Math.round(progress)}%</span>
       </div>
     </div>
   );
@@ -203,62 +200,54 @@ function ProgressRing({ progress, size = 80, strokeWidth = 6 }: { progress: numb
 function LossChart({ data }: { data?: Array<{ step: number; train_loss: number; val_loss: number }> }) {
   if (!data || data.length < 2) {
     return (
-      <div className="h-64 flex items-center justify-center text-slate-500">
+      <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
         Waiting for data...
       </div>
     );
   }
 
   return (
-    <ResponsiveContainer width="100%" height={256}>
+    <ResponsiveContainer width="100%" height={192}>
       <AreaChart data={data}>
-        <defs>
-          <linearGradient id="trainGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="valGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis 
-          dataKey="step" 
-          stroke="#64748b" 
-          fontSize={11}
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis
+          dataKey="step"
+          stroke="hsl(var(--muted-foreground))"
+          fontSize={10}
           tickFormatter={(v) => v.toLocaleString()}
         />
-        <YAxis 
-          stroke="#64748b" 
-          fontSize={11}
+        <YAxis
+          stroke="hsl(var(--muted-foreground))"
+          fontSize={10}
           tickFormatter={(v) => v.toFixed(3)}
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: "#1e293b",
-            border: "1px solid #334155",
-            borderRadius: "8px",
-            fontSize: "12px",
+            backgroundColor: "hsl(var(--background-elevated))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: "4px",
+            fontSize: "11px",
           }}
-          labelStyle={{ color: "#94a3b8" }}
+          labelStyle={{ color: "hsl(var(--foreground))" }}
         />
-        <Legend />
         <Area
           type="monotone"
           dataKey="train_loss"
-          name="Train Loss"
-          stroke="#3b82f6"
-          fill="url(#trainGradient)"
-          strokeWidth={2}
+          name="Train"
+          stroke="hsl(var(--foreground))"
+          fill="hsl(var(--foreground))"
+          fillOpacity={0.1}
+          strokeWidth={1}
         />
         <Area
           type="monotone"
           dataKey="val_loss"
-          name="Val Loss"
-          stroke="#f59e0b"
-          fill="url(#valGradient)"
-          strokeWidth={2}
+          name="Val"
+          stroke="hsl(var(--muted-foreground))"
+          fill="hsl(var(--muted-foreground))"
+          fillOpacity={0.05}
+          strokeWidth={1}
+          strokeDasharray="3 3"
         />
       </AreaChart>
     </ResponsiveContainer>
@@ -269,29 +258,29 @@ function LearningRateChart({ data }: { data?: Array<{ step: number; lr: number }
   if (!data || data.length < 2) return null;
 
   return (
-    <ResponsiveContainer width="100%" height={120}>
+    <ResponsiveContainer width="100%" height={100}>
       <LineChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis dataKey="step" stroke="#64748b" fontSize={10} />
-        <YAxis 
-          stroke="#64748b" 
-          fontSize={10}
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis dataKey="step" stroke="hsl(var(--muted-foreground))" fontSize={9} />
+        <YAxis
+          stroke="hsl(var(--muted-foreground))"
+          fontSize={9}
           tickFormatter={(v) => v.toExponential(0)}
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: "#1e293b",
-            border: "1px solid #334155",
-            borderRadius: "8px",
-            fontSize: "11px",
+            backgroundColor: "hsl(var(--background-elevated))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: "4px",
+            fontSize: "10px",
           }}
         />
         <Line
           type="monotone"
           dataKey="lr"
-          name="Learning Rate"
-          stroke="#8b5cf6"
-          strokeWidth={2}
+          name="LR"
+          stroke="hsl(var(--foreground))"
+          strokeWidth={1}
           dot={false}
         />
       </LineChart>
@@ -303,45 +292,40 @@ function MemoryChart({ data }: { data?: Array<{ step: number; used: number; peak
   if (!data || data.length < 2) return null;
 
   return (
-    <ResponsiveContainer width="100%" height={120}>
+    <ResponsiveContainer width="100%" height={100}>
       <AreaChart data={data}>
-        <defs>
-          <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis dataKey="step" stroke="#64748b" fontSize={10} />
-        <YAxis 
-          stroke="#64748b" 
-          fontSize={10}
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis dataKey="step" stroke="hsl(var(--muted-foreground))" fontSize={9} />
+        <YAxis
+          stroke="hsl(var(--muted-foreground))"
+          fontSize={9}
           tickFormatter={(v) => `${v.toFixed(0)}GB`}
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: "#1e293b",
-            border: "1px solid #334155",
-            borderRadius: "8px",
-            fontSize: "11px",
+            backgroundColor: "hsl(var(--background-elevated))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: "4px",
+            fontSize: "10px",
           }}
           formatter={(v: number) => `${v.toFixed(2)} GB`}
         />
         <Area
           type="monotone"
           dataKey="used"
-          name="Memory Used"
-          stroke="#10b981"
-          fill="url(#memGradient)"
-          strokeWidth={2}
+          name="Used"
+          stroke="hsl(var(--foreground))"
+          fill="hsl(var(--foreground))"
+          fillOpacity={0.1}
+          strokeWidth={1}
         />
         <Line
           type="monotone"
           dataKey="peak"
           name="Peak"
-          stroke="#ef4444"
+          stroke="hsl(var(--muted-foreground))"
           strokeWidth={1}
-          strokeDasharray="5 5"
+          strokeDasharray="3 3"
           dot={false}
         />
       </AreaChart>
@@ -354,25 +338,25 @@ function ErrorsPanel({ errors, warnings }: { errors?: string[]; warnings?: strin
   const warningList = warnings || [];
   if (errorList.length === 0 && warningList.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-500">
-        <span className="text-2xl">✓</span>
-        <p className="mt-2 text-sm">No errors or warnings</p>
+      <div className="text-center py-4 text-muted-foreground">
+        <span className="text-lg">✓</span>
+        <p className="mt-1 text-xs">No errors or warnings</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2 max-h-48 overflow-y-auto">
+    <div className="space-y-2 max-h-32 overflow-y-auto">
       {errorList.map((error, i) => (
-        <div key={`error-${i}`} className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm">
-          <span className="text-red-400 font-medium">Error: </span>
-          <span className="text-red-300">{error}</span>
+        <div key={`error-${i}`} className="text-xs p-2 border border-border rounded">
+          <span className="text-foreground-bright">Error: </span>
+          <span className="text-foreground">{error}</span>
         </div>
       ))}
       {warningList.map((warning, i) => (
-        <div key={`warn-${i}`} className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm">
-          <span className="text-yellow-400 font-medium">Warning: </span>
-          <span className="text-yellow-300">{warning}</span>
+        <div key={`warn-${i}`} className="text-xs p-2 border border-border rounded">
+          <span className="text-muted-foreground">Warning: </span>
+          <span className="text-foreground">{warning}</span>
         </div>
       ))}
     </div>
@@ -384,7 +368,7 @@ function DataViewer({ samples }: { samples: DataSample[] }) {
   const [filter, setFilter] = useState<string>("all");
 
   const emotions = Array.from(new Set(samples.map(s => s.prosody?.semantic?.emotion).filter(Boolean)));
-  
+
   const filtered = samples.filter(s => {
     if (search && !s.text.toLowerCase().includes(search.toLowerCase())) return false;
     if (filter !== "all" && s.prosody?.semantic?.emotion !== filter) return false;
@@ -392,54 +376,49 @@ function DataViewer({ samples }: { samples: DataSample[] }) {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-3">
+    <div className="space-y-3">
+      <div className="flex gap-2">
         <input
           type="text"
           placeholder="Search samples..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+          className="flex-1 bg-background border border-border rounded px-3 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-foreground"
         />
         <select
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+          className="bg-background border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-foreground"
         >
-          <option value="all">All emotions</option>
+          <option value="all">All</option>
           {emotions.map(e => (
             <option key={e} value={e}>{e}</option>
           ))}
         </select>
       </div>
 
-      <div className="space-y-2 max-h-96 overflow-y-auto">
+      <div className="space-y-2 max-h-64 overflow-y-auto">
         {filtered.slice(0, 50).map((sample) => (
           <div
             key={sample.id}
-            className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 hover:border-slate-600 transition-colors"
+            className="border border-border rounded p-3 hover:border-foreground/30 transition-colors"
           >
             <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-white flex-1">{sample.text}</p>
-              <span className="text-xs text-slate-500 whitespace-nowrap">
+              <p className="text-sm text-foreground flex-1">{sample.text}</p>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {sample.duration.toFixed(1)}s
               </span>
             </div>
             {sample.prosody?.semantic && (
               <div className="flex gap-2 mt-2">
                 {sample.prosody.semantic.emotion && (
-                  <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">
+                  <span className="text-xs text-muted-foreground">
                     {sample.prosody.semantic.emotion}
                   </span>
                 )}
                 {sample.prosody.semantic.tone && (
-                  <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">
+                  <span className="text-xs text-foreground-subtle">
                     {sample.prosody.semantic.tone}
-                  </span>
-                )}
-                {sample.prosody.semantic.energy_level && (
-                  <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">
-                    {sample.prosody.semantic.energy_level}
                   </span>
                 )}
               </div>
@@ -447,7 +426,7 @@ function DataViewer({ samples }: { samples: DataSample[] }) {
           </div>
         ))}
         {filtered.length > 50 && (
-          <p className="text-center text-sm text-slate-500 py-2">
+          <p className="text-center text-xs text-muted-foreground py-2">
             Showing 50 of {filtered.length} samples
           </p>
         )}
@@ -464,41 +443,30 @@ function EmotionDistribution({ data }: { data: Record<string, number> }) {
 
   if (chartData.length === 0) return null;
 
-  const colors: Record<string, string> = {
-    neutral: "#94a3b8",
-    happy: "#fbbf24",
-    sad: "#60a5fa",
-    angry: "#f87171",
-    friendly: "#34d399",
-    excited: "#fb923c",
-    thoughtful: "#818cf8",
-    concerned: "#fcd34d",
-    confident: "#22d3ee",
-  };
-
   return (
-    <ResponsiveContainer width="100%" height={160}>
+    <ResponsiveContainer width="100%" height={120}>
       <BarChart data={chartData} layout="vertical">
-        <XAxis type="number" stroke="#64748b" fontSize={10} />
-        <YAxis 
-          type="category" 
-          dataKey="emotion" 
-          stroke="#64748b" 
-          fontSize={11}
-          width={80}
+        <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+        <YAxis
+          type="category"
+          dataKey="emotion"
+          stroke="hsl(var(--muted-foreground))"
+          fontSize={10}
+          width={60}
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: "#1e293b",
-            border: "1px solid #334155",
-            borderRadius: "8px",
-            fontSize: "11px",
+            backgroundColor: "hsl(var(--background-elevated))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: "4px",
+            fontSize: "10px",
           }}
         />
-        <Bar 
-          dataKey="count" 
-          fill="#3b82f6"
-          radius={[0, 4, 4, 0]}
+        <Bar
+          dataKey="count"
+          fill="hsl(var(--foreground))"
+          fillOpacity={0.6}
+          radius={[0, 2, 2, 0]}
         />
       </BarChart>
     </ResponsiveContainer>
@@ -528,36 +496,33 @@ export default function TrainingDashboard() {
   // Connect to WebSocket
   useEffect(() => {
     const connect = () => {
-      // Use env var or default to localhost
       const apiHost = process.env.NEXT_PUBLIC_TRAINING_API || "localhost:8001";
       const ws = new WebSocket(`ws://${apiHost}/ws`);
-      
+
       ws.onopen = () => {
         console.log("Connected to training API");
         setConnected(true);
       };
-      
+
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         setMetrics(data);
       };
-      
+
       ws.onclose = () => {
         setConnected(false);
-        // Reconnect after 3 seconds
         setTimeout(connect, 3000);
       };
-      
+
       ws.onerror = () => {
         setConnected(false);
       };
-      
+
       wsRef.current = ws;
     };
 
     connect();
 
-    // Fallback: Poll for metrics
     const pollInterval = setInterval(async () => {
       if (!connected) {
         try {
@@ -572,13 +537,11 @@ export default function TrainingDashboard() {
       }
     }, 2000);
 
-    // Load sample data
     fetch(`${BACKEND_API}/samples`)
       .then(res => res.json())
       .then(data => setSamples(data.samples || []))
       .catch(() => {});
 
-    // Load voice data stats
     const fetchVoiceStats = async () => {
       try {
         const res = await fetch(`${BACKEND_API}/training/data-stats`);
@@ -592,7 +555,6 @@ export default function TrainingDashboard() {
     };
     fetchVoiceStats();
 
-    // Poll training status
     const statusInterval = setInterval(async () => {
       try {
         const res = await fetch(`${BACKEND_API}/training/status`);
@@ -615,166 +577,187 @@ export default function TrainingDashboard() {
   }, [connected]);
 
   const epochProgress = metrics ? (metrics.epoch_progress * 100) : 0;
-  const totalProgress = metrics 
-    ? ((metrics.epoch - 1 + metrics.epoch_progress) / 50 * 100) // Assuming 50 epochs
+  const totalProgress = metrics
+    ? ((metrics.epoch - 1 + metrics.epoch_progress) / 50 * 100)
     : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Page Header with Status */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {metrics && <StatusBadge status={metrics.status} />}
+    <div className="min-h-screen bg-background flex">
+      {/* Left Sidebar - Status & Config */}
+      <aside className="w-[280px] flex-shrink-0 border-r border-border bg-background-elevated h-[calc(100vh-48px)] overflow-y-auto">
+        {/* Connection Status */}
+        <Section title="Status" defaultOpen>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Connection</span>
+              <div className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-foreground" : "bg-muted-foreground"}`} />
+                <span className="text-xs text-foreground">{connected ? "Live" : "Disconnected"}</span>
+              </div>
+            </div>
+            {metrics && (
+              <>
+                <StatRow label="Status" value={metrics.status} />
+                <StatRow label="Epoch" value={`${metrics.epoch} / 50`} />
+                <StatRow label="Step" value={metrics.step.toLocaleString()} />
+              </>
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
-            <span className="text-xs text-slate-500">
-              {connected ? "Live" : "Disconnected"}
-            </span>
-          </div>
-        </div>
+        </Section>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6">
+        {/* Training Config */}
+        <Section title="Configuration" defaultOpen={!metrics}>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Epochs</label>
+              <input
+                type="number"
+                value={trainingConfig.epochs}
+                onChange={(e) => setTrainingConfig(prev => ({ ...prev, epochs: parseInt(e.target.value) || 50 }))}
+                className="w-full bg-background border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Batch Size</label>
+              <input
+                type="number"
+                value={trainingConfig.batchSize}
+                onChange={(e) => setTrainingConfig(prev => ({ ...prev, batchSize: parseInt(e.target.value) || 4 }))}
+                className="w-full bg-background border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-foreground"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Config</label>
+              <select
+                value={trainingConfig.config}
+                onChange={(e) => setTrainingConfig(prev => ({ ...prev, config: e.target.value }))}
+                className="w-full bg-background border border-border rounded px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-foreground"
+              >
+                <option value="m4_pro.yaml">M4 Pro (Mac)</option>
+                <option value="rtx_4090.yaml">RTX 4090</option>
+              </select>
+            </div>
+          </div>
+        </Section>
+
+        {/* DeepSeek Techniques */}
+        <Section title="DeepSeek Techniques">
+          <div className="space-y-1">
+            {[
+              { name: "Multi-Token Prediction", status: true },
+              { name: "DeepSeek LR Schedule", status: true },
+              { name: "Gradient Checkpointing", status: true },
+              { name: "torch.compile (MPS)", status: true },
+            ].map((tech) => (
+              <div key={tech.name} className="flex items-center gap-2 py-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${tech.status ? "bg-foreground" : "bg-muted-foreground"}`} />
+                <span className="text-xs text-foreground">{tech.name}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* Voice Data Stats */}
+        {voiceStats && voiceStats.has_training_data && (
+          <Section title="Training Data">
+            <div className="space-y-2">
+              <StatRow label="Samples" value={voiceStats.sample_count || 0} />
+              <StatRow label="Duration" value={`${(voiceStats.total_duration_minutes || 0).toFixed(1)} min`} />
+              {voiceStats.emotion_distribution && (
+                <div className="pt-2">
+                  <div className="text-xs text-muted-foreground mb-2">Emotion Distribution</div>
+                  <EmotionDistribution data={voiceStats.emotion_distribution} />
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 h-[calc(100vh-48px)] overflow-y-auto">
+        <div className="p-6">
+          {/* Tabs */}
+          <div className="flex gap-px mb-6 border border-border rounded overflow-hidden w-fit">
             {(["overview", "data", "logs"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                className={`px-4 py-2 text-sm transition-colors ${
                   activeTab === tab
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+                    ? "bg-foreground text-background"
+                    : "bg-background-elevated text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
-        </div>
-        {!metrics && trainingStatus?.status !== "running" ? (
-          <div className="space-y-6">
-            {/* Start Training Section */}
-            <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold mb-2">Train Your Voice Model</h2>
-                <p className="text-slate-400">Fine-tune CSM-1B on your recorded voice samples</p>
-              </div>
+          </div>
 
-              {/* Voice Data Stats */}
-              {voiceStats ? (
-                voiceStats.has_training_data ? (
-                  <div className="space-y-6">
-                    {/* Data Ready */}
-                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="text-2xl">✓</span>
-                        <div>
-                          <h3 className="font-semibold text-emerald-400">Training Data Ready</h3>
-                          <p className="text-sm text-slate-400">{voiceStats.sample_count} samples • {voiceStats.total_duration_minutes} minutes</p>
+          {!metrics && trainingStatus?.status !== "running" ? (
+            /* No Training Running - Show Setup */
+            <div className="space-y-6">
+              <div className="border border-border rounded p-6">
+                <div className="text-center mb-6">
+                  <h2 className="text-lg text-foreground-bright mb-1">Train Your Voice Model</h2>
+                  <p className="text-sm text-muted-foreground">Fine-tune CSM-1B on your recorded voice samples</p>
+                </div>
+
+                {voiceStats ? (
+                  voiceStats.has_training_data ? (
+                    <div className="space-y-4">
+                      <div className="border border-foreground/20 rounded p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-foreground-bright">✓</span>
+                          <span className="text-sm text-foreground-bright">Training Data Ready</span>
                         </div>
+                        <p className="text-xs text-muted-foreground">
+                          {voiceStats.sample_count} samples | {voiceStats.total_duration_minutes?.toFixed(1)} minutes
+                        </p>
                       </div>
 
-                      {/* Emotion Distribution */}
-                      {voiceStats.emotion_distribution && (
-                        <div className="mt-4">
-                          <p className="text-sm text-slate-400 mb-2">Emotion Distribution:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(voiceStats.emotion_distribution).map(([emotion, count]) => (
-                              <span key={emotion} className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">
-                                {emotion}: {count}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Training Config */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-sm text-slate-400 mb-1 block">Epochs</label>
-                        <input
-                          type="number"
-                          value={trainingConfig.epochs}
-                          onChange={(e) => setTrainingConfig(prev => ({ ...prev, epochs: parseInt(e.target.value) || 50 }))}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm text-slate-400 mb-1 block">Batch Size</label>
-                        <input
-                          type="number"
-                          value={trainingConfig.batchSize}
-                          onChange={(e) => setTrainingConfig(prev => ({ ...prev, batchSize: parseInt(e.target.value) || 4 }))}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm text-slate-400 mb-1 block">Config</label>
-                        <select
-                          value={trainingConfig.config}
-                          onChange={(e) => setTrainingConfig(prev => ({ ...prev, config: e.target.value }))}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white"
-                        >
-                          <option value="m4_pro.yaml">M4 Pro (Mac)</option>
-                          <option value="rtx_4090.yaml">RTX 4090</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Start Button */}
-                    <button
-                      onClick={async () => {
-                        setIsStarting(true);
-                        try {
-                          const res = await fetch(`${BACKEND_API}/training/start?config=${trainingConfig.config}&epochs=${trainingConfig.epochs}&batch_size=${trainingConfig.batchSize}`, {
-                            method: "POST",
-                          });
-                          const data = await res.json();
-                          if (res.ok) {
-                            setTrainingStatus(data);
-                          } else {
-                            alert(data.detail || "Failed to start training");
+                      <button
+                        onClick={async () => {
+                          setIsStarting(true);
+                          try {
+                            const res = await fetch(`${BACKEND_API}/training/start?config=${trainingConfig.config}&epochs=${trainingConfig.epochs}&batch_size=${trainingConfig.batchSize}`, {
+                              method: "POST",
+                            });
+                            const data = await res.json();
+                            if (res.ok) {
+                              setTrainingStatus(data);
+                            } else {
+                              alert(data.detail || "Failed to start training");
+                            }
+                          } catch (e) {
+                            alert("Failed to start training");
+                          } finally {
+                            setIsStarting(false);
                           }
-                        } catch (e) {
-                          alert("Failed to start training");
-                        } finally {
-                          setIsStarting(false);
-                        }
-                      }}
-                      disabled={isStarting}
-                      className="w-full py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
-                    >
-                      {isStarting ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Starting Training...
-                        </span>
-                      ) : (
-                        "Start Training on Mac"
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  /* No Training Data - Need to Prepare */
-                  <div className="space-y-6">
-                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="text-2xl">⚠</span>
-                        <div>
-                          <h3 className="font-semibold text-yellow-400">No Training Data</h3>
-                          <p className="text-sm text-slate-400">{voiceStats.message}</p>
+                        }}
+                        disabled={isStarting}
+                        className="w-full py-3 bg-foreground text-background rounded hover:bg-foreground-bright transition-colors disabled:opacity-50"
+                      >
+                        {isStarting ? "Starting Training..." : "Start Training"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="border border-border rounded p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-muted-foreground">○</span>
+                          <span className="text-sm text-foreground">No Training Data</span>
                         </div>
+                        <p className="text-xs text-muted-foreground">{voiceStats.message}</p>
                       </div>
 
                       {voiceStats.sessions_available && voiceStats.sessions_available.length > 0 && (
-                        <div className="mt-4">
-                          <p className="text-sm text-slate-400 mb-2">Available recording sessions:</p>
+                        <>
                           <div className="space-y-2">
                             {voiceStats.sessions_available.map((session) => (
-                              <div key={session.session_id} className="flex items-center justify-between bg-slate-800/50 rounded-lg p-3">
-                                <span className="text-sm text-white">{session.session_id}</span>
-                                <span className="text-sm text-slate-400">{session.recording_count} recordings</span>
+                              <div key={session.session_id} className="flex items-center justify-between border border-border rounded p-3">
+                                <span className="text-sm text-foreground">{session.session_id}</span>
+                                <span className="text-xs text-muted-foreground">{session.recording_count} recordings</span>
                               </div>
                             ))}
                           </div>
@@ -788,7 +771,6 @@ export default function TrainingDashboard() {
                                 });
                                 const data = await res.json();
                                 if (res.ok) {
-                                  // Refresh stats
                                   const statsRes = await fetch(`${BACKEND_API}/training/data-stats`);
                                   if (statsRes.ok) {
                                     setVoiceStats(await statsRes.json());
@@ -803,260 +785,284 @@ export default function TrainingDashboard() {
                               }
                             }}
                             disabled={isPreparing}
-                            className="mt-4 w-full py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-xl transition-all disabled:opacity-50"
+                            className="w-full py-3 border border-border text-foreground rounded hover:bg-accent transition-colors disabled:opacity-50"
                           >
                             {isPreparing ? "Preparing..." : "Prepare Training Data"}
                           </button>
-                        </div>
+                        </>
                       )}
-                    </div>
 
-                    <div className="text-center">
-                      <p className="text-slate-500 text-sm">
-                        Go to the <a href="/perform" className="text-emerald-400 hover:underline">Perform page</a> to record voice samples first.
-                      </p>
+                      <div className="text-center pt-2">
+                        <p className="text-xs text-muted-foreground">
+                          Go to the <a href="/perform" className="text-foreground hover:text-foreground-bright underline">Perform page</a> to record voice samples first.
+                        </p>
+                      </div>
                     </div>
+                  )
+                ) : (
+                  <div className="flex justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-border border-t-foreground rounded-full animate-spin" />
                   </div>
-                )
-              ) : (
-                <div className="flex justify-center py-8">
-                  <div className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+                )}
+              </div>
+
+              {/* Training Status */}
+              {trainingStatus && trainingStatus.status !== "not_started" && (
+                <div className="border border-border rounded p-6">
+                  <h3 className="text-sm text-foreground-bright mb-4">Training Status</h3>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className={`w-2 h-2 rounded-full ${
+                      trainingStatus.status === "running" ? "bg-foreground animate-pulse" :
+                      trainingStatus.status === "completed" ? "bg-foreground" :
+                      trainingStatus.status === "failed" ? "bg-muted-foreground" : "bg-muted-foreground"
+                    }`} />
+                    <span className="text-sm text-foreground capitalize">{trainingStatus.status}</span>
+                    {trainingStatus.pid && <span className="text-xs text-muted-foreground">PID: {trainingStatus.pid}</span>}
+                  </div>
+
+                  {trainingStatus.log_tail && (
+                    <pre className="bg-background rounded p-4 text-xs text-foreground overflow-auto max-h-48 font-mono border border-border">
+                      {trainingStatus.log_tail}
+                    </pre>
+                  )}
+
+                  {trainingStatus.status === "running" && (
+                    <button
+                      onClick={async () => {
+                        if (confirm("Are you sure you want to stop training?")) {
+                          await fetch(`${BACKEND_API}/training/stop`, { method: "POST" });
+                        }
+                      }}
+                      className="mt-4 px-4 py-2 border border-border text-foreground rounded hover:bg-accent transition-colors"
+                    >
+                      Stop Training
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-
-            {/* Training Status */}
-            {trainingStatus && trainingStatus.status !== "not_started" && (
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <h3 className="text-lg font-semibold mb-4">Training Status</h3>
-                <div className="flex items-center gap-3 mb-4">
-                  <span className={`w-3 h-3 rounded-full ${
-                    trainingStatus.status === "running" ? "bg-emerald-500 animate-pulse" :
-                    trainingStatus.status === "completed" ? "bg-emerald-500" :
-                    trainingStatus.status === "failed" ? "bg-red-500" : "bg-slate-500"
-                  }`} />
-                  <span className="font-medium capitalize">{trainingStatus.status}</span>
-                  {trainingStatus.pid && <span className="text-sm text-slate-500">PID: {trainingStatus.pid}</span>}
-                </div>
-
-                {trainingStatus.log_tail && (
-                  <pre className="bg-slate-900 rounded-lg p-4 text-xs text-slate-300 overflow-auto max-h-64 font-mono">
-                    {trainingStatus.log_tail}
-                  </pre>
-                )}
-
-                {trainingStatus.status === "running" && (
-                  <button
-                    onClick={async () => {
-                      if (confirm("Are you sure you want to stop training?")) {
-                        await fetch(`${BACKEND_API}/training/stop`, { method: "POST" });
-                      }
-                    }}
-                    className="mt-4 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30"
-                  >
-                    Stop Training
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ) : activeTab === "overview" ? (
-          <div className="space-y-6">
-            {/* Progress Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-lg font-semibold">Training Progress</h2>
-                    <p className="text-sm text-slate-400">
-                      Epoch {metrics.epoch} • Step {metrics.step.toLocaleString()}
-                    </p>
-                  </div>
-                  <ProgressRing progress={totalProgress} size={64} />
-                </div>
-
-                {/* Epoch Progress Bar */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">Epoch Progress</span>
-                    <span className="text-white font-medium">{epochProgress.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all duration-300"
-                      style={{ width: `${epochProgress}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Time Stats */}
-                <div className="grid grid-cols-2 gap-4 mt-6">
-                  <div>
-                    <span className="text-xs text-slate-500 uppercase tracking-wider">Elapsed</span>
-                    <p className="text-lg font-semibold text-white">{formatTime(metrics.elapsed_seconds)}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500 uppercase tracking-wider">ETA</span>
-                    <p className="text-lg font-semibold text-white">{formatTime(metrics.eta_seconds)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Key Metrics */}
-              <div className="space-y-4">
-                <MetricCard
-                  title="Train Loss"
-                  value={formatNumber(metrics.train_loss, 4)}
-                  subtitle={`Val: ${formatNumber(metrics.val_loss, 4)}`}
-                  trend={metrics.train_loss < (metrics.loss_history[metrics.loss_history.length - 2]?.train_loss || metrics.train_loss) ? "down" : "neutral"}
-                  icon="📉"
-                />
-                <MetricCard
-                  title="Learning Rate"
-                  value={metrics.learning_rate.toExponential(2)}
-                  icon="📈"
-                />
-                <MetricCard
-                  title="Speed"
-                  value={`${metrics.samples_per_second.toFixed(1)}/s`}
-                  subtitle="samples per second"
-                  icon="⚡"
-                />
-              </div>
-            </div>
-
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Loss Chart */}
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4">Loss Over Time</h3>
-                <LossChart data={metrics.loss_history} />
-              </div>
-
-              {/* Memory & LR Charts */}
-              <div className="space-y-6">
-                <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-slate-300">Memory Usage</h3>
-                    <span className="text-xs text-slate-500">
-                      {metrics.memory_used_gb.toFixed(1)} / 64 GB
-                    </span>
-                  </div>
-                  <MemoryChart data={metrics.memory_history} />
-                </div>
-
-                <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-4">Learning Rate Schedule</h3>
-                  <LearningRateChart data={metrics.lr_history} />
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Training Stats */}
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4">Training Stats</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Gradient Norm</span>
-                    <span className={`text-sm font-medium ${metrics.grad_norm_clipped ? "text-yellow-400" : "text-white"}`}>
-                      {formatNumber(metrics.grad_norm, 4)}
-                      {metrics.grad_norm_clipped && " (clipped)"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">MTP Loss</span>
-                    <span className="text-sm font-medium text-white">{formatNumber(metrics.mtp_loss, 4)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-slate-400">Batch Size</span>
-                    <span className="text-sm font-medium text-white">12 × 2 = 24</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* DeepSeek Techniques */}
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4">DeepSeek Techniques</h3>
-                <div className="space-y-2">
-                  {[
-                    { name: "Multi-Token Prediction", status: true },
-                    { name: "DeepSeek LR Schedule", status: true },
-                    { name: "Gradient Checkpointing", status: true },
-                    { name: "torch.compile (MPS)", status: true },
-                  ].map((tech) => (
-                    <div key={tech.name} className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${tech.status ? "bg-emerald-500" : "bg-slate-600"}`} />
-                      <span className="text-sm text-slate-300">{tech.name}</span>
+          ) : activeTab === "overview" ? (
+            /* Training Overview */
+            <div className="space-y-6">
+              {/* Progress Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 border border-border rounded p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-sm text-foreground-bright">Training Progress</h2>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Epoch {metrics?.epoch} | Step {metrics?.step.toLocaleString()}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    {metrics && <ProgressRing progress={totalProgress} />}
+                  </div>
 
-              {/* Errors & Warnings */}
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4">Errors & Warnings</h3>
-                <ErrorsPanel errors={metrics.errors} warnings={metrics.warnings} />
-              </div>
-            </div>
-          </div>
-        ) : activeTab === "data" ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Stats */}
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4">Dataset Stats</h3>
+                  {/* Epoch Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Epoch Progress</span>
+                      <span className="text-foreground">{epochProgress.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-1 bg-border rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-foreground transition-all duration-300"
+                        style={{ width: `${epochProgress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Time Stats */}
+                  {metrics && (
+                    <div className="grid grid-cols-2 gap-4 mt-6">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Elapsed</span>
+                        <p className="text-sm text-foreground-bright">{formatTime(metrics.elapsed_seconds)}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground">ETA</span>
+                        <p className="text-sm text-foreground-bright">{formatTime(metrics.eta_seconds)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Key Metrics */}
                 <div className="space-y-4">
-                  <MetricCard
-                    title="Total Samples"
-                    value={samples.length}
-                    icon="📊"
-                  />
-                  <MetricCard
-                    title="Total Duration"
-                    value={`${(samples.reduce((a, s) => a + s.duration, 0) / 60).toFixed(1)} min`}
-                    icon="⏱️"
+                  <div className="border border-border rounded p-4">
+                    <div className="text-xs text-muted-foreground mb-1">Train Loss</div>
+                    <div className="text-lg text-foreground-bright">{formatNumber(metrics?.train_loss, 4)}</div>
+                    <div className="text-xs text-muted-foreground mt-1">Val: {formatNumber(metrics?.val_loss, 4)}</div>
+                  </div>
+                  <div className="border border-border rounded p-4">
+                    <div className="text-xs text-muted-foreground mb-1">Learning Rate</div>
+                    <div className="text-lg text-foreground-bright">{metrics?.learning_rate.toExponential(2)}</div>
+                  </div>
+                  <div className="border border-border rounded p-4">
+                    <div className="text-xs text-muted-foreground mb-1">Speed</div>
+                    <div className="text-lg text-foreground-bright">{metrics?.samples_per_second.toFixed(1)}/s</div>
+                    <div className="text-xs text-muted-foreground mt-1">samples per second</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Loss Chart */}
+                <div className="border border-border rounded p-6">
+                  <h3 className="text-xs text-muted-foreground mb-4">Loss Over Time</h3>
+                  <LossChart data={metrics?.loss_history} />
+                </div>
+
+                {/* Memory & LR Charts */}
+                <div className="space-y-6">
+                  <div className="border border-border rounded p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xs text-muted-foreground">Memory Usage</h3>
+                      <span className="text-xs text-foreground">
+                        {metrics?.memory_used_gb.toFixed(1)} / 64 GB
+                      </span>
+                    </div>
+                    <MemoryChart data={metrics?.memory_history} />
+                  </div>
+
+                  <div className="border border-border rounded p-6">
+                    <h3 className="text-xs text-muted-foreground mb-4">Learning Rate Schedule</h3>
+                    <LearningRateChart data={metrics?.lr_history} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Training Stats */}
+                <div className="border border-border rounded p-6">
+                  <h3 className="text-xs text-muted-foreground mb-4">Training Stats</h3>
+                  <div className="space-y-2">
+                    <StatRow
+                      label="Gradient Norm"
+                      value={`${formatNumber(metrics?.grad_norm, 4)}${metrics?.grad_norm_clipped ? " (clipped)" : ""}`}
+                    />
+                    <StatRow label="MTP Loss" value={formatNumber(metrics?.mtp_loss, 4)} />
+                    <StatRow label="Batch Size" value="12 x 2 = 24" />
+                  </div>
+                </div>
+
+                {/* Errors & Warnings */}
+                <div className="lg:col-span-2 border border-border rounded p-6">
+                  <h3 className="text-xs text-muted-foreground mb-4">Errors & Warnings</h3>
+                  <ErrorsPanel errors={metrics?.errors} warnings={metrics?.warnings} />
+                </div>
+              </div>
+            </div>
+          ) : activeTab === "data" ? (
+            /* Data Tab */
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Stats */}
+                <div className="border border-border rounded p-6">
+                  <h3 className="text-xs text-muted-foreground mb-4">Dataset Stats</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Total Samples</div>
+                      <div className="text-lg text-foreground-bright">{samples.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Total Duration</div>
+                      <div className="text-lg text-foreground-bright">
+                        {(samples.reduce((a, s) => a + s.duration, 0) / 60).toFixed(1)} min
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Emotion Distribution */}
+                <div className="lg:col-span-2 border border-border rounded p-6">
+                  <h3 className="text-xs text-muted-foreground mb-4">Emotion Distribution</h3>
+                  <EmotionDistribution
+                    data={samples.reduce((acc, s) => {
+                      const e = s.prosody?.semantic?.emotion;
+                      if (e) acc[e] = (acc[e] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>)}
                   />
                 </div>
               </div>
 
-              {/* Emotion Distribution */}
-              <div className="lg:col-span-2 bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4">Emotion Distribution</h3>
-                <EmotionDistribution
-                  data={samples.reduce((acc, s) => {
-                    const e = s.prosody?.semantic?.emotion;
-                    if (e) acc[e] = (acc[e] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>)}
-                />
+              {/* Sample Browser */}
+              <div className="border border-border rounded p-6">
+                <h3 className="text-xs text-muted-foreground mb-4">Training Samples</h3>
+                <DataViewer samples={samples} />
               </div>
             </div>
+          ) : (
+            /* Logs Tab */
+            <div className="border border-border rounded p-6">
+              <h3 className="text-xs text-muted-foreground mb-4">Training Logs</h3>
+              <div className="font-mono text-xs space-y-1 max-h-[500px] overflow-y-auto bg-background rounded p-4 border border-border">
+                {metrics?.errors.map((e, i) => (
+                  <div key={`e-${i}`} className="text-foreground">[ERROR] {e}</div>
+                ))}
+                {metrics?.warnings.map((w, i) => (
+                  <div key={`w-${i}`} className="text-muted-foreground">[WARN] {w}</div>
+                ))}
+                <div className="text-muted-foreground">
+                  [Step {metrics?.step}] Loss: {metrics?.train_loss.toFixed(4)} | LR: {metrics?.learning_rate.toExponential(2)} | Mem: {metrics?.memory_used_gb.toFixed(1)}GB
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
 
-            {/* Sample Browser */}
-            <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-              <h3 className="text-sm font-semibold text-slate-300 mb-4">Training Samples</h3>
-              <DataViewer samples={samples} />
+      {/* Right Sidebar - Quick Stats */}
+      <aside className="w-[240px] flex-shrink-0 border-l border-border bg-background-elevated h-[calc(100vh-48px)] overflow-y-auto">
+        <Section title="Live Metrics" defaultOpen>
+          {metrics ? (
+            <div className="space-y-2">
+              <StatRow label="Train Loss" value={formatNumber(metrics.train_loss, 4)} />
+              <StatRow label="Val Loss" value={formatNumber(metrics.val_loss, 4)} />
+              <StatRow label="LR" value={metrics.learning_rate.toExponential(2)} />
+              <StatRow label="Speed" value={`${metrics.samples_per_second.toFixed(1)}/s`} />
+              <StatRow label="Memory" value={`${metrics.memory_used_gb.toFixed(1)} GB`} />
             </div>
-          </div>
-        ) : (
-          <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-            <h3 className="text-sm font-semibold text-slate-300 mb-4">Training Logs</h3>
-            <div className="font-mono text-xs space-y-1 max-h-[600px] overflow-y-auto bg-slate-900 rounded-lg p-4">
-              {metrics?.errors.map((e, i) => (
-                <div key={`e-${i}`} className="text-red-400">{e}</div>
-              ))}
-              {metrics?.warnings.map((w, i) => (
-                <div key={`w-${i}`} className="text-yellow-400">{w}</div>
-              ))}
-              <div className="text-slate-500">
-                [Step {metrics?.step}] Loss: {metrics?.train_loss.toFixed(4)} | LR: {metrics?.learning_rate.toExponential(2)} | Mem: {metrics?.memory_used_gb.toFixed(1)}GB
-              </div>
+          ) : (
+            <div className="text-xs text-muted-foreground text-center py-4">
+              No training in progress
             </div>
+          )}
+        </Section>
+
+        <Section title="Hardware">
+          <div className="space-y-2">
+            <StatRow label="Training" value="RTX 4090" />
+            <StatRow label="Inference" value="M4 Pro" />
+            <StatRow label="VRAM" value="24GB" />
           </div>
-        )}
-      </div>
+        </Section>
+
+        <Section title="Actions">
+          <div className="space-y-2">
+            {trainingStatus?.status === "running" && (
+              <button
+                onClick={async () => {
+                  if (confirm("Stop training?")) {
+                    await fetch(`${BACKEND_API}/training/stop`, { method: "POST" });
+                  }
+                }}
+                className="w-full py-2 text-sm border border-border text-foreground rounded hover:bg-accent transition-colors"
+              >
+                Stop Training
+              </button>
+            )}
+            <a
+              href="/perform"
+              className="block w-full py-2 text-sm text-center border border-border text-foreground rounded hover:bg-accent transition-colors"
+            >
+              Record More Samples
+            </a>
+          </div>
+        </Section>
+      </aside>
     </div>
   );
 }
