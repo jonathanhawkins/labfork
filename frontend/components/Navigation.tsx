@@ -3,34 +3,53 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Mic, GitCompare, GraduationCap, AudioWaveform, Sparkles, Film, Scroll } from "lucide-react";
+import {
+  Mic,
+  GitCompare,
+  GraduationCap,
+  Sparkles,
+  Film,
+  Scroll,
+  Radio,
+  Home,
+  FlaskConical,
+  Bot,
+  Target,
+} from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Studio", icon: Mic },
+  { href: "/", label: "Home", icon: Home },
+  { href: "/studio", label: "Studio", icon: Mic },
   { href: "/perform", label: "Perform", icon: Scroll },
   { href: "/generate", label: "Generate", icon: Sparkles },
+  { href: "/live", label: "Live", icon: Radio },
   { href: "/author", label: "Author", icon: Film },
   { href: "/compare", label: "Compare", icon: GitCompare },
   { href: "/training", label: "Training", icon: GraduationCap },
+  { href: "/evaluate", label: "A/B Test", icon: FlaskConical },
+  { href: "/lab", label: "Lab", icon: Bot },
+  { href: "/research", label: "Research", icon: Target },
 ];
 
 export function Navigation() {
   const pathname = usePathname();
 
   return (
-    <nav className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-600">
-              <AudioWaveform className="w-5 h-5 text-white" />
+    <nav className="border-b border-border bg-background">
+      <div className="max-w-[1400px] mx-auto px-4">
+        <div className="flex items-center justify-between h-12">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="w-6 h-6 rounded border border-border flex items-center justify-center">
+              <div className="w-2 h-2 rounded-full bg-foreground group-hover:bg-foreground-bright transition-colors" />
             </div>
-            <span className="text-xl font-bold text-white">
+            <span className="text-sm text-foreground-bright">
               Voice Clone Pipeline
             </span>
-          </div>
+          </Link>
 
-          <div className="flex items-center gap-1">
+          {/* Navigation Items */}
+          <div className="flex items-center">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -40,17 +59,26 @@ export function Navigation() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                    "flex items-center gap-2 px-3 py-1.5 text-sm transition-colors",
                     isActive
-                      ? "bg-orange-500/20 text-orange-400"
-                      : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+                      ? "text-foreground-bright"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Icon className="w-4 h-4" />
-                  {item.label}
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-foreground-bright" />
+                  )}
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline">{item.label}</span>
                 </Link>
               );
             })}
+          </div>
+
+          {/* Status indicator */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="hidden sm:inline">Ready</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-foreground animate-pulse" />
           </div>
         </div>
       </div>
