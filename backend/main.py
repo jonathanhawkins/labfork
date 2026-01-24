@@ -999,6 +999,243 @@ async def generate_keyframes(request: KeyframeRequest):
     )
 
 
+# ============== DrawSpeech Sketch-Conditioned Generation ==============
+
+class SketchGenerateRequest(BaseModel):
+    """Request for sketch-conditioned voice generation."""
+    text: str
+    pitch_sketch: List[float]  # Pitch curve (normalized 0-1)
+    energy_sketch: List[float]  # Energy curve (normalized 0-1)
+    cfg_scale: float = 2.0  # Classifier-free guidance scale
+    temperature: float = 0.8
+
+
+@app.post("/generate-sketch")
+async def generate_from_sketch(request: SketchGenerateRequest):
+    """
+    Generate speech with user-drawn pitch/energy curves (DrawSpeech).
+
+    Based on DrawSpeech (ICASSP 2025) - enables intuitive prosody control
+    by drawing curves that represent desired pitch and energy trajectories.
+
+    The sketch curves serve as coarse guides, and the model refines them
+    into natural, expressive prosody while respecting the user's intent.
+
+    Args:
+        text: Text to synthesize
+        pitch_sketch: List of pitch values (0-1 normalized), any length
+        energy_sketch: List of energy values (0-1 normalized), any length
+        cfg_scale: Classifier-free guidance scale (higher = more adherence to sketch)
+        temperature: Sampling temperature for generation
+    """
+    if not request.text:
+        raise HTTPException(status_code=400, detail="Text is required")
+
+    if not request.pitch_sketch or len(request.pitch_sketch) < 2:
+        raise HTTPException(status_code=400, detail="Pitch sketch requires at least 2 points")
+
+    if not request.energy_sketch or len(request.energy_sketch) < 2:
+        raise HTTPException(status_code=400, detail="Energy sketch requires at least 2 points")
+
+    print(f"Generating with sketch - pitch: {len(request.pitch_sketch)} points, "
+          f"energy: {len(request.energy_sketch)} points, cfg: {request.cfg_scale}")
+
+    # Generate output path
+    output_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+    output_path = PROCESSED_DIR / f"generated_sketch_{output_id}.wav"
+
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        sys.path.insert(0, str(Path(__file__).parent.parent / "training"))
+        sys.path.insert(0, str(Path(__file__).parent.parent / "inference"))
+
+        # Check if DrawSpeech model is available
+        drawspeech_checkpoint = Path(__file__).parent.parent / "models" / "checkpoints" / "draw_speech" / "best.pt"
+        prosody_checkpoint = Path(__file__).parent.parent / "models" / "checkpoints" / "prosody_conditioned" / "final.pt"
+
+        # Convert sketches to tensors
+        pitch_tensor = torch.tensor(request.pitch_sketch, dtype=torch.float32)
+        energy_tensor = torch.tensor(request.energy_sketch, dtype=torch.float32)
+
+        # Check if DrawSpeech model exists
+        if drawspeech_checkpoint.exists():
+            # Use DrawSpeech model for generation
+            from draw_speech import DrawSpeechConfig, DrawSpeech
+
+            config = DrawSpeechConfig()
+            model = DrawSpeech(config)
+
+            checkpoint = torch.load(drawspeech_checkpoint, map_location="cpu")
+            model.load_state_dict(checkpoint.get("model", checkpoint))
+
+            device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+            model = model.to(device)
+            model.eval()
+
+            # Generate prosody tokens from sketches
+            with torch.no_grad():
+                prosody_tokens = model.sample_tokens(
+                    pitch_tensor.unsqueeze(0).to(device),
+                    energy_tensor.unsqueeze(0).to(device),
+                    cfg_scale=request.cfg_scale,
+                    temperature=request.temperature,
+                )
+
+            # Use prosody tokens with CSM for final audio generation
+            from generate_with_prosody import ControllableVoiceGenerator
+
+            base_model = Path(__file__).parent.parent / "models" / "csm-1b"
+            lora_adapter = Path(__file__).parent.parent / "models" / "checkpoints" / "csm_lora_450" / "best"
+
+            generator = ControllableVoiceGenerator(
+                csm_path=str(base_model),
+                prosody_checkpoint=str(prosody_checkpoint) if prosody_checkpoint.exists() else None,
+                lora_adapter=str(lora_adapter) if lora_adapter.exists() else None,
+                device="auto",
+            )
+
+            # Convert tokens to prosody dict format
+            prosody_dict = {
+                "tokens": prosody_tokens,
+                "_is_sketch": True,
+            }
+
+            audio = generator.generate(
+                text=request.text,
+                prosody=prosody_dict,
+                temperature=request.temperature,
+            )
+            generator.save_audio(audio, str(output_path))
+            duration = audio.shape[1] / 24000
+
+        else:
+            # Fallback: convert sketch to keyframes and use existing pipeline
+            print("DrawSpeech model not found, using keyframe fallback")
+
+            from keyframe_prosody import (
+                ProsodyKeyframe,
+                keyframes_to_prosody,
+                get_temporal_prosody_tokens,
+            )
+
+            # Sample keyframes from sketch curves
+            num_keyframes = min(10, len(request.pitch_sketch))
+            step = max(1, len(request.pitch_sketch) // num_keyframes)
+
+            keyframes = []
+            for i in range(0, len(request.pitch_sketch), step):
+                pitch_val = request.pitch_sketch[i]
+                energy_val = request.energy_sketch[min(i, len(request.energy_sketch) - 1)]
+                time_norm = i / (len(request.pitch_sketch) - 1)
+
+                # Map sketch values to prosody parameters
+                emotion = "neutral"
+                intensity = 0.5
+
+                # Determine emotion from sketch patterns
+                if energy_val > 0.7 and pitch_val > 0.6:
+                    emotion = "excited"
+                    intensity = min(1.0, (energy_val + pitch_val) / 2)
+                elif energy_val > 0.7:
+                    emotion = "angry"
+                    intensity = energy_val
+                elif pitch_val > 0.6:
+                    emotion = "happy"
+                    intensity = pitch_val
+                elif pitch_val < 0.4:
+                    emotion = "sad"
+                    intensity = 1.0 - pitch_val
+                elif energy_val < 0.4:
+                    emotion = "calm"
+                    intensity = 1.0 - energy_val
+
+                keyframes.append(ProsodyKeyframe(
+                    time=time_norm * 3.0,  # Assume 3 second default duration
+                    emotion=emotion,
+                    intensity=intensity,
+                    energy=energy_val,
+                    pitch_tendency="high" if pitch_val > 0.6 else "low" if pitch_val < 0.4 else "neutral",
+                ))
+
+            # Use existing keyframe pipeline
+            base_model = Path(__file__).parent.parent / "models" / "csm-1b"
+            lora_adapter = Path(__file__).parent.parent / "models" / "checkpoints" / "csm_lora_450" / "best"
+
+            if not prosody_checkpoint.exists():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Prosody-conditioned model not available. Train the model first."
+                )
+
+            from generate_with_prosody import ControllableVoiceGenerator
+
+            generator = ControllableVoiceGenerator(
+                csm_path=str(base_model),
+                prosody_checkpoint=str(prosody_checkpoint),
+                lora_adapter=str(lora_adapter) if lora_adapter.exists() else None,
+                device="auto",
+            )
+
+            # Convert keyframes to prosody
+            max_time = max(kf.time for kf in keyframes) if keyframes else 3.0
+            duration_seconds = max(max_time, 1.0)
+
+            prosody_dense = keyframes_to_prosody(keyframes, duration_seconds)
+
+            num_segments = generator.prosody_config.num_prosody_tokens
+            prosody_tensors = get_temporal_prosody_tokens(prosody_dense, num_segments)
+            prosody_tensors["_is_temporal"] = True
+            prosody_tensors["_num_segments"] = num_segments
+
+            device = generator.device
+            prosody_tensors = {
+                k: v.to(device) if hasattr(v, 'to') else v
+                for k, v in prosody_tensors.items()
+            }
+
+            audio = generator.generate(
+                text=request.text,
+                prosody=prosody_tensors,
+                temperature=request.temperature,
+            )
+            generator.save_audio(audio, str(output_path))
+            duration = audio.shape[1] / 24000
+
+        print(f"Generated sketch audio: {output_path} ({duration:.2f}s)")
+
+    except ImportError as e:
+        print(f"Import error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=503,
+            detail=f"Sketch generation module not available: {str(e)}"
+        )
+    except Exception as e:
+        print(f"Sketch generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
+    # Build response info
+    sketch_info = {
+        "source": "sketch",
+        "pitch_points": len(request.pitch_sketch),
+        "energy_points": len(request.energy_sketch),
+        "cfg_scale": request.cfg_scale,
+    }
+
+    return FileResponse(
+        str(output_path),
+        media_type="audio/wav",
+        headers={
+            "X-Sketch-Info": json.dumps(sketch_info),
+            "X-Duration": str(duration),
+        }
+    )
+
+
 @app.post("/predict-prosody")
 async def predict_prosody_endpoint(text: str):
     """
@@ -2161,8 +2398,8 @@ async def analyze_with_prosody_encoder(audio_path: str) -> Dict[str, Any]:
             "acoustic": {
                 "pitch_mean": float(acoustic[0]),
                 "pitch_std": float(acoustic[1]),
-                "energy": float(acoustic[2]),
-                "speaking_rate": float(acoustic[3]),
+                "energy": float(acoustic[2]),         # intensity_mean / energy level
+                "energy_variation": float(acoustic[3]),  # intensity_std
             },
             "rhythm": {
                 "pause_ratio": float(rhythm[0]),
@@ -2810,6 +3047,311 @@ async def websocket_live_transform(websocket: WebSocket):
 
 
 # ============== Startup/Shutdown ==============
+
+# ============== GPU Stats (Remote Training Machine) ==============
+
+# Remote RTX 4090 machine configuration
+REMOTE_GPU_HOST = "100.83.78.111"
+REMOTE_GPU_USER = "doc"
+NVIDIA_SMI_PATH = "/usr/lib/wsl/lib/nvidia-smi"
+
+
+class GpuProcess(BaseModel):
+    pid: str
+    name: str
+    memoryUsed: str
+    script: Optional[str] = None  # e.g., "train_prosody_conditioned.py"
+    session: Optional[str] = None  # e.g., "v7train"
+    config: Optional[str] = None  # e.g., "prosody_v7_balanced.yaml"
+    progress: Optional[str] = None  # e.g., "Epoch 6/30 - loss: 2.85"
+
+
+class GpuInfo(BaseModel):
+    name: str
+    driverVersion: str
+    cudaVersion: str
+    utilization: int
+    memoryUsed: int
+    memoryTotal: int
+    memoryPercent: int
+    temperature: int
+    powerDraw: int
+    powerLimit: int
+    fanSpeed: Optional[int] = None
+
+
+class GpuStatsResponse(BaseModel):
+    connected: bool
+    error: Optional[str] = None
+    timestamp: str
+    gpu: Optional[GpuInfo] = None
+    processes: List[GpuProcess] = []
+
+
+def parse_nvidia_smi(output: str) -> dict:
+    """Parse nvidia-smi output into structured data."""
+    try:
+        lines = output.split('\n')
+
+        gpu_name = 'NVIDIA GPU'
+        driver_version = 'Unknown'
+        cuda_version = 'Unknown'
+
+        for line in lines:
+            if 'Driver Version:' in line:
+                import re
+                match = re.search(r'Driver Version:\s*(\S+)', line)
+                if match:
+                    driver_version = match.group(1)
+                cuda_match = re.search(r'CUDA Version:\s*(\S+)', line)
+                if cuda_match:
+                    cuda_version = cuda_match.group(1)
+            if 'RTX' in line or 'GeForce' in line:
+                import re
+                name_match = re.search(r'(NVIDIA\s+)?((GeForce\s+)?RTX\s+\d+\s*\w*)', line, re.IGNORECASE)
+                if name_match:
+                    gpu_name = name_match.group(0).strip()
+
+        utilization = 0
+        memory_used = 0
+        memory_total = 0
+        temperature = 0
+        power_draw = 0
+        power_limit = 0
+        fan_speed = None
+
+        import re
+        for line in lines:
+            # Memory usage: "4029MiB / 24564MiB"
+            mem_match = re.search(r'(\d+)MiB\s*/\s*(\d+)MiB', line)
+            if mem_match:
+                memory_used = int(mem_match.group(1))
+                memory_total = int(mem_match.group(2))
+
+            # Power usage: "6W / 450W"
+            power_match = re.search(r'(\d+)W\s*/\s*(\d+)W', line)
+            if power_match:
+                power_draw = int(power_match.group(1))
+                power_limit = int(power_match.group(2))
+
+            # Temperature: "29C"
+            temp_match = re.search(r'(\d+)C\s+P\d', line)
+            if temp_match:
+                temperature = int(temp_match.group(1))
+
+            # GPU utilization: look for the last percentage in the line (GPU-Util column)
+            # Format: "|  0%   29C    P8   6W /  450W |  4029MiB / 24564MiB |   0%  Default |"
+            util_match = re.search(r'\|\s*(\d+)%\s+Default', line)
+            if util_match:
+                utilization = int(util_match.group(1))
+
+            # Fan speed: first percentage in the stats line
+            fan_match = re.search(r'\|\s*(\d+)%\s+\d+C', line)
+            if fan_match:
+                fan_speed = int(fan_match.group(1))
+
+        processes = []
+        in_process_section = False
+        for line in lines:
+            if 'Processes:' in line:
+                in_process_section = True
+                continue
+            if in_process_section and '|' in line:
+                # Handle both standard format (1234MiB) and WSL format (N/A)
+                process_match = re.search(r'\|\s*\d+\s+\S+\s+\S+\s+(\d+)\s+(\w+)\s+(\S+)\s+(?:(\d+)\s*MiB|N/A)', line)
+                if process_match:
+                    memory = process_match.group(4)
+                    processes.append({
+                        'pid': process_match.group(1),
+                        'name': process_match.group(3),
+                        'memoryUsed': f"{memory} MiB" if memory else "N/A"
+                    })
+
+        return {
+            'gpu': {
+                'name': gpu_name,
+                'driverVersion': driver_version,
+                'cudaVersion': cuda_version,
+                'utilization': utilization,
+                'memoryUsed': memory_used,
+                'memoryTotal': memory_total,
+                'memoryPercent': round((memory_used / memory_total) * 100) if memory_total > 0 else 0,
+                'temperature': temperature,
+                'powerDraw': power_draw,
+                'powerLimit': power_limit,
+                'fanSpeed': fan_speed,
+            },
+            'processes': processes
+        }
+    except Exception as e:
+        print(f"Failed to parse nvidia-smi output: {e}")
+        return {'gpu': None, 'processes': []}
+
+
+def get_process_details(pids: list) -> dict:
+    """Get detailed info about GPU processes via SSH."""
+    import subprocess
+    import re
+
+    if not pids:
+        return {}
+
+    # Build commands to get process details
+    # Use \\\\0 to get literal \0 in the shell command
+    pid_cmds = [f'echo "CMDLINE:{pid}:$(cat /proc/{pid}/cmdline 2>/dev/null | tr "\\\\0" " ")"' for pid in pids]
+    cmd = '; '.join(pid_cmds)
+    cmd += '; tmux list-sessions -F "SESSION:#{session_name}" 2>/dev/null || true'
+    cmd += '; tail -1 ~/dev/voice-clone-pipeline/training/v7_train.log 2>/dev/null | sed "s/^/LOG:/"'
+
+    try:
+        # Use shell=True with properly escaped command
+        ssh_cmd = f"ssh -T -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no {REMOTE_GPU_USER}@{REMOTE_GPU_HOST} '{cmd}'"
+        result = subprocess.run(
+            ssh_cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        details = {}
+        tmux_sessions = []
+        training_log = None
+
+        for line in result.stdout.strip().split('\n'):
+            if line.startswith('CMDLINE:'):
+                parts = line.split(':', 2)
+                if len(parts) >= 3:
+                    pid, cmdline = parts[1], parts[2]
+                    details[pid] = {'cmdline': cmdline.strip()}
+            elif line.startswith('SESSION:'):
+                tmux_sessions.append(line[8:])
+            elif line.startswith('LOG:'):
+                training_log = line[4:]
+
+        # Parse command lines to extract useful info
+        for pid, info in details.items():
+            cmdline = info.get('cmdline', '')
+
+            # Extract script name
+            if 'train_' in cmdline:
+                match = re.search(r'(train_\w+\.py)', cmdline)
+                if match:
+                    info['script'] = match.group(1)
+
+            # Extract config
+            if '--config' in cmdline:
+                match = re.search(r'--config\s+(?:config/)?(\S+\.yaml)', cmdline)
+                if match:
+                    info['config'] = match.group(1)
+
+            # Associate with tmux session (check if session name matches script)
+            for session in tmux_sessions:
+                if 'train' in session.lower():
+                    info['session'] = session
+                    break
+
+            # Add training progress if available
+            if training_log:
+                # Parse log line for progress info
+                epoch_match = re.search(r'Epoch (\d+)', training_log)
+                loss_match = re.search(r'loss=(\d+\.\d+)', training_log)
+                if epoch_match:
+                    progress = f"Epoch {epoch_match.group(1)}"
+                    if loss_match:
+                        progress += f" • loss: {loss_match.group(1)}"
+                    info['progress'] = progress
+
+        return details
+    except Exception as e:
+        print(f"Failed to get process details: {e}")
+        return {}
+
+
+@app.get("/api/lab/gpu-stats", response_model=GpuStatsResponse)
+async def get_gpu_stats():
+    """Fetch GPU stats from remote RTX 4090 training machine via SSH."""
+    import subprocess
+    from datetime import datetime
+
+    timestamp = datetime.now().isoformat()
+
+    try:
+        result = subprocess.run(
+            [
+                'ssh', '-T',
+                '-o', 'ConnectTimeout=5',
+                '-o', 'BatchMode=yes',
+                '-o', 'StrictHostKeyChecking=no',
+                f'{REMOTE_GPU_USER}@{REMOTE_GPU_HOST}',
+                NVIDIA_SMI_PATH
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() or f"SSH exited with code {result.returncode}"
+            return GpuStatsResponse(
+                connected=False,
+                error=error_msg,
+                timestamp=timestamp,
+                gpu=None,
+                processes=[]
+            )
+
+        parsed = parse_nvidia_smi(result.stdout)
+
+        # Get detailed info about running processes
+        pids = [p['pid'] for p in parsed['processes']]
+        process_details = get_process_details(pids)
+
+        # Enrich process info with details
+        processes = []
+        for p in parsed['processes']:
+            pid = p['pid']
+            details = process_details.get(pid, {})
+            processes.append(GpuProcess(
+                pid=pid,
+                name=details.get('script', p['name']),  # Use script name if available
+                memoryUsed=p['memoryUsed'],
+                script=details.get('script'),
+                session=details.get('session'),
+                config=details.get('config'),
+                progress=details.get('progress'),
+            ))
+
+        return GpuStatsResponse(
+            connected=True,
+            timestamp=timestamp,
+            gpu=GpuInfo(**parsed['gpu']) if parsed['gpu'] else None,
+            processes=processes
+        )
+
+    except subprocess.TimeoutExpired:
+        return GpuStatsResponse(
+            connected=False,
+            error="Connection timed out - is the training machine online?",
+            timestamp=timestamp,
+            gpu=None,
+            processes=[]
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if 'Connection refused' in error_msg:
+            error_msg = 'Connection refused - SSH service may not be running'
+        elif 'Permission denied' in error_msg:
+            error_msg = 'SSH authentication failed - check SSH keys'
+
+        return GpuStatsResponse(
+            connected=False,
+            error=error_msg,
+            timestamp=timestamp,
+            gpu=None,
+            processes=[]
+        )
+
 
 @app.on_event("startup")
 async def startup():
