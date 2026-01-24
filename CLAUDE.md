@@ -399,3 +399,36 @@ Only use paid Anthropic API for:
 - Time-critical tasks where 3-min response is too slow
 
 For everything else, use the FREE local tools.
+
+## 4090 Supervisor System (FREE Autonomous Agents)
+
+Run autonomous AI agents on the RTX 4090 using FREE local Ollama. A supervisor manages worker agents via tmux.
+
+### Quick Start
+
+```bash
+# Start supervisor system (creates supervisor + lab-manager sessions)
+ssh doc@100.83.78.111 "~/bin/start-supervisor"
+
+# Attach to supervisor
+ssh doc@100.83.78.111 -t "tmux attach -t supervisor"
+
+# Check status
+ssh doc@100.83.78.111 "tmux list-sessions && ~/bin/gpu-status"
+```
+
+### Architecture
+
+- **Supervisor** (`tmux -t supervisor`): Assigns tasks, monitors workers via tmux
+- **Lab-Manager** (`tmux -t lab-manager`): Executes tasks autonomously
+- **Watchdog** (cron every 5 min): Auto-restarts if anything crashes
+
+### Scripts on 4090 (`~/bin/`)
+
+| Script | Purpose |
+|--------|---------|
+| `start-supervisor` | Start both sessions |
+| `supervisor-watchdog` | Cron monitoring daemon |
+| `gpu-status` | Check GPU + Ollama |
+
+See `.claude/commands/4090-supervisor.md` for full documentation.
