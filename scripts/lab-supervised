@@ -1,0 +1,33 @@
+#!/bin/bash
+# Start Haiku-supervised lab manager
+# Cost: ~$0.03-0.10 per 100 tasks (vs $50-100 with Opus)
+
+cd "$(dirname "$0")/.."
+
+# Check for API key
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+    echo "❌ ANTHROPIC_API_KEY not set"
+    echo ""
+    echo "   export ANTHROPIC_API_KEY='sk-ant-...'"
+    echo ""
+    exit 1
+fi
+
+# Check if Ollama is running
+if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    echo "❌ Ollama not running. Start Ollama app first!"
+    exit 1
+fi
+
+echo "🧠 Haiku-Supervised Lab Manager"
+echo "================================"
+echo "Supervisor: Claude Haiku (~\$0.25/1M tokens)"
+echo "Worker:     Ollama qwen3-coder-32k (FREE)"
+echo ""
+echo "Usage:"
+echo "  $0              # Run 50 iterations"
+echo "  $0 --continuous # Run until Ctrl+C"
+echo "  $0 --check      # Check if lab manager running"
+echo ""
+
+python3 scripts/haiku_lab_supervisor.py "$@"

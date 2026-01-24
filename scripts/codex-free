@@ -1,0 +1,16 @@
+#!/bin/bash
+# Wrapper to run Codex CLI with FREE Ollama (for code writing & analytics)
+# Uses qwen3-coder-32k for best coding performance
+
+# Check if Ollama is running
+if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    echo "Ollama not running. Start Ollama app first!"
+    exit 1
+fi
+
+echo "Codex FREE (Qwen3-Coder via Ollama)"
+echo "Cost: FREE | Model: qwen3-coder-32k (30B MoE, 32k context)"
+echo ""
+
+# Use official Ollama launch for Codex
+ollama launch codex --model qwen3-coder-32k "$@"

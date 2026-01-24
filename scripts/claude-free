@@ -1,0 +1,21 @@
+#!/bin/bash
+# Wrapper to run Claude Code with FREE Ollama (native Anthropic API compatibility)
+# Uses environment variables as recommended by Ollama blog
+
+# Check if Ollama is running
+if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    echo "Ollama not running. Start Ollama app first!"
+    exit 1
+fi
+
+echo "Claude Code FREE (Qwen3-Coder via Ollama)"
+echo "Cost: FREE | Model: qwen3-coder-32k (30B MoE, 32k context)"
+echo ""
+
+# Official Ollama setup from https://ollama.com/blog/claude
+export ANTHROPIC_AUTH_TOKEN="ollama"
+export ANTHROPIC_BASE_URL="http://localhost:11434"
+export ANTHROPIC_API_KEY=""
+
+# Run Claude Code with qwen3-coder-32k (32k context for tool definitions)
+claude --model qwen3-coder-32k "$@"
