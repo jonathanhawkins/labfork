@@ -18,6 +18,11 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
+# Anthropic usage is disabled by default in this lab.
+if os.environ.get("ALLOW_ANTHROPIC") != "true":
+    print("❌ Anthropic supervisor disabled. Use the research-manager orchestrator + Codex.")
+    exit(1)
+
 # Try to import anthropic, give helpful error if missing
 try:
     import anthropic

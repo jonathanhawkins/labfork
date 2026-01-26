@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -3425,7 +3425,7 @@ async def get_gpu_stats():
         )
 
 
-# ============== Agent Status (4090 Supervisor/Lab-Manager) ==============
+# ============== Agent Status (4090 Lab-Manager) ==============
 
 class AgentStatus(BaseModel):
     id: str
@@ -3499,7 +3499,7 @@ def parse_tmux_output(output: str) -> dict:
 
 @app.get("/api/lab/agent-status", response_model=AgentStatusResponse)
 async def get_agent_status():
-    """Get real-time status of 4090 supervisor and lab-manager agents."""
+    """Get real-time status of 4090 lab-manager agent."""
     import subprocess
     from datetime import datetime
 
@@ -3510,7 +3510,6 @@ async def get_agent_status():
 
     # Sessions to check
     sessions = [
-        ('supervisor', 'Supervisor'),
         ('lab-manager', 'Lab-Manager')
     ]
 
@@ -4458,10 +4457,12 @@ def select_agent_type(task: Dict[str, Any]) -> str:
 def spawn_agent_for_task(task: Dict[str, Any]) -> bool:
     agent_name = f"task-{task.get('id')}-{int(time.time() * 1000)}"
     agent_type = select_agent_type(task)
+    description = task.get("description") or ""
+    description_block = f"\nDescription: {description}" if description else ""
     prompt = f"""Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="voice-clone-pipeline"):
 
 TASK #{task.get('id')}: {task.get('subject')}
-{f"\\nDescription: {task.get('description')}" if task.get('description') else ""}
+{description_block}
 
 INSTRUCTIONS:
 1. Read .skills/research-manager/MISSION.md and align work to current priority

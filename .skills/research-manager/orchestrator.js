@@ -638,7 +638,7 @@ function selectAgentType(task) {
 
   // Explicit override via tag in subject/description
   if (text.includes('[codex]') || text.includes('codex:') || text.includes('use codex')) {
-    return 'codex';
+    return { type: 'codex', reason: 'explicit', requiresCodex: true };
   }
 
   // Reviews should go to Codex for speed and depth
@@ -659,7 +659,7 @@ function selectAgentType(task) {
   ]);
   const words = text.split(/[^a-z0-9]+/).filter(Boolean);
   if (words.some((word) => reviewKeywords.has(word))) {
-    return 'codex';
+    return { type: 'codex', reason: 'review', requiresCodex: true };
   }
 
   // Heuristics for "hard work" that benefits from Codex
@@ -675,17 +675,25 @@ function selectAgentType(task) {
     'performance investigation',
   ];
   if (codexHints.some((hint) => text.includes(hint))) {
-    return 'codex';
+    return { type: 'codex', reason: 'complexity', requiresCodex: false };
   }
 
   // Default: local Ollama agent
-  return 'ollama';
+  return { type: 'ollama', reason: 'default', requiresCodex: false };
 }
 
 function spawnTaskAgent(task) {
   const agentName = `task-${task.id}-${Date.now()}`;
-  let agentType = selectAgentType(task);
+  const selection = selectAgentType(task);
+  let agentType = selection.type;
   if (agentType === 'codex' && !commandExists(CODEX_CMD)) {
+    if (selection.requiresCodex) {
+      log('warn', 'Codex required but unavailable; skipping spawn', {
+        taskId: task.id,
+        reason: selection.reason,
+      });
+      return { spawned: false, reason: 'codex-unavailable', selection };
+    }
     log('warn', 'Codex not found; falling back to ollama', { taskId: task.id });
     agentType = 'ollama';
   }
@@ -722,9 +730,9 @@ You have access to all Claude Code tools. Be autonomous and thorough.`;
         owner: `rm:${agentName}`,
       });
     }
-    return agentName;
+    return { spawned: true, name: agentName, type: agentType, selection };
   }
-  return null;
+  return { spawned: false, reason: 'spawn-failed', selection };
 }
 
 // Spawn research agent
@@ -916,23 +924,33 @@ function autoSpawn() {
       }))
     });
 
-    const agentName = spawnTaskAgent(task);
-    if (agentName) {
+    const spawnResult = spawnTaskAgent(task);
+    if (spawnResult && spawnResult.spawned) {
       log('info', 'Spawned task agent', {
-        name: agentName,
+        name: spawnResult.name,
         task: task.subject,
         priority: task._priority.score,
+        type: spawnResult.type,
+        selection: spawnResult.selection?.reason,
       });
 
       // Notify about spawned agent
-      notifications.notifyAgentSpawned(agentName, `#${task.id}: ${task.subject}`).catch(() => {});
+      notifications.notifyAgentSpawned(spawnResult.name, `#${task.id}: ${task.subject}`).catch(() => {});
 
       return {
-        spawned: agentName,
+        spawned: spawnResult.name,
         type: 'task',
         task: task.subject,
         priority: task._priority,
       };
+    }
+    if (spawnResult && !spawnResult.spawned && spawnResult.reason) {
+      log('info', 'Skipped task spawn', {
+        taskId: task.id,
+        reason: spawnResult.reason,
+        selection: spawnResult.selection?.reason,
+      });
+      return { spawned: null, reason: spawnResult.reason };
     }
   }
 

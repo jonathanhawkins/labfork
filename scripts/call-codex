@@ -1,0 +1,150 @@
+#!/bin/bash
+# call-codex: Call paid Codex CLI to analyze a task and return an execution plan
+# Used by FREE Ollama lab-manager to get help with complex tasks
+#
+# Usage:
+#   call-codex "Task description"
+#   call-codex --files "file1.py,file2.py" "Task description"
+#
+# Output: JSON execution plan to stdout
+
+set -e
+
+# Configuration
+PROJECT_DIR="${PROJECT_DIR:-$HOME/dev/voice-clone-pipeline}"
+CODEX_OUTPUT_DIR="$PROJECT_DIR/.codex-plans"
+MAX_FILE_SIZE=50000  # Max chars per file to include
+
+# Parse arguments
+FILES=""
+TASK=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --files)
+            FILES="$2"
+            shift 2
+            ;;
+        *)
+            TASK="$1"
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$TASK" ]; then
+    echo "Usage: call-codex [--files file1,file2] \"Task description\""
+    exit 1
+fi
+
+# Create output directory
+mkdir -p "$CODEX_OUTPUT_DIR"
+
+# Build context from files
+FILE_CONTEXT=""
+if [ -n "$FILES" ]; then
+    IFS=',' read -ra FILE_ARRAY <<< "$FILES"
+    for file in "${FILE_ARRAY[@]}"; do
+        filepath="$PROJECT_DIR/$file"
+        if [ -f "$filepath" ]; then
+            content=$(head -c $MAX_FILE_SIZE "$filepath")
+            FILE_CONTEXT="${FILE_CONTEXT}
+
+=== FILE: $file ===
+$content
+=== END FILE ===
+"
+        else
+            echo "Warning: File not found: $file" >&2
+        fi
+    done
+fi
+
+# Create the prompt for Codex
+PROMPT="You are a code analyst helping a FREE AI lab-manager execute tasks.
+
+The lab-manager runs on local Ollama and can:
+- Read/write files
+- Run bash commands
+- Make simple edits
+
+But it struggles with:
+- Deep code analysis
+- Understanding complex implementations
+- Multi-step planning
+
+Your job: Analyze the task and return a JSON execution plan that the lab-manager can follow step-by-step.
+
+PROJECT: voice-clone-pipeline
+LOCATION: $PROJECT_DIR
+
+TASK: $TASK
+$FILE_CONTEXT
+
+Return ONLY a JSON object with this structure (no markdown, no explanation):
+{
+  \"task\": \"Brief task title\",
+  \"analysis\": \"Your analysis of what needs to be done (2-3 sentences)\",
+  \"steps\": [
+    {
+      \"id\": 1,
+      \"type\": \"write_file|edit_file|bash|read_file\",
+      \"path\": \"relative/path/to/file\",
+      \"description\": \"What this step does\",
+      \"content\": \"For write_file: full file content\",
+      \"command\": \"For bash: the command to run\",
+      \"find\": \"For edit_file: text to find\",
+      \"replace\": \"For edit_file: replacement text\"
+    }
+  ],
+  \"verification\": \"How to verify the task is complete\"
+}"
+
+# Save prompt for debugging
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+PROMPT_FILE="$CODEX_OUTPUT_DIR/prompt_$TIMESTAMP.txt"
+echo "$PROMPT" > "$PROMPT_FILE"
+
+# Resolve codex binary (PATH, CODEX_PATH, or NVM)
+resolve_codex() {
+    if [ -n "${CODEX_PATH:-}" ] && [ -x "$CODEX_PATH" ]; then
+        echo "$CODEX_PATH"
+        return 0
+    fi
+    if command -v codex &> /dev/null; then
+        command -v codex
+        return 0
+    fi
+    if [ -d "$HOME/.nvm/versions/node" ]; then
+        local candidate
+        candidate=$(ls -1d "$HOME/.nvm/versions/node/"*/bin/codex 2>/dev/null | sort | tail -1)
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Check which AI backend to use
+CODEX_BIN="$(resolve_codex || true)"
+if [ -n "$CODEX_BIN" ]; then
+    echo "Calling Codex CLI..." >&2
+    PLAN=$("$CODEX_BIN" -c model=codex-mini-latest -c timeout=1800000 "$PROMPT")
+elif command -v ollama &> /dev/null && curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    # Fallback to local Ollama
+    echo "Calling local Ollama..." >&2
+    PLAN=$(echo "$PROMPT" | ollama run qwen3-coder-32k 2>/dev/null)
+else
+    echo "Error: No AI backend available" >&2
+    echo "Ensure codex is installed (or set CODEX_PATH) or Ollama is running." >&2
+    exit 1
+fi
+
+# Save the plan
+PLAN_FILE="$CODEX_OUTPUT_DIR/plan_$TIMESTAMP.json"
+echo "$PLAN" > "$PLAN_FILE"
+echo "Plan saved to: $PLAN_FILE" >&2
+
+# Output the plan
+echo "$PLAN"

@@ -1,15 +1,12 @@
 #!/bin/bash
-# Start Haiku-supervised lab manager
-# Cost: ~$0.03-0.10 per 100 tasks (vs $50-100 with Opus)
+# Start Haiku-supervised lab manager (disabled by default)
+# This lab does not use Anthropic by default. Use research-manager + Codex instead.
 
 cd "$(dirname "$0")/.."
 
-# Check for API key
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "❌ ANTHROPIC_API_KEY not set"
-    echo ""
-    echo "   export ANTHROPIC_API_KEY='sk-ant-...'"
-    echo ""
+if [ "${ALLOW_ANTHROPIC:-}" != "true" ]; then
+    echo "❌ Anthropic supervisor disabled (ALLOW_ANTHROPIC=true to override)."
+    echo "   Use: ./.skills/research-manager/rm orchestrator start"
     exit 1
 fi
 
