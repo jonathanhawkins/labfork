@@ -7,7 +7,10 @@ import os
 import json
 import uuid
 import asyncio
-from datetime import datetime
+import re
+import time
+import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -3055,6 +3058,54 @@ REMOTE_GPU_HOST = "100.83.78.111"
 REMOTE_GPU_USER = "doc"
 NVIDIA_SMI_PATH = "/usr/lib/wsl/lib/nvidia-smi"
 
+def is_running_on_gpu_machine() -> bool:
+    """Check if we're running on the 4090 machine (WSL)."""
+    import os
+    # Check if the WSL nvidia-smi path exists locally
+    return os.path.exists(NVIDIA_SMI_PATH)
+
+
+def run_remote_python(script: str, timeout: int = 10) -> Any:
+    """Run a Python script locally or on the 4090 via SSH and return JSON output."""
+    import subprocess
+    import json as jsonlib
+
+    run_local = is_running_on_gpu_machine()
+    if run_local:
+        cmd = ["python3", "-"]
+    else:
+        cmd = [
+            "ssh",
+            "-T",
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=no",
+            f"{REMOTE_GPU_USER}@{REMOTE_GPU_HOST}",
+            "python3",
+            "-",
+        ]
+
+    result = subprocess.run(
+        cmd,
+        input=script,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+    )
+
+    if result.returncode != 0:
+        error = (result.stderr or "").strip() or f"Command failed with {result.returncode}"
+        raise RuntimeError(error)
+
+    output = (result.stdout or "").strip()
+    if not output:
+        return {}
+
+    return jsonlib.loads(output)
+
 
 class GpuProcess(BaseModel):
     pid: str
@@ -3188,8 +3239,8 @@ def parse_nvidia_smi(output: str) -> dict:
         return {'gpu': None, 'processes': []}
 
 
-def get_process_details(pids: list) -> dict:
-    """Get detailed info about GPU processes via SSH."""
+def get_process_details(pids: list, run_local: bool = False) -> dict:
+    """Get detailed info about GPU processes via SSH or locally."""
     import subprocess
     import re
 
@@ -3204,15 +3255,25 @@ def get_process_details(pids: list) -> dict:
     cmd += '; tail -1 ~/dev/voice-clone-pipeline/training/v7_train.log 2>/dev/null | sed "s/^/LOG:/"'
 
     try:
-        # Use shell=True with properly escaped command
-        ssh_cmd = f"ssh -T -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no {REMOTE_GPU_USER}@{REMOTE_GPU_HOST} '{cmd}'"
-        result = subprocess.run(
-            ssh_cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        if run_local:
+            # Run locally
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+        else:
+            # Use shell=True with properly escaped command
+            ssh_cmd = f"ssh -T -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no {REMOTE_GPU_USER}@{REMOTE_GPU_HOST} '{cmd}'"
+            result = subprocess.run(
+                ssh_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
 
         details = {}
         tmux_sessions = []
@@ -3270,26 +3331,37 @@ def get_process_details(pids: list) -> dict:
 
 @app.get("/api/lab/gpu-stats", response_model=GpuStatsResponse)
 async def get_gpu_stats():
-    """Fetch GPU stats from remote RTX 4090 training machine via SSH."""
+    """Fetch GPU stats from RTX 4090 - locally if running on 4090, else via SSH."""
     import subprocess
     from datetime import datetime
 
     timestamp = datetime.now().isoformat()
+    run_local = is_running_on_gpu_machine()
 
     try:
-        result = subprocess.run(
-            [
-                'ssh', '-T',
-                '-o', 'ConnectTimeout=5',
-                '-o', 'BatchMode=yes',
-                '-o', 'StrictHostKeyChecking=no',
-                f'{REMOTE_GPU_USER}@{REMOTE_GPU_HOST}',
-                NVIDIA_SMI_PATH
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        if run_local:
+            # Running on the 4090 itself - run nvidia-smi directly
+            result = subprocess.run(
+                [NVIDIA_SMI_PATH],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+        else:
+            # Running remotely - use SSH
+            result = subprocess.run(
+                [
+                    'ssh', '-T',
+                    '-o', 'ConnectTimeout=5',
+                    '-o', 'BatchMode=yes',
+                    '-o', 'StrictHostKeyChecking=no',
+                    f'{REMOTE_GPU_USER}@{REMOTE_GPU_HOST}',
+                    NVIDIA_SMI_PATH
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
 
         if result.returncode != 0:
             error_msg = result.stderr.strip() or f"SSH exited with code {result.returncode}"
@@ -3305,7 +3377,7 @@ async def get_gpu_stats():
 
         # Get detailed info about running processes
         pids = [p['pid'] for p in parsed['processes']]
-        process_details = get_process_details(pids)
+        process_details = get_process_details(pids, run_local=run_local)
 
         # Enrich process info with details
         processes = []
@@ -3351,6 +3423,1283 @@ async def get_gpu_stats():
             gpu=None,
             processes=[]
         )
+
+
+# ============== Agent Status (4090 Supervisor/Lab-Manager) ==============
+
+class AgentStatus(BaseModel):
+    id: str
+    name: str
+    status: str  # 'idle', 'working', 'thinking'
+    task: Optional[str] = None
+    lastOutput: Optional[str] = None
+    tokensGenerated: Optional[int] = None
+    elapsedTime: Optional[str] = None
+
+
+class AgentStatusResponse(BaseModel):
+    connected: bool
+    timestamp: str
+    agents: List[AgentStatus]
+    error: Optional[str] = None
+
+
+def parse_tmux_output(output: str) -> dict:
+    """Parse tmux capture output to extract agent status."""
+    status = "idle"
+    task = None
+    tokens = None
+    elapsed = None
+    last_output = None
+
+    lines = output.strip().split('\n')
+
+    # Claude Code working indicators (fun verbs it uses)
+    working_indicators = [
+        'Generating', 'Accomplishing', 'Thinking', 'Running',
+        'Quantumizing', 'Frosting', 'Churning', 'Cooking',
+        'Jitterbugging', 'Percolating', 'Simmering', 'Brewing',
+        'Cogitating', 'Pondering', 'Contemplating', 'Processing',
+        'Crunching', 'Computing', 'Analyzing', 'Synthesizing',
+        'Esc to interrupt'  # This appears during active generation
+    ]
+
+    for line in lines:
+        # Check for active generation indicators
+        if any(indicator in line for indicator in working_indicators):
+            status = "working"
+            # Extract tokens and time if present
+            import re
+            token_match = re.search(r'(\d+)\s*tokens', line)
+            time_match = re.search(r'(\d+m\s*\d+s|\d+s)', line)
+            if token_match:
+                tokens = int(token_match.group(1))
+            if time_match:
+                elapsed = time_match.group(1)
+
+        # Extract task from prompt lines
+        if line.startswith('❯') and len(line) > 2:
+            task_text = line[1:].strip()
+            if task_text and not task_text.startswith('?'):
+                task = task_text[:100]  # Truncate long tasks
+
+        # Get last meaningful output
+        if line.strip() and not line.startswith('─') and not line.startswith('❯'):
+            if 'shortcuts' not in line:
+                last_output = line.strip()[:150]
+
+    return {
+        'status': status,
+        'task': task,
+        'tokens': tokens,
+        'elapsed': elapsed,
+        'lastOutput': last_output
+    }
+
+
+@app.get("/api/lab/agent-status", response_model=AgentStatusResponse)
+async def get_agent_status():
+    """Get real-time status of 4090 supervisor and lab-manager agents."""
+    import subprocess
+    from datetime import datetime
+
+    timestamp = datetime.now().isoformat()
+    run_local = is_running_on_gpu_machine()
+
+    agents = []
+
+    # Sessions to check
+    sessions = [
+        ('supervisor', 'Supervisor'),
+        ('lab-manager', 'Lab-Manager')
+    ]
+
+    for session_name, display_name in sessions:
+        try:
+            if run_local:
+                result = subprocess.run(
+                    f"tmux capture-pane -t {session_name} -p -S -20 2>/dev/null",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+            else:
+                result = subprocess.run(
+                    f"ssh -o ConnectTimeout=3 -o BatchMode=yes {REMOTE_GPU_USER}@{REMOTE_GPU_HOST} "
+                    f"'tmux capture-pane -t {session_name} -p -S -20 2>/dev/null'",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+            if result.returncode == 0 and result.stdout.strip():
+                parsed = parse_tmux_output(result.stdout)
+                agents.append(AgentStatus(
+                    id=session_name,
+                    name=display_name,
+                    status=parsed['status'],
+                    task=parsed['task'],
+                    lastOutput=parsed['lastOutput'],
+                    tokensGenerated=parsed['tokens'],
+                    elapsedTime=parsed['elapsed']
+                ))
+            else:
+                # Session not found or empty
+                agents.append(AgentStatus(
+                    id=session_name,
+                    name=display_name,
+                    status='idle',
+                    task='Session not running'
+                ))
+
+        except Exception as e:
+            agents.append(AgentStatus(
+                id=session_name,
+                name=display_name,
+                status='idle',
+                task=f'Error: {str(e)[:50]}'
+            ))
+
+    return AgentStatusResponse(
+        connected=len([a for a in agents if a.status != 'idle' or 'Error' not in (a.task or '')]) > 0,
+        timestamp=timestamp,
+        agents=agents
+    )
+
+
+# ============== Research Manager Tasks & Agents ==============
+
+@app.get("/api/lab/research-agents")
+async def get_research_agents():
+    """Fetch Research Manager agent state (local or via SSH to 4090)."""
+    script = """
+import json, pathlib
+path = pathlib.Path('~/dev/voice-clone-pipeline/.skills/research-manager/state/agents.json').expanduser()
+agents = {}
+if path.exists():
+    agents = json.loads(path.read_text())
+print(json.dumps({"agents": agents}))
+"""
+    try:
+        return run_remote_python(script, timeout=10)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/lab/tasks")
+async def get_lab_tasks():
+    """Fetch Claude task list (voice-clone-pipeline) from 4090."""
+    script = """
+import json, pathlib
+root = pathlib.Path('~/.claude/tasks/voice-clone-pipeline').expanduser()
+tasks = []
+if root.exists():
+    def sort_key(p):
+        try:
+            return int(p.stem)
+        except Exception:
+            return 0
+    for path in sorted(root.glob('*.json'), key=sort_key):
+        try:
+            tasks.append(json.loads(path.read_text()))
+        except Exception:
+            pass
+print(json.dumps({"tasks": tasks, "sessionId": root.name, "taskListId": "voice-clone-pipeline"}))
+"""
+    try:
+        return run_remote_python(script, timeout=10)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/lab/tasks")
+async def create_lab_task(payload: Dict[str, Any]):
+    """Create a new task in the shared task list on 4090."""
+    subject = (payload.get("subject") or "").strip()
+    description = payload.get("description") or ""
+    if not subject:
+        raise HTTPException(status_code=400, detail="Subject is required")
+
+    input_payload = json.dumps({"subject": subject, "description": description})
+    script = f"""
+import json, pathlib
+payload = json.loads({input_payload!r})
+root = pathlib.Path('~/.claude/tasks/voice-clone-pipeline').expanduser()
+root.mkdir(parents=True, exist_ok=True)
+
+existing = [p for p in root.glob('*.json') if p.stem.isdigit()]
+ids = [int(p.stem) for p in existing] if existing else [0]
+next_id = max(ids) + 1
+
+new_task = {{
+    "id": str(next_id),
+    "subject": payload["subject"],
+    "description": payload.get("description", "") or "",
+    "status": "pending",
+    "activeForm": "",
+    "blocks": [],
+    "blockedBy": [],
+}}
+
+path = root / f"{{next_id}}.json"
+path.write_text(json.dumps(new_task, indent=2))
+print(json.dumps({{"success": True, "task": new_task}}))
+"""
+    try:
+        return run_remote_python(script, timeout=10)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/lab/tasks")
+async def update_lab_task(payload: Dict[str, Any]):
+    """Update an existing task in the shared task list on 4090."""
+    task_id = (payload.get("id") or "").strip()
+    if not task_id:
+        raise HTTPException(status_code=400, detail="Task ID is required")
+
+    input_payload = json.dumps({
+        "id": task_id,
+        "status": payload.get("status"),
+        "subject": payload.get("subject"),
+        "description": payload.get("description"),
+        "owner": payload.get("owner"),
+        "activeForm": payload.get("activeForm"),
+    })
+    script = f"""
+import json, pathlib
+payload = json.loads({input_payload!r})
+root = pathlib.Path('~/.claude/tasks/voice-clone-pipeline').expanduser()
+path = root / f"{{payload['id']}}.json"
+if not path.exists():
+    print(json.dumps({{"error": "Task not found"}}))
+    raise SystemExit(1)
+
+task = json.loads(path.read_text())
+for key in ["status", "subject", "description", "owner", "activeForm"]:
+    if payload.get(key) is not None:
+        task[key] = payload[key]
+path.write_text(json.dumps(task, indent=2))
+print(json.dumps({{"success": True, "task": task}}))
+"""
+    try:
+        return run_remote_python(script, timeout=10)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Research Manager Health/Progress/Metrics ==============
+
+RM_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RM_DIR = RM_PROJECT_ROOT / ".skills" / "research-manager"
+RM_STATE_DIR = RM_DIR / "state"
+RM_SCRIPT = RM_DIR / "rm"
+AGENTS_FILE = RM_STATE_DIR / "agents.json"
+PROGRESS_FILE = RM_STATE_DIR / "progress.json"
+METRICS_FILE = RM_STATE_DIR / "metrics.json"
+OUTPUTS_DIR = RM_STATE_DIR / "outputs"
+RESEARCH_STATE_FILE = RM_STATE_DIR / "research-state.json"
+ORCHESTRATOR_PID_FILE = RM_STATE_DIR / "orchestrator.pid"
+TASKS_DIR = Path.home() / ".claude" / "tasks" / "voice-clone-pipeline"
+
+
+def read_json_file(path: Path, default: Any) -> Any:
+    try:
+        if path.exists():
+            return json.loads(path.read_text())
+    except Exception:
+        return default
+    return default
+
+
+def write_json_file(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
+
+
+def parse_iso_time(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", ""))
+    except Exception:
+        return None
+
+
+def strip_ansi(text: str) -> str:
+    text = re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text)
+    text = re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", "", text)
+    text = re.sub(r"\x1b[PX^_][^\x1b]*\x1b\\", "", text)
+    text = re.sub(r"\x1b[@-Z\\-_]", "", text)
+    text = re.sub(r"[\x00-\x09\x0b-\x1f]", "", text)
+    return text
+
+
+def kill_rm_agent(name: str) -> bool:
+    try:
+        result = subprocess.run(
+            [str(RM_SCRIPT), "kill", "--name", name],
+            cwd=RM_PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def check_agent_health(agent: Dict[str, Any]) -> Dict[str, Any]:
+    now = datetime.now()
+    started_at = parse_iso_time(agent.get("started_at")) or now
+    running_for = round((now - started_at).total_seconds() / 60)
+
+    health = {
+        "name": agent.get("name"),
+        "status": agent.get("status"),
+        "runningFor": running_for,
+        "lastActivity": 0,
+        "logSize": 0,
+        "isStuck": False,
+        "stuckReason": None,
+        "hasErrors": False,
+        "errors": [],
+    }
+
+    log_path = agent.get("output_file")
+    if log_path and Path(log_path).exists():
+        stats = Path(log_path).stat()
+        health["logSize"] = stats.st_size
+        health["lastActivity"] = round((now - datetime.fromtimestamp(stats.st_mtime)).total_seconds() / 60)
+
+        try:
+            content = Path(log_path).read_text(errors="ignore")
+            last_chunk = content[-10000:]
+        except Exception:
+            last_chunk = ""
+
+        error_patterns = [
+            r"CUDA out of memory",
+            r"RuntimeError",
+            r"PermissionError",
+            r"rate limit",
+            r"API error",
+            r"Connection refused",
+            r"Traceback.*most recent",
+            r"OutOfMemoryError",
+            r"torch\.cuda\.OutOfMemoryError",
+        ]
+
+        for pattern in error_patterns:
+            matches = re.findall(pattern, last_chunk, flags=re.IGNORECASE)
+            if matches:
+                health["hasErrors"] = True
+                health["errors"].append(f"{pattern}: {len(matches)} occurrences")
+
+        if agent.get("status") == "running":
+            if health["lastActivity"] > 10:
+                health["isStuck"] = True
+                health["stuckReason"] = f"No log activity for {health['lastActivity']} minutes"
+            if running_for > 60 and health["lastActivity"] > 5:
+                health["isStuck"] = True
+                health["stuckReason"] = f"Running for {running_for} minutes with minimal recent activity"
+
+            lines = [line for line in last_chunk.split("\n") if line.strip()]
+            last_lines = lines[-50:]
+            unique_lines = {line[:50] for line in last_lines}
+            if len(last_lines) > 30 and len(unique_lines) < 5:
+                health["isStuck"] = True
+                health["stuckReason"] = "Repeated log output detected (possible spinner stuck)"
+    else:
+        if agent.get("status") == "running" and running_for > 2:
+            health["isStuck"] = True
+            health["stuckReason"] = "No log file created after 2 minutes"
+
+    return health
+
+
+def generate_recommendations(health_reports: List[Dict[str, Any]], killed_agents: List[str]) -> List[str]:
+    recommendations: List[str] = []
+    stuck_agents = [h for h in health_reports if h.get("isStuck")]
+    if stuck_agents:
+        recommendations.append(
+            f"{len(stuck_agents)} agent(s) appear stuck. Consider killing them with POST /api/lab/health {{ action: \"kill-stuck\" }}"
+        )
+
+    error_agents = [h for h in health_reports if h.get("hasErrors")]
+    if error_agents:
+        recommendations.append(
+            f"{len(error_agents)} agent(s) have errors in logs. Check their output for issues."
+        )
+
+    long_running = [h for h in health_reports if h.get("runningFor", 0) > 30 and not h.get("isStuck")]
+    if long_running:
+        recommendations.append(
+            f"{len(long_running)} agent(s) running for 30+ minutes. Monitor for completion."
+        )
+
+    if len(killed_agents) > 5:
+        recommendations.append(
+            f"{len(killed_agents)} killed agents in state file. Run cleanup with POST /api/lab/health {{ action: \"cleanup-killed\" }}"
+        )
+
+    if not health_reports:
+        recommendations.append(
+            "No agents currently running. Use POST /api/lab/auto-spawn to start work."
+        )
+
+    return recommendations
+
+
+@app.get("/api/lab/health")
+async def get_lab_health():
+    try:
+        agents = read_json_file(AGENTS_FILE, {})
+        health_reports = []
+        stuck_agents = []
+        error_agents = []
+
+        for name, agent in agents.items():
+            if agent.get("status") == "running":
+                health = check_agent_health(agent)
+                health_reports.append(health)
+                if health.get("isStuck"):
+                    stuck_agents.append(name)
+                if health.get("hasErrors"):
+                    error_agents.append(name)
+
+        killed_agents = [name for name, agent in agents.items() if agent.get("status") == "killed"]
+
+        return {
+            "healthy": len(stuck_agents) == 0,
+            "runningCount": len(health_reports),
+            "stuckCount": len(stuck_agents),
+            "errorCount": len(error_agents),
+            "killedCount": len(killed_agents),
+            "agents": health_reports,
+            "stuckAgents": stuck_agents,
+            "errorAgents": error_agents,
+            "killedAgents": killed_agents[:10],
+            "recommendations": generate_recommendations(health_reports, killed_agents),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/lab/health")
+async def post_lab_health(payload: Dict[str, Any]):
+    try:
+        action = payload.get("action")
+        agent_name = payload.get("agentName")
+        agents = read_json_file(AGENTS_FILE, {})
+
+        if action == "kill-stuck":
+            killed = []
+            for name, agent in list(agents.items()):
+                if agent.get("status") == "running":
+                    health = check_agent_health(agent)
+                    if health.get("isStuck") and kill_rm_agent(name):
+                        agents[name]["status"] = "killed"
+                        agents[name]["killed_at"] = datetime.now().isoformat()
+                        killed.append(name)
+            write_json_file(AGENTS_FILE, agents)
+            return {"success": True, "killed": killed}
+
+        if action == "kill-agent":
+            if not agent_name or agent_name not in agents:
+                raise HTTPException(status_code=404, detail="Agent not found")
+            success = kill_rm_agent(agent_name)
+            if success:
+                agents[agent_name]["status"] = "killed"
+                agents[agent_name]["killed_at"] = datetime.now().isoformat()
+                write_json_file(AGENTS_FILE, agents)
+            return {"success": success}
+
+        if action == "cleanup-killed":
+            one_hour_ago = datetime.now().timestamp() - 60 * 60
+            removed = []
+            for name, agent in list(agents.items()):
+                killed_at = parse_iso_time(agent.get("killed_at"))
+                if agent.get("status") == "killed" and killed_at:
+                    if killed_at.timestamp() < one_hour_ago:
+                        removed.append(name)
+                        del agents[name]
+            write_json_file(AGENTS_FILE, agents)
+            return {"success": True, "removed": removed}
+
+        raise HTTPException(status_code=400, detail="Unknown action")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def analyze_agent_progress(log_path: str, agent_name: str, started_at: str) -> Dict[str, Any]:
+    progress: Dict[str, Any] = {
+        "name": agent_name,
+        "startedAt": started_at,
+        "lastActivity": 0,
+        "filesRead": 0,
+        "filesWritten": 0,
+        "filesEdited": 0,
+        "toolCalls": 0,
+        "tasksCreated": 0,
+        "tasksCompleted": 0,
+        "webSearches": 0,
+        "errors": 0,
+        "progressScore": 0,
+        "status": "active",
+        "statusReason": "Running normally",
+    }
+
+    task_match = re.match(r"^task-(\d+)-", agent_name)
+    if task_match:
+        progress["taskId"] = task_match.group(1)
+
+    if not log_path or not Path(log_path).exists():
+        progress["status"] = "error"
+        progress["statusReason"] = "No log file found"
+        return progress
+
+    stats = Path(log_path).stat()
+    progress["lastActivity"] = round((datetime.now() - datetime.fromtimestamp(stats.st_mtime)).total_seconds() / 60)
+
+    try:
+        content = Path(log_path).read_text(errors="ignore")
+        if len(content) > 200000:
+            content = content[-200000:]
+        clean_content = strip_ansi(content)
+
+        progress["filesRead"] = len(re.findall(r"Read\(", clean_content))
+        progress["filesWritten"] = len(re.findall(r"Write\(", clean_content))
+        progress["filesEdited"] = len(re.findall(r"Edit\(", clean_content))
+        progress["webSearches"] = len(re.findall(r"WebSearch\(", clean_content))
+        progress["tasksCreated"] = len(re.findall(r"TaskCreate", clean_content))
+        progress["tasksCompleted"] = len(re.findall(r"TaskUpdate.*completed", clean_content, flags=re.IGNORECASE))
+
+        tool_patterns = [
+            r"Read\(",
+            r"Write\(",
+            r"Edit\(",
+            r"Bash\(",
+            r"Grep\(",
+            r"Glob\(",
+            r"WebSearch\(",
+            r"WebFetch\(",
+            r"Task\(",
+            r"TaskCreate",
+            r"TaskUpdate",
+        ]
+        progress["toolCalls"] = sum(len(re.findall(p, clean_content)) for p in tool_patterns)
+
+        critical_error_patterns = [
+            r"CUDA out of memory",
+            r"RuntimeError",
+            r"PermissionError",
+            r"rate limit",
+            r"API error",
+            r"Connection refused",
+            r"Traceback.*most recent",
+        ]
+        progress["errors"] = sum(len(re.findall(p, clean_content, flags=re.IGNORECASE)) for p in critical_error_patterns)
+
+        file_score = min(40, (progress["filesWritten"] * 10) + (progress["filesEdited"] * 5) + (progress["filesRead"] * 2))
+        tool_score = min(30, progress["toolCalls"] * 0.5)
+        task_score = min(20, (progress["tasksCreated"] * 5) + (progress["tasksCompleted"] * 10))
+        error_penalty = min(20, progress["errors"] * 2)
+        progress["progressScore"] = max(0, min(100, file_score + tool_score + task_score - error_penalty))
+
+        started_time = parse_iso_time(started_at)
+        running_minutes = ((datetime.now() - started_time).total_seconds() / 60) if started_time else 0
+
+        if progress["errors"] >= 3:
+            progress["status"] = "error"
+            progress["statusReason"] = f"Critical errors detected ({progress['errors']})"
+        elif progress["lastActivity"] > 10:
+            progress["status"] = "stuck"
+            progress["statusReason"] = f"No activity for {progress['lastActivity']} minutes"
+        elif running_minutes > 30 and progress["progressScore"] < 20:
+            progress["status"] = "slow"
+            progress["statusReason"] = f"Low progress after {round(running_minutes)} minutes"
+        elif progress["progressScore"] > 80:
+            progress["status"] = "active"
+            progress["statusReason"] = "High progress, nearing completion"
+        else:
+            progress["status"] = "active"
+            progress["statusReason"] = f"Progress: {progress['progressScore']}%, {progress['toolCalls']} tool calls"
+
+    except Exception:
+        progress["status"] = "error"
+        progress["statusReason"] = "Failed to read log file"
+
+    return progress
+
+
+def get_progress_history() -> List[Dict[str, Any]]:
+    data = read_json_file(PROGRESS_FILE, {})
+    return data.get("history", []) if isinstance(data, dict) else []
+
+
+def save_progress_history(history: List[Dict[str, Any]]) -> None:
+    trimmed = history[-100:]
+    write_json_file(PROGRESS_FILE, {"history": trimmed})
+
+
+def record_outcome(agent_name: str, task_id: Optional[str], outcome: str, duration: float, progress_score: float) -> int:
+    history = get_progress_history()
+    retry_count = len([h for h in history if h.get("taskId") == task_id and h.get("outcome") != "completed"]) if task_id else 0
+    history.append({
+        "agentName": agent_name,
+        "taskId": task_id,
+        "outcome": outcome,
+        "duration": duration,
+        "progressScore": progress_score,
+        "timestamp": datetime.now().isoformat(),
+        "retryCount": retry_count,
+    })
+    save_progress_history(history)
+    return retry_count
+
+
+def get_retry_recommendation(task_id: str) -> Dict[str, Any]:
+    history = get_progress_history()
+    task_history = [h for h in history if h.get("taskId") == task_id]
+
+    if not task_history:
+        return {"shouldRetry": True, "reason": "No history, first attempt"}
+
+    failures = [h for h in task_history if h.get("outcome") != "completed"]
+    successes = [h for h in task_history if h.get("outcome") == "completed"]
+
+    if successes:
+        return {"shouldRetry": False, "reason": "Task already completed successfully"}
+
+    if len(failures) >= 3:
+        return {"shouldRetry": False, "reason": f"Task failed {len(failures)} times, needs manual review"}
+
+    stuck_count = len([h for h in failures if h.get("outcome") == "stuck"])
+    error_count = len([h for h in failures if h.get("outcome") == "error"])
+    timeout_count = len([h for h in failures if h.get("outcome") == "timeout"])
+
+    strategy = "standard"
+    if stuck_count > 0:
+        strategy = "break_into_subtasks"
+    elif error_count > 0:
+        strategy = "add_error_handling"
+    elif timeout_count > 0:
+        strategy = "simplify_scope"
+
+    return {
+        "shouldRetry": True,
+        "reason": f"Attempt {len(failures) + 1} of 3",
+        "strategy": strategy,
+    }
+
+
+@app.get("/api/lab/progress")
+async def get_lab_progress():
+    try:
+        agents = read_json_file(AGENTS_FILE, {})
+        progress_reports = []
+
+        for name, agent in agents.items():
+            if agent.get("status") == "running":
+                progress = analyze_agent_progress(
+                    agent.get("output_file", ""),
+                    name,
+                    agent.get("started_at", datetime.now().isoformat()),
+                )
+                progress_reports.append(progress)
+
+        history = get_progress_history()
+        recent_history = history[-20:]
+
+        stats = {
+            "totalAttempts": len(history),
+            "completed": len([h for h in history if h.get("outcome") == "completed"]),
+            "stuck": len([h for h in history if h.get("outcome") == "stuck"]),
+            "errors": len([h for h in history if h.get("outcome") == "error"]),
+            "timeouts": len([h for h in history if h.get("outcome") == "timeout"]),
+            "avgDuration": round(sum(h.get("duration", 0) for h in history) / len(history)) if history else 0,
+            "avgProgressScore": round(sum(h.get("progressScore", 0) for h in history) / len(history)) if history else 0,
+        }
+
+        failed_task_ids = {
+            h.get("taskId") for h in history if h.get("taskId") and h.get("outcome") != "completed"
+        }
+        pending_retries = []
+        for task_id in failed_task_ids:
+            rec = get_retry_recommendation(task_id)
+            if rec.get("shouldRetry"):
+                pending_retries.append({"taskId": task_id, "recommendation": rec})
+
+        return {
+            "agents": progress_reports,
+            "history": recent_history,
+            "stats": stats,
+            "pendingRetries": pending_retries,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/lab/progress")
+async def post_lab_progress(payload: Dict[str, Any]):
+    try:
+        action = payload.get("action")
+        if action == "record":
+            retry_count = record_outcome(
+                payload.get("agentName"),
+                payload.get("taskId"),
+                payload.get("outcome"),
+                payload.get("duration", 0),
+                payload.get("progressScore", 0),
+            )
+            return {"success": True, "retryCount": retry_count}
+
+        if action == "should-retry":
+            task_id = payload.get("taskId")
+            if not task_id:
+                raise HTTPException(status_code=400, detail="taskId required")
+            return get_retry_recommendation(task_id)
+
+        raise HTTPException(status_code=400, detail="Unknown action")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def estimate_cost(duration_minutes: float, agent_type: str = "opus") -> float:
+    rates = {"opus": 10, "sonnet": 3, "haiku": 0.25}
+    rate = rates.get(agent_type, rates["opus"])
+    return (duration_minutes / 60) * rate
+
+
+@app.get("/api/lab/metrics")
+async def get_lab_metrics():
+    try:
+        history = get_progress_history()
+        now = datetime.now()
+        one_day_ago = now.timestamp() - 24 * 60 * 60
+        seven_days_ago = now.timestamp() - 7 * 24 * 60 * 60
+
+        last24h_history = [h for h in history if parse_iso_time(h.get("timestamp")) and parse_iso_time(h.get("timestamp")).timestamp() > one_day_ago]
+        last7d_history = [h for h in history if parse_iso_time(h.get("timestamp")) and parse_iso_time(h.get("timestamp")).timestamp() > seven_days_ago]
+
+        completed = [h for h in history if h.get("outcome") == "completed"]
+        failed = [h for h in history if h.get("outcome") != "completed"]
+
+        total_tasks_completed = len(completed)
+        total_tasks_failed = len(failed)
+        success_rate = (total_tasks_completed / len(history) * 100) if history else 0
+        avg_completion_time = (sum(h.get("duration", 0) for h in completed) / len(completed)) if completed else 0
+        avg_progress_score = (sum(h.get("progressScore", 0) for h in history) / len(history)) if history else 0
+
+        last24h_completed = [h for h in last24h_history if h.get("outcome") == "completed"]
+        last24h_failed = [h for h in last24h_history if h.get("outcome") != "completed"]
+
+        by_outcome = {
+            "completed": len([h for h in history if h.get("outcome") == "completed"]),
+            "stuck": len([h for h in history if h.get("outcome") == "stuck"]),
+            "error": len([h for h in history if h.get("outcome") == "error"]),
+            "timeout": len([h for h in history if h.get("outcome") == "timeout"]),
+        }
+
+        research_history = [h for h in history if "researcher" in (h.get("agentName") or "")]
+        task_history = [h for h in history if "task-" in (h.get("agentName") or "")]
+
+        by_task_type = {
+            "research": {
+                "count": len(research_history),
+                "avgDuration": (sum(h.get("duration", 0) for h in research_history) / len(research_history)) if research_history else 0,
+                "successRate": (len([h for h in research_history if h.get("outcome") == "completed"]) / len(research_history) * 100) if research_history else 0,
+            },
+            "task": {
+                "count": len(task_history),
+                "avgDuration": (sum(h.get("duration", 0) for h in task_history) / len(task_history)) if task_history else 0,
+                "successRate": (len([h for h in task_history if h.get("outcome") == "completed"]) / len(task_history) * 100) if task_history else 0,
+            },
+        }
+
+        daily_map: Dict[str, Dict[str, Any]] = {}
+        for i in range(7):
+            date_str = (now - timedelta(days=i)).date().isoformat()
+            daily_map[date_str] = {
+                "date": date_str,
+                "tasksCompleted": 0,
+                "tasksFailed": 0,
+                "totalDuration": 0,
+                "avgDuration": 0,
+                "avgProgressScore": 0,
+                "researchAgents": 0,
+                "taskAgents": 0,
+                "costEstimate": 0,
+            }
+
+        for h in last7d_history:
+            ts = parse_iso_time(h.get("timestamp"))
+            if not ts:
+                continue
+            date_str = ts.date().isoformat()
+            daily = daily_map.get(date_str)
+            if not daily:
+                continue
+            if h.get("outcome") == "completed":
+                daily["tasksCompleted"] += 1
+            else:
+                daily["tasksFailed"] += 1
+            daily["totalDuration"] += h.get("duration", 0)
+            daily["costEstimate"] += estimate_cost(h.get("duration", 0))
+            if "researcher" in (h.get("agentName") or ""):
+                daily["researchAgents"] += 1
+            else:
+                daily["taskAgents"] += 1
+
+        for daily in daily_map.values():
+            total = daily["tasksCompleted"] + daily["tasksFailed"]
+            if total > 0:
+                daily["avgDuration"] = daily["totalDuration"] / total
+
+        daily_history = sorted(daily_map.values(), key=lambda d: d["date"])
+
+        today_date = now.date().isoformat()
+        today_metrics = daily_map.get(today_date, {})
+        estimated_cost_today = today_metrics.get("costEstimate", 0)
+        estimated_cost_total = sum(estimate_cost(h.get("duration", 0)) for h in history)
+
+        orchestrator_uptime = None
+        if ORCHESTRATOR_PID_FILE.exists():
+            stats = ORCHESTRATOR_PID_FILE.stat()
+            orchestrator_uptime = round((now - datetime.fromtimestamp(stats.st_mtime)).total_seconds() / 60)
+
+        current_agents = len([a for a in read_json_file(AGENTS_FILE, {}).values() if a.get("status") == "running"])
+
+        return {
+            "totalTasksCompleted": total_tasks_completed,
+            "totalTasksFailed": total_tasks_failed,
+            "successRate": round(success_rate * 10) / 10,
+            "avgCompletionTime": round(avg_completion_time * 10) / 10,
+            "avgProgressScore": round(avg_progress_score),
+            "last24h": {
+                "completed": len(last24h_completed),
+                "failed": len(last24h_failed),
+                "avgDuration": round((sum(h.get("duration", 0) for h in last24h_history) / len(last24h_history)) * 10) / 10 if last24h_history else 0,
+            },
+            "byOutcome": by_outcome,
+            "currentAgents": current_agents,
+            "currentPendingTasks": 0,
+            "dailyHistory": daily_history,
+            "byTaskType": by_task_type,
+            "estimatedCostToday": round(estimated_cost_today * 100) / 100,
+            "estimatedCostTotal": round(estimated_cost_total * 100) / 100,
+            "orchestratorUptime": orchestrator_uptime,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def parse_agent_messages(content: str, agent_name: str, timestamp: datetime) -> List[Dict[str, Any]]:
+    messages = []
+    clean_content = strip_ansi(content)
+    lines = clean_content.split("\n")
+
+    for line in lines:
+        trimmed = line.strip()
+        if not trimmed or len(trimmed) < 15:
+            continue
+        if "Claude Code v" in trimmed or "ctrl+" in trimmed or "bypass permissions" in trimmed:
+            continue
+        if trimmed.startswith("❯") or trimmed.startswith("Agent:") or trimmed.startswith("Type:"):
+            continue
+        if re.match(r"^[─═▐▛▜▘▝\-\s⎿┌┐└┘├┤┬┴┼│]+$", trimmed):
+            continue
+
+        cleaned = re.sub(r"^[✶✻✲✳✴✵✷✸✹✺✼✽·•◦◼◻]+\s*", "", trimmed)
+        cleaned = re.sub(r"^\d+[◼◻✔✶]\s*", "", cleaned)
+        cleaned = cleaned.replace("\t", " ")
+        cleaned = cleaned.strip()
+
+        if len(cleaned) < 10:
+            continue
+
+        message_type = "output"
+        message_text = cleaned
+
+        if cleaned.startswith("⏺"):
+            message_text = cleaned.replace("⏺", "").strip()
+        elif re.search(r"(Implementing|Researching|Analyzing|Processing)", cleaned):
+            message_type = "action"
+        elif re.match(r"^(Read|Edit|Write|Bash|Grep|Glob|Task)\(", cleaned):
+            message_type = "action"
+
+        messages.append({
+            "agent": agent_name,
+            "message": message_text[:200],
+            "timestamp": timestamp.isoformat(),
+            "type": message_type,
+        })
+
+    seen = set()
+    deduped = []
+    for msg in reversed(messages):
+        key = msg["message"].lower()[:50]
+        if key not in seen:
+            seen.add(key)
+            deduped.append(msg)
+    return list(reversed(deduped))[-15:]
+
+
+@app.get("/api/lab/agent-messages")
+async def get_lab_agent_messages():
+    try:
+        if not OUTPUTS_DIR.exists():
+            return {"messages": []}
+
+        all_messages: List[Dict[str, Any]] = []
+        one_hour_ago = datetime.now().timestamp() - 60 * 60
+
+        for log_file in OUTPUTS_DIR.glob("*.log"):
+            try:
+                stats = log_file.stat()
+                if stats.st_mtime < one_hour_ago:
+                    continue
+
+                content = log_file.read_text(errors="ignore")
+                recent_content = content[-50000:]
+                agent_name = log_file.stem
+                timestamp = datetime.fromtimestamp(stats.st_mtime)
+                all_messages.extend(parse_agent_messages(recent_content, agent_name, timestamp))
+            except Exception:
+                continue
+
+        all_messages.sort(key=lambda m: m.get("timestamp", ""), reverse=True)
+        return {"messages": all_messages[:20], "count": len(all_messages)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_all_tasks() -> List[Dict[str, Any]]:
+    if not TASKS_DIR.exists():
+        return []
+    tasks = []
+    for path in sorted(TASKS_DIR.glob("*.json"), key=lambda p: int(p.stem) if p.stem.isdigit() else 0):
+        try:
+            tasks.append(json.loads(path.read_text()))
+        except Exception:
+            continue
+    return tasks
+
+
+def get_pending_tasks() -> List[Dict[str, Any]]:
+    all_tasks = get_all_tasks()
+    completed_ids = {t.get("id") for t in all_tasks if t.get("status") == "completed"}
+    pending = []
+    for task in all_tasks:
+        if task.get("status") != "pending" or task.get("owner"):
+            continue
+        blocked_by = task.get("blockedBy") or []
+        if any(blocker not in completed_ids for blocker in blocked_by):
+            continue
+        pending.append(task)
+    return pending
+
+
+def get_running_agents() -> List[Dict[str, Any]]:
+    agents = read_json_file(AGENTS_FILE, {})
+    return [agent for agent in agents.values() if agent.get("status") == "running"]
+
+
+def update_task_file(task_id: str, updates: Dict[str, Any]) -> None:
+    path = TASKS_DIR / f"{task_id}.json"
+    if not path.exists():
+        return
+    task = json.loads(path.read_text())
+    task.update({k: v for k, v in updates.items() if v is not None})
+    path.write_text(json.dumps(task, indent=2))
+
+
+def select_agent_type(task: Dict[str, Any]) -> str:
+    subject = (task.get("subject") or "").lower()
+    description = (task.get("description") or "").lower()
+    text = f"{subject} {description}"
+
+    if "[codex]" in text or "codex:" in text or "use codex" in text:
+        return "codex"
+
+    review_keywords = {
+        "review", "reviewer", "audit", "auditing", "critique", "assessment",
+        "assess", "validate", "validation", "verify", "verification",
+        "postmortem", "retrospective",
+    }
+    words = re.split(r"[^a-z0-9]+", text)
+    if any(word in review_keywords for word in words if word):
+        return "codex"
+
+    codex_hints = [
+        "architecture",
+        "multi-file",
+        "deep analysis",
+        "root cause",
+        "refactor",
+        "benchmark",
+        "design doc",
+        "tradeoff",
+        "performance investigation",
+    ]
+    if any(hint in text for hint in codex_hints):
+        return "codex"
+
+    return "ollama"
+
+
+def spawn_agent_for_task(task: Dict[str, Any]) -> bool:
+    agent_name = f"task-{task.get('id')}-{int(time.time() * 1000)}"
+    agent_type = select_agent_type(task)
+    prompt = f"""Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="voice-clone-pipeline"):
+
+TASK #{task.get('id')}: {task.get('subject')}
+{f"\\nDescription: {task.get('description')}" if task.get('description') else ""}
+
+INSTRUCTIONS:
+1. Read .skills/research-manager/MISSION.md and align work to current priority
+2. First call TaskList to see all tasks
+3. Call TaskUpdate to mark task #{task.get('id')} as in_progress with your name as owner
+4. Work on the task autonomously
+5. When done, call TaskUpdate to mark it completed
+6. Check TaskList for more pending tasks
+
+You have access to all Claude Code tools. Be autonomous and thorough.
+"""
+    result = subprocess.run(
+        [str(RM_SCRIPT), "spawn", "--type", agent_type, "--name", agent_name, "--task", prompt],
+        cwd=RM_PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        update_task_file(str(task.get("id")), {"status": "in_progress", "owner": f"rm:{agent_name}"})
+        return True
+    return False
+
+
+def spawn_web_research_agent() -> bool:
+    state = read_json_file(RESEARCH_STATE_FILE, {"lastResearchTime": 0, "topicIndex": 0})
+    topics = [
+        "prosody conditioning TTS 2024 2025 emotion neural speech synthesis",
+        "disentangled speech synthesis prosody content separation",
+        "emotion transfer voice cloning zero-shot",
+        "pitch contour prediction neural TTS F0 modeling",
+        "DeepSeek techniques for speech synthesis",
+        "variational autoencoder prosody disentanglement",
+    ]
+    topic = topics[state.get("topicIndex", 0) % len(topics)]
+    agent_name = f"web-researcher-{int(time.time() * 1000)}"
+    task_prompt = f"""You are a web research agent. Your job is to find NEW ideas for improving prosody and emotion conditioning in TTS systems.
+
+USE WebSearch TOOL (Claude built-in) to search for recent papers and techniques.
+
+YOUR RESEARCH TOPIC: "{topic}"
+
+INSTRUCTIONS:
+1. First call TaskList to see current tasks and their status
+2. Use WebSearch to find recent papers/repos on this topic
+3. For each promising finding, create a task with TaskCreate that includes:
+   - Subject: What to implement
+   - Description MUST include:
+     a) Key technique summary (2-3 sentences)
+     b) How to integrate with our codebase
+     c) SUCCESS CRITERIA: Specific metric improvement expected
+     d) VERIFICATION: How to test it works
+     e) DEPENDENCIES: What must be done first
+4. After creating tasks, use TaskUpdate to set blockedBy if needed
+
+You have WebSearch access - USE IT! Start searching now.
+"""
+    result = subprocess.run(
+        [str(RM_SCRIPT), "spawn", "--type", "ollama", "--name", agent_name, "--task", task_prompt],
+        cwd=RM_PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        write_json_file(RESEARCH_STATE_FILE, {
+            "lastResearchTime": int(time.time() * 1000),
+            "topicIndex": state.get("topicIndex", 0) + 1,
+        })
+        return True
+    return False
+
+
+def orchestrator_running() -> bool:
+    if not ORCHESTRATOR_PID_FILE.exists():
+        return False
+    try:
+        pid = int(ORCHESTRATOR_PID_FILE.read_text().strip())
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        return False
+
+
+def cleanup_finished_agents() -> Dict[str, Any]:
+    running_agents = get_running_agents()
+    completed_task_ids = {t.get("id") for t in get_all_tasks() if t.get("status") == "completed"}
+    killed: List[str] = []
+    reason: Dict[str, str] = {}
+    now = time.time()
+
+    for agent in running_agents:
+        started_at = parse_iso_time(agent.get("started_at"))
+        running_minutes = ((time.time() - started_at.timestamp()) / 60) if started_at else 0
+        name = agent.get("name", "")
+
+        task_match = re.match(r"^task-(\d+)-", name)
+        if task_match:
+            task_id = task_match.group(1)
+            if task_id in completed_task_ids:
+                if kill_rm_agent(name):
+                    killed.append(name)
+                    reason[name] = f"Task #{task_id} completed"
+                    record_outcome(name, task_id, "completed", running_minutes, 100)
+                    continue
+
+        if ("researcher" in name or "web-research" in name) and running_minutes > 20:
+            if kill_rm_agent(name):
+                killed.append(name)
+                reason[name] = f"Research timeout ({round(running_minutes)}min)"
+                record_outcome(name, None, "timeout", running_minutes, 50)
+                continue
+
+        if running_minutes > 60:
+            if kill_rm_agent(name):
+                killed.append(name)
+                reason[name] = f"Stuck timeout ({round(running_minutes)}min)"
+                record_outcome(name, task_match.group(1) if task_match else None, "stuck", running_minutes, 20)
+
+    return {"killed": killed, "reason": reason}
+
+
+def has_running_research_agent(agents: List[Dict[str, Any]]) -> bool:
+    return any(
+        "web-research" in (a.get("name") or "") or "researcher" in (a.get("name") or "") or "WebSearch" in (a.get("task") or "")
+        for a in agents
+    )
+
+
+@app.post("/api/lab/auto-spawn")
+async def post_lab_auto_spawn(request: Request):
+    try:
+        params = request.query_params
+        force_research = params.get("research") == "true"
+        cleanup_only = params.get("cleanup") == "true"
+
+        cleanup_result = cleanup_finished_agents()
+        if cleanup_only:
+            return {"success": True, "type": "cleanup", "killed": cleanup_result["killed"], "reasons": cleanup_result["reason"]}
+
+        pending_tasks = get_pending_tasks()
+        running_agents = get_running_agents()
+        research_state = read_json_file(RESEARCH_STATE_FILE, {"lastResearchTime": 0, "topicIndex": 0})
+
+        if orchestrator_running():
+            return {
+                "success": False,
+                "reason": "Orchestrator is running",
+                "runningAgents": len(running_agents),
+                "pendingTasks": len(pending_tasks),
+                "cleanup": cleanup_result if cleanup_result["killed"] else None,
+            }
+
+        research_interval = 30 * 60 * 1000
+        time_since_last = int(time.time() * 1000) - int(research_state.get("lastResearchTime", 0))
+        needs_research = time_since_last > research_interval
+        has_researcher = has_running_research_agent(running_agents)
+
+        if len(running_agents) >= 3:
+            return {
+                "success": False,
+                "reason": "Max concurrent agents reached",
+                "runningAgents": len(running_agents),
+                "pendingTasks": len(pending_tasks),
+                "researchStatus": "running" if has_researcher else "idle",
+                "cleanup": cleanup_result if cleanup_result["killed"] else None,
+            }
+
+        if (needs_research or force_research) and not has_researcher:
+            spawned = spawn_web_research_agent()
+            if spawned:
+                return {
+                    "success": True,
+                    "type": "research",
+                    "runningAgents": len(running_agents) + 1,
+                    "pendingTasks": len(pending_tasks),
+                }
+
+        if pending_tasks and len(running_agents) < 3:
+            task_to_assign = pending_tasks[0]
+            spawned = spawn_agent_for_task(task_to_assign)
+            return {
+                "success": spawned,
+                "type": "task",
+                "assignedTask": task_to_assign,
+                "runningAgents": len(running_agents) + (1 if spawned else 0),
+                "pendingTasks": len(pending_tasks) - (1 if spawned else 0),
+            }
+
+        return {
+            "success": False,
+            "reason": "No work to assign",
+            "runningAgents": len(running_agents),
+            "pendingTasks": len(pending_tasks),
+            "researchStatus": "running" if has_researcher else ("due" if needs_research else "recent"),
+            "nextResearchIn": max(0, research_interval - time_since_last),
+            "cleanup": cleanup_result if cleanup_result["killed"] else None,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/lab/auto-spawn")
+async def get_lab_auto_spawn():
+    try:
+        pending_tasks = get_pending_tasks()
+        running_agents = get_running_agents()
+        research_state = read_json_file(RESEARCH_STATE_FILE, {"lastResearchTime": 0, "topicIndex": 0})
+
+        research_interval = 30 * 60 * 1000
+        time_since_last = int(time.time() * 1000) - int(research_state.get("lastResearchTime", 0))
+        has_researcher = has_running_research_agent(running_agents)
+        topics = [
+            "prosody conditioning TTS 2024 2025 emotion neural speech synthesis",
+            "disentangled speech synthesis prosody content separation",
+            "emotion transfer voice cloning zero-shot",
+            "pitch contour prediction neural TTS F0 modeling",
+            "DeepSeek techniques for speech synthesis",
+            "variational autoencoder prosody disentanglement",
+        ]
+        next_topic = topics[research_state.get("topicIndex", 0) % len(topics)]
+
+        return {
+            "pendingTasks": len(pending_tasks),
+            "runningAgents": len(running_agents),
+            "tasks": [{"id": t.get("id"), "subject": t.get("subject")} for t in pending_tasks],
+            "agents": [{"name": a.get("name"), "type": a.get("type"), "status": a.get("status")} for a in running_agents],
+            "canSpawn": len(pending_tasks) > 0 and len(running_agents) < 3 and not orchestrator_running(),
+            "research": {
+                "hasResearcher": has_researcher,
+                "lastResearchTime": research_state.get("lastResearchTime", 0),
+                "timeSinceLastResearch": time_since_last,
+                "isDue": time_since_last > research_interval,
+                "nextTopic": next_topic,
+                "topicIndex": research_state.get("topicIndex", 0),
+                "totalTopics": len(topics),
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.on_event("startup")
