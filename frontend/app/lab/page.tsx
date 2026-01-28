@@ -1274,7 +1274,7 @@ export default function LabPage() {
           </Section>
         )}
 
-        {progressData && progressData.agents.length > 0 && (
+        {progressData?.agents?.length > 0 && (
           <Section title="Agent Progress">
             <div className="space-y-3">
               {progressData.agents.map((agent) => (
