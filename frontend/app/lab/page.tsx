@@ -175,6 +175,8 @@ export default function LabPage() {
       if (!taskText) return "Working...";
       const taskLine = taskText.match(/TASK #(\d+):\s*([^\n]+)/);
       if (taskLine) return `Task #${taskLine[1]}: ${taskLine[2]}`;
+      // Skip raw prompts that start with rules/warnings
+      if (taskText.startsWith('⚠') || taskText.includes('CRITICAL')) return "Researching...";
       const firstLine = taskText.split("\n").find((line) => line.trim());
       return (firstLine || taskText).slice(0, 80);
     };

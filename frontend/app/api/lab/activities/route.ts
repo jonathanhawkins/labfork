@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { execSync } from 'child_process';
 
 export const dynamic = "force-dynamic";
 
@@ -300,7 +301,13 @@ function buildResearchAgentActivities(agents: Record<string, any>): ActivityStat
       // Determine which 3D agent this maps to based on agent type/name
       let assignedAgent = 'explorer';
       let activityType = 'task';
-      let message = agent.task?.substring(0, 50) || 'Researching...';
+      const taskMatch = agent.task?.match(/TASK #\d+:\s*(.+?)(?:\\n|\n|$)/);
+      let message = 'Researching...';
+      if (taskMatch) {
+        message = taskMatch[1].trim().substring(0, 60);
+      } else if (agent.task && !agent.task.startsWith('⚠') && !agent.task.includes('CRITICAL')) {
+        message = agent.task.substring(0, 50);
+      }
 
       // The auto-improver is the Manager - it orchestrates everything
       if (name === 'auto-improver' || name.includes('manager') || name.includes('loop')) {
@@ -340,8 +347,11 @@ function buildResearchAgentActivities(agents: Record<string, any>): ActivityStat
 }
 
 async function fetchResearchAgentActivities(): Promise<ActivityState[]> {
+  const REMOTE_HOST = 'doc@100.83.78.111';
+  const REMOTE_AGENTS_FILE = '~/dev/voice-clone-pipeline/.skills/research-manager/state/agents.json';
+
+  // Try local first
   try {
-    // Path is relative to project root (one level up from frontend)
     const projectRoot = join(process.cwd(), '..');
     const agentStatePath = join(
       projectRoot,
@@ -353,8 +363,19 @@ async function fetchResearchAgentActivities(): Promise<ActivityState[]> {
 
     if (existsSync(agentStatePath)) {
       const agents = JSON.parse(readFileSync(agentStatePath, 'utf-8'));
-      return buildResearchAgentActivities(agents);
+      const activities = buildResearchAgentActivities(agents);
+      if (activities.length > 0) return activities;
     }
+  } catch { /* fall through to remote */ }
+
+  // Fall back to remote SSH
+  try {
+    const raw = execSync(
+      `ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no ${REMOTE_HOST} "cat ${REMOTE_AGENTS_FILE} 2>/dev/null"`,
+      { encoding: 'utf-8', timeout: 5000 }
+    );
+    const agents = JSON.parse(raw);
+    return buildResearchAgentActivities(agents);
   } catch (error) {
     console.error('[Activities API] Research agent fetch failed:', error);
   }
