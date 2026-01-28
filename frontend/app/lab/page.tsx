@@ -1099,12 +1099,12 @@ export default function LabPage() {
         {metrics && (
           <Section title="Metrics">
             <div className="space-y-2">
-              <StatRow label="Success Rate" value={`${metrics.successRate}%`} />
+              <StatRow label="Success Rate" value={`${metrics.successRate ?? 0}%`} />
               <StatRow label="Completed (24h)" value={metrics.last24h?.completed ?? 0} />
               <StatRow label="Failed (24h)" value={metrics.last24h?.failed ?? 0} />
-              <StatRow label="Avg time" value={`${metrics.avgCompletionTime}m`} />
+              <StatRow label="Avg time" value={`${metrics.avgCompletionTime ?? 0}m`} />
               <div className="pt-2 mt-2 border-t border-border">
-                <StatRow label="Est. cost today" value={`$${metrics.estimatedCostToday.toFixed(2)}`} />
+                <StatRow label="Est. cost today" value={`$${(metrics.estimatedCostToday ?? 0).toFixed(2)}`} />
               </div>
             </div>
           </Section>
