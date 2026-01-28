@@ -547,6 +547,14 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     group.position.set(...agent.position);
     group.position.y = 0;
 
+    // Clean up any existing label for this agent (prevent duplicates)
+    const existingLabel = agentLabelsRef.current.get(agent.id);
+    if (existingLabel) {
+      existingLabel.removeFromParent();
+      existingLabel.element.remove();
+      agentLabelsRef.current.delete(agent.id);
+    }
+
     // Create and attach status label
     const label = createStatusLabel(agent);
     group.add(label);
@@ -1488,11 +1496,44 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
       window.removeEventListener("resize", handleResize);
       containerRef.current?.removeEventListener("click", handleClick);
       cancelAnimationFrame(animationRef.current);
-      renderer.dispose();
-      agentMeshesRef.current.clear();
-      agentLabelsRef.current.clear();
+
+      // Traverse entire scene and dispose all geometries/materials (prevent GPU memory leak)
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
+          if (object.geometry) object.geometry.dispose();
+          if (object.material) {
+            if (Array.isArray(object.material)) {
+              object.material.forEach((m) => {
+                if (m.map) m.map.dispose();
+                m.dispose();
+              });
+            } else {
+              if (object.material.map) object.material.map.dispose();
+              object.material.dispose();
+            }
+          }
+        }
+      });
+
+      // Clear refs
       particlesRef.current = [];
       screenMeshesRef.current = [];
+
+      // Properly dispose of all labels before clearing (remove DOM elements)
+      agentLabelsRef.current.forEach((label) => {
+        label.removeFromParent();
+        label.element.remove();
+      });
+      agentMeshesRef.current.clear();
+      agentLabelsRef.current.clear();
+
+      // Dispose renderer
+      renderer.dispose();
+
+      // Remove style sheet
+      const styleSheet = document.getElementById("lab3d-animations");
+      if (styleSheet) styleSheet.remove();
+
       if (containerRef.current) {
         if (renderer.domElement) {
           containerRef.current.removeChild(renderer.domElement);
@@ -1518,13 +1559,15 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     const currentIds = new Set(agents.map(a => a.id));
     agentMeshesRef.current.forEach((group, id) => {
       if (!currentIds.has(id)) {
-        scene.remove(group);
-        agentMeshesRef.current.delete(id);
+        // Properly dispose of the label (it's a child of group, not scene)
         const label = agentLabelsRef.current.get(id);
         if (label) {
-          scene.remove(label);
+          label.removeFromParent();  // Remove from group
+          label.element.remove();     // Remove DOM element
           agentLabelsRef.current.delete(id);
         }
+        scene.remove(group);
+        agentMeshesRef.current.delete(id);
       }
     });
   }, [agents, createAgent]);
@@ -1631,10 +1674,12 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
 
   // Fetch GPU stats periodically for diegetic display
   useEffect(() => {
+    const abortController = new AbortController();
+
     const fetchGpuStats = async () => {
       try {
         // Use Next.js API route (handles Vercel demo mode automatically)
-        const response = await fetch("/api/lab/gpu-stats");
+        const response = await fetch("/api/lab/gpu-stats", { signal: abortController.signal });
         const data = await response.json();
 
         if (data.connected && data.gpu) {
@@ -1696,7 +1741,10 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     fetchGpuStats();
     const interval = setInterval(fetchGpuStats, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      abortController.abort();
+      clearInterval(interval);
+    };
   }, []);
 
   // Render code lines onto a canvas texture for monitor screens
@@ -1740,9 +1788,11 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
 
   // Fetch agent output and apply to monitor screens
   useEffect(() => {
+    const abortController = new AbortController();
+
     const fetchAndApply = async () => {
       try {
-        const response = await fetch('/api/lab/agent-output');
+        const response = await fetch('/api/lab/agent-output', { signal: abortController.signal });
         const data = await response.json();
         if (!data.outputs) return;
 
@@ -1772,6 +1822,7 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     fetchAndApply();
     const interval = setInterval(fetchAndApply, 8000);
     return () => {
+      abortController.abort();
       clearInterval(interval);
       monitorTexturesRef.current.forEach((t) => t.dispose());
       monitorTexturesRef.current.clear();

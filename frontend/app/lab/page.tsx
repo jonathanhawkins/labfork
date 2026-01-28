@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Lab3D from "@/components/Lab3D";
 import { GpuStatsDialog } from "@/components/lab/GpuStatsDialog";
+import { TokenUsageWidget } from "@/components/lab/TokenUsageWidget";
 import {
   Brain,
   Cpu,
@@ -446,12 +447,12 @@ export default function LabPage() {
           const result = await spawnResponse.json();
           if (result.success) {
             console.log("[Lab] Agent spawned:", result.assignedTask?.subject);
-            setAutoSpawnStatus((prev) => ({
-              ...prev!,
+            setAutoSpawnStatus((prev) => prev ? {
+              ...prev,
               lastSpawn: new Date().toLocaleTimeString(),
               runningAgents: result.runningAgents,
               pendingTasks: result.pendingTasks,
-            }));
+            } : null);
           }
         }
       } catch (error) {
@@ -1195,6 +1196,10 @@ export default function LabPage() {
             </div>
           </Section>
         )}
+
+        <Section title="Token Usage" defaultOpen>
+          <TokenUsageWidget />
+        </Section>
       </aside>
 
       {/* Main Content */}
