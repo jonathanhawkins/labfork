@@ -370,65 +370,120 @@ If context is 4096, the model needs to be recreated with `num_ctx 32768`.
 
 ## AI Cost Optimization Strategy
 
-Use FREE local models for most tasks, reserve paid APIs only when necessary.
+Use FREE local models for exploration/research, automatically route complex coding tasks to paid OpenAI Codex.
 
-### Task Routing
+### What is Codex?
 
-| Task Type | Tool | Cost |
-|-----------|------|------|
-| Lab management, research | `./scripts/claude-free` | FREE |
-| Code writing, analytics | `./scripts/codex-free` | FREE |
-| Complex multi-file refactors | Paid Claude (only if needed) | $$$ |
+**Codex** = OpenAI's Codex CLI (https://github.com/openai/codex)
+- **NOT a free tool** - Uses OpenAI API (paid)
+- Terminal-based coding agent from OpenAI
+- Much better at coding than local Ollama models
+- Used automatically by orchestrator for reviews and complex tasks
 
-### Available FREE Tools
+### Installation
 
 ```bash
-# Lab manager (Claude Code + Ollama)
+# Mac (via Homebrew)
+brew install --cask codex
+
+# Linux (4090 machine)
+# Download from https://github.com/openai/codex/releases/latest
+curl -fsSL https://github.com/openai/codex/releases/download/rust-v0.92.0/codex-x86_64-unknown-linux-musl.tar.gz | tar -xz
+mv codex-x86_64-unknown-linux-musl ~/bin/codex
+chmod +x ~/bin/codex
+
+# Login with OpenAI account
+codex login
+```
+
+### Task Routing (Automatic)
+
+The orchestrator automatically routes tasks based on complexity:
+
+| Task Type | Agent Type | Model | Cost |
+|-----------|------------|-------|------|
+| Simple exploration, research | Ollama | qwen3-coder-32k | FREE |
+| Reviews, audits, validation | **Codex** | codex-mini-latest | Paid (~$0.50/task) |
+| Complex multi-file work | **Codex** | codex-mini-latest | Paid (~$1-2/task) |
+| Architecture, refactoring | **Codex** | codex-mini-latest | Paid (~$2-5/task) |
+
+**No manual routing needed** - the orchestrator picks the right tool automatically.
+
+### Available Tools
+
+```bash
+# Lab manager (Claude Code + Ollama) - FREE
 ./scripts/claude-free
 tmux new-session -s claude-free "./scripts/claude-free"
 
-# Code writing (Codex + Ollama)
-./scripts/codex-free
+# Research orchestrator on 4090 - Hybrid (FREE + Paid)
+ssh doc@100.83.78.111 -t "tmux attach -t lab-manager"
 ```
 
-### When to Use Paid Claude
+## 4090 Research System (Hybrid: FREE + Paid)
 
-Only use paid Anthropic API for:
-- Complex architectural decisions requiring deep reasoning
-- Multi-file refactors across 10+ files
-- Time-critical tasks where 3-min response is too slow
+The 4090 runs a **hybrid system** that automatically uses the right tool:
+- **Ollama (FREE)** for simple exploration and web research
+- **Codex (PAID)** for complex coding, reviews, and implementations
 
-For everything else, use the FREE local tools.
+### How It Works
 
-## 4090 Supervisor System (FREE Autonomous Agents)
+The orchestrator (`orchestrator.js`) automatically selects the right agent:
 
-Run autonomous AI agents on the RTX 4090 using FREE local Ollama. A supervisor manages worker agents via tmux.
+```javascript
+// Simple task → Ollama (FREE)
+"Explore DiffStyleTTS approach" → type: "ollama"
 
-### Quick Start
+// Complex task → Codex (PAID)
+"Review prosody implementation" → type: "codex" (keyword: review)
+"Refactor multi-file architecture" → type: "codex" (keyword: refactor)
+```
+
+### Setup on 4090
 
 ```bash
-# Start supervisor system (creates supervisor + lab-manager sessions)
-ssh doc@100.83.78.111 "~/bin/start-supervisor"
+# SSH into 4090
+ssh doc@100.83.78.111
 
-# Attach to supervisor
-ssh doc@100.83.78.111 -t "tmux attach -t supervisor"
+# Install Codex CLI (one-time)
+cd /tmp
+curl -fsSL https://github.com/openai/codex/releases/download/rust-v0.92.0/codex-x86_64-unknown-linux-musl.tar.gz -o codex.tar.gz
+tar -xzf codex.tar.gz
+mkdir -p ~/bin
+mv codex-x86_64-unknown-linux-musl ~/bin/codex
+chmod +x ~/bin/codex
 
-# Check status
-ssh doc@100.83.78.111 "tmux list-sessions && ~/bin/gpu-status"
+# Login with OpenAI account
+~/bin/codex login
+
+# Start orchestrator
+cd ~/dev/voice-clone-pipeline
+.skills/research-manager/rm orchestrator start
+
+# Start Ollama
+nohup ollama serve > /tmp/ollama.log 2>&1 &
 ```
 
-### Architecture
+### Monitoring
 
-- **Supervisor** (`tmux -t supervisor`): Assigns tasks, monitors workers via tmux
-- **Lab-Manager** (`tmux -t lab-manager`): Executes tasks autonomously
-- **Watchdog** (cron every 5 min): Auto-restarts if anything crashes
+```bash
+# Check orchestrator status
+ssh doc@100.83.78.111 "cd ~/dev/voice-clone-pipeline && .skills/research-manager/rm orchestrator status"
 
-### Scripts on 4090 (`~/bin/`)
+# View logs
+ssh doc@100.83.78.111 "cd ~/dev/voice-clone-pipeline && .skills/research-manager/rm orchestrator logs"
 
-| Script | Purpose |
-|--------|---------|
-| `start-supervisor` | Start both sessions |
-| `supervisor-watchdog` | Cron monitoring daemon |
-| `gpu-status` | Check GPU + Ollama |
+# Check GPU usage
+ssh doc@100.83.78.111 "/usr/lib/wsl/lib/nvidia-smi"
 
-See `.claude/commands/4090-supervisor.md` for full documentation.
+# Check what agents are running
+ssh doc@100.83.78.111 "tmux list-sessions"
+```
+
+### Cost Estimate
+
+With hybrid routing:
+- ~5-10 Codex calls per day = $5-15/day
+- Simple exploration = FREE (Ollama)
+- **Much cheaper than all-paid** ($100+/day)
+- **Much better than all-free** (8.9% completion rate → 40-60%)
