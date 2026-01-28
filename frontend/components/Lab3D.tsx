@@ -1474,6 +1474,30 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createAgent, createDesk, createDataParticles, createDecorations]);
 
+  // Dynamically create agent meshes when new agents arrive (e.g. from API after initial render)
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    agents.forEach((agent) => {
+      if (!agentMeshesRef.current.has(agent.id)) {
+        createAgent(agent, scene);
+      }
+    });
+    // Remove agents that are no longer in the list
+    const currentIds = new Set(agents.map(a => a.id));
+    agentMeshesRef.current.forEach((group, id) => {
+      if (!currentIds.has(id)) {
+        scene.remove(group);
+        agentMeshesRef.current.delete(id);
+        const label = agentLabelsRef.current.get(id);
+        if (label) {
+          scene.remove(label);
+          agentLabelsRef.current.delete(id);
+        }
+      }
+    });
+  }, [agents, createAgent]);
+
   // Update labels when agents change (include progress from activities)
   useEffect(() => {
     agents.forEach((agent) => {
