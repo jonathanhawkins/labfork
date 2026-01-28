@@ -106,11 +106,11 @@ const WORK_SLOTS: WorkSlot[] = [
   { id: 'speaker-1', position: [4.5, 0, 4], nearProp: 'speaker', facing: -Math.PI * 0.25 },
   { id: 'speaker-2', position: [5.5, 0, 3], nearProp: 'speaker', facing: -Math.PI * 0.5 },
 
-  // Central work area slots (for general tasks)
-  { id: 'center-1', position: [-1.5, 0, 0], nearProp: 'hub', facing: 0 },
-  { id: 'center-2', position: [1.5, 0, 0], nearProp: 'hub', facing: Math.PI },
-  { id: 'center-3', position: [0, 0, 1.5], nearProp: 'hub', facing: -Math.PI * 0.5 },
-  { id: 'center-4', position: [0, 0, -1.5], nearProp: 'hub', facing: Math.PI * 0.5 },
+  // Desk workstations (matching createDesk positions - agents sit in front facing the desk)
+  { id: 'desk-1', position: [-3, 0, -2.5], nearProp: 'hub', facing: Math.PI },       // front of back-left desk
+  { id: 'desk-2', position: [3, 0, -2.5], nearProp: 'hub', facing: Math.PI },        // front of back-right desk
+  { id: 'desk-3', position: [-3, 0, 3.5], nearProp: 'hub', facing: 0 },              // front of front-left desk
+  { id: 'desk-4', position: [3, 0, 3.5], nearProp: 'hub', facing: 0 },               // front of front-right desk
 ];
 
 // Icon SVGs for status indicators (Sims-style)
@@ -1580,32 +1580,20 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
         // Check if agent already has a slot assigned
         const existingSlot = agentSlotRef.current.get(activity.assignedAgent);
         if (!existingSlot) {
-          // Determine which prop type this activity is related to
-          const propType = activity.config.prop !== 'none' ? activity.config.prop : undefined;
+          // Determine prop info (may be missing for API-sourced activities)
+          const hasConfig = activity.config && activity.config.prop !== 'none';
+          const propType = hasConfig ? activity.config.prop : undefined;
+          const propPos: [number, number, number] = hasConfig ? activity.config.propPosition : [0, 0, 0];
 
           // Find the best available slot
-          const slot = findBestSlot(activity.config.propPosition, propType);
+          const slot = findBestSlot(propPos, propType);
           if (slot) {
-            // Claim the slot
             claimSlot(slot.id, activity.assignedAgent);
-
-            // Set agent target to slot position
             agentTargetsRef.current.set(
               activity.assignedAgent,
               new THREE.Vector3(...slot.position)
             );
-
-            // Set target rotation to face the equipment
             agentTargetRotationRef.current.set(activity.assignedAgent, slot.facing);
-          } else {
-            // Fallback: no slots available, use basic offset positioning
-            const [px, , pz] = activity.config.propPosition;
-            const offsetX = px > 0 ? -1.5 : 1.5;
-            const offsetZ = pz > 0 ? -1.5 : 1.5;
-            agentTargetsRef.current.set(
-              activity.assignedAgent,
-              new THREE.Vector3(px + offsetX, 0, pz + offsetZ)
-            );
           }
         }
       }
