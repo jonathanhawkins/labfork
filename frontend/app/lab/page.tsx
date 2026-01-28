@@ -198,10 +198,25 @@ export default function LabPage() {
       return name.slice(-6);
     };
 
+    const FUN_NAMES = [
+      "Opus Popus", "Noodle", "Bloop", "Sprocket", "Brainy",
+      "Sparky", "Cruncher", "Scouty", "Wobbles", "Fizz",
+      "Pixel", "Ziggy", "Turbo", "Nibbles", "Blinky",
+      "Cosmo", "Doodle", "Gizmo", "Jinx", "Mochi",
+    ];
+
+    const hashStr = (s: string) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      }
+      return Math.abs(h);
+    };
+
     const formatName = (name: string, type: string) => {
-      const shortId = getShortId(name);
+      const funName = FUN_NAMES[hashStr(name) % FUN_NAMES.length];
       const label = type.toUpperCase();
-      return `${label} ${shortId}`;
+      return `${funName}\n${label}`;
     };
 
     const POSITION_PRESETS: [number, number, number][] = [
@@ -351,6 +366,7 @@ export default function LabPage() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [gpuStatsOpen, setGpuStatsOpen] = useState(false);
+  const [agentOutputs, setAgentOutputs] = useState<Record<string, { lines: string[]; file: string }>>({});
   const fullscreenRef = useRef<HTMLDivElement>(null);
 
   const toggleFullscreen = useCallback(async () => {
@@ -487,6 +503,25 @@ export default function LabPage() {
 
     fetch4090Status();
     const interval = setInterval(fetch4090Status, 3000); // Poll every 3 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch agent output from 4090 monitors
+  useEffect(() => {
+    const fetchAgentOutput = async () => {
+      try {
+        const response = await fetch("/api/lab/agent-output");
+        const data = await response.json();
+        if (data.outputs) {
+          setAgentOutputs(data.outputs);
+        }
+      } catch (error) {
+        console.error("Failed to fetch agent output:", error);
+      }
+    };
+
+    fetchAgentOutput();
+    const interval = setInterval(fetchAgentOutput, 8000);
     return () => clearInterval(interval);
   }, []);
 
@@ -845,6 +880,27 @@ export default function LabPage() {
                   <div className="text-xs text-muted-foreground">
                     {selectedAgent.task}
                   </div>
+                  {/* Agent terminal output (fullscreen) */}
+                  {(() => {
+                    const output = Object.entries(agentOutputs).find(
+                      ([name]) => name.toLowerCase().includes(selectedAgent.id.toLowerCase()) ||
+                        selectedAgent.id.toLowerCase().includes(name.toLowerCase().replace(/[^a-z0-9]/g, ''))
+                    );
+                    if (!output) return null;
+                    const [, data] = output;
+                    return (
+                      <div className="mt-3 rounded overflow-hidden border border-border">
+                        <div
+                          className="p-2 max-h-[160px] overflow-y-auto"
+                          style={{ background: '#1a1a2e' }}
+                        >
+                          <pre className="text-xs leading-relaxed whitespace-pre-wrap break-all" style={{ color: '#00ff88', fontFamily: 'monospace' }}>
+                            {data.lines.join('\n')}
+                          </pre>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-xs text-muted-foreground text-center py-3">
@@ -990,6 +1046,31 @@ export default function LabPage() {
                 </div>
                 <div className="text-sm text-foreground">{selectedAgent.task}</div>
               </div>
+              {/* Agent terminal output */}
+              {(() => {
+                const output = Object.entries(agentOutputs).find(
+                  ([name]) => name.toLowerCase().includes(selectedAgent.id.toLowerCase()) ||
+                    selectedAgent.id.toLowerCase().includes(name.toLowerCase().replace(/[^a-z0-9]/g, ''))
+                );
+                if (!output) return null;
+                const [, data] = output;
+                return (
+                  <div className="border border-border rounded overflow-hidden">
+                    <div className="text-xs text-muted-foreground px-3 py-1.5 border-b border-border flex items-center justify-between">
+                      <span>Terminal Output</span>
+                      <span className="text-foreground-subtle truncate ml-2 max-w-[140px]">{data.file.split('/').pop()}</span>
+                    </div>
+                    <div
+                      className="p-3 max-h-[200px] overflow-y-auto"
+                      style={{ background: '#1a1a2e' }}
+                    >
+                      <pre className="text-xs leading-relaxed whitespace-pre-wrap break-all" style={{ color: '#00ff88', fontFamily: 'monospace' }}>
+                        {data.lines.join('\n')}
+                      </pre>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="text-sm text-muted-foreground text-center py-8">

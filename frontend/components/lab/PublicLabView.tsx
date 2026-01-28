@@ -14,6 +14,23 @@ import {
   Server,
 } from "lucide-react";
 
+// ============== Fun Agent Names ==============
+
+const FUN_NAMES = [
+  "Opus Popus", "Noodle", "Bloop", "Sprocket", "Brainy",
+  "Sparky", "Cruncher", "Scouty", "Wobbles", "Fizz",
+  "Pixel", "Ziggy", "Turbo", "Nibbles", "Blinky",
+  "Cosmo", "Doodle", "Gizmo", "Jinx", "Mochi",
+];
+
+function getFunName(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+  }
+  return FUN_NAMES[Math.abs(h) % FUN_NAMES.length];
+}
+
 // ============== Data Sanitization Utilities ==============
 
 /**
@@ -227,7 +244,7 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
       .filter(a => a.status === 'working')
       .map((a, index) => ({
         id: a.id || a.name,
-        name: a.name,
+        name: getFunName(a.name || a.id),
         color: COLORS.labManager,
         position: getPosition(index),
         task: sanitizeMessage(a.task || a.lastOutput || "Working..."),

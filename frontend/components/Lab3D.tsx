@@ -237,6 +237,9 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
   // Demo props storage (always visible equipment)
   const demoPropsRef = useRef<Map<string, { type: PropType; refs: Prop3DRefs }>>(new Map());
 
+  // Monitor textures for agent output
+  const monitorTexturesRef = useRef<Map<number, THREE.CanvasTexture>>(new Map());
+
   // GPU stats for diegetic display
   const gpuStatsRef = useRef<GpuStatsData | null>(null);
 
@@ -1170,11 +1173,14 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
           const distance = currentPos.distanceTo(targetPos);
 
           if (distance > 0.1) {
-            // Smoothly move toward target
+            // Move toward target at ~2 units/second (dt ~0.016)
             const direction = targetPos.clone().sub(currentPos).normalize();
-            const moveSpeed = 0.03;
+            const moveSpeed = Math.min(2.0 * 0.016, distance); // cap at remaining distance
             group.position.x += direction.x * moveSpeed;
             group.position.z += direction.z * moveSpeed;
+
+            // Walking bob while moving
+            group.position.y = Math.abs(Math.sin(time * 8)) * 0.06;
 
             // Face the direction of movement while walking
             const angle = Math.atan2(direction.x, direction.z);
@@ -1183,18 +1189,43 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
             // At destination - rotate to face the equipment
             group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, targetRotation, 0.05);
           }
+
+          // Store whether agent is at workstation for typing animation
+          (group.userData as Record<string, unknown>).atWorkstation = distance <= 0.5;
+        } else {
+          (group.userData as Record<string, unknown>).atWorkstation = false;
         }
 
-        // Gentle bobbing
-        group.position.y = Math.sin(time * 2 + group.position.x) * 0.05;
+        // Gentle bobbing (skip if walking bob is active)
+        const isWalking = target && new THREE.Vector3(group.position.x, 0, group.position.z)
+          .distanceTo(new THREE.Vector3(target.x, 0, target.z)) > 0.1;
+        if (!isWalking) {
+          group.position.y = Math.sin(time * 2 + group.position.x) * 0.05;
+        }
 
-        // Arm animation for working agents (use current status)
-        if (currentAgent.status === "working") {
-          const leftArm = group.getObjectByName("leftArm") as THREE.Mesh;
-          const rightArm = group.getObjectByName("rightArm") as THREE.Mesh;
-          if (leftArm && rightArm) {
-            leftArm.rotation.x = Math.sin(time * 8) * 0.3;
-            rightArm.rotation.x = Math.sin(time * 8 + Math.PI) * 0.3;
+        // Arm animation: typing at workstation vs walking vs idle
+        const leftArm = group.getObjectByName("leftArm") as THREE.Mesh;
+        const rightArm = group.getObjectByName("rightArm") as THREE.Mesh;
+        if (leftArm && rightArm) {
+          const atWorkstation = !!(group.userData as Record<string, unknown>).atWorkstation;
+          if (currentAgent.status === "working" && atWorkstation) {
+            // Rapid typing at desk
+            leftArm.rotation.x = Math.sin(time * 12) * 0.4;
+            rightArm.rotation.x = Math.sin(time * 12 + Math.PI) * 0.4;
+            leftArm.rotation.z = Math.PI / 8;
+            rightArm.rotation.z = -Math.PI / 8;
+          } else if (currentAgent.status === "working" && isWalking) {
+            // Arm swing while walking
+            leftArm.rotation.x = Math.sin(time * 6) * 0.25;
+            rightArm.rotation.x = Math.sin(time * 6 + Math.PI) * 0.25;
+            leftArm.rotation.z = Math.PI / 6;
+            rightArm.rotation.z = -Math.PI / 6;
+          } else {
+            // Idle arms
+            leftArm.rotation.x = 0;
+            rightArm.rotation.x = 0;
+            leftArm.rotation.z = Math.PI / 6;
+            rightArm.rotation.z = -Math.PI / 6;
           }
         }
 
@@ -1679,6 +1710,85 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
 
     return () => clearInterval(interval);
   }, []);
+
+  // Render code lines onto a canvas texture for monitor screens
+  const renderMonitorTexture = useCallback((lines: string[]): THREE.CanvasTexture => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+
+    // Dark background
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, 512, 256);
+
+    // Subtle scanline effect
+    ctx.fillStyle = 'rgba(0, 255, 136, 0.03)';
+    for (let y = 0; y < 256; y += 4) {
+      ctx.fillRect(0, y, 512, 1);
+    }
+
+    // Green monospace text
+    ctx.font = '14px monospace';
+    ctx.fillStyle = '#00ff88';
+
+    const visibleLines = lines.slice(-12);
+    visibleLines.forEach((line, i) => {
+      const truncated = line.length > 58 ? line.slice(0, 55) + '...' : line;
+      ctx.fillText(truncated, 8, 20 + i * 20);
+    });
+
+    // Cursor blink indicator
+    const cursorY = 20 + visibleLines.length * 20;
+    ctx.fillStyle = '#00ff88';
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(8, cursorY - 2, 8, 14);
+    ctx.globalAlpha = 1;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+
+  // Fetch agent output and apply to monitor screens
+  useEffect(() => {
+    const fetchAndApply = async () => {
+      try {
+        const response = await fetch('/api/lab/agent-output');
+        const data = await response.json();
+        if (!data.outputs) return;
+
+        const outputEntries = Object.entries(data.outputs) as [string, { lines: string[]; file: string }][];
+        const screens = screenMeshesRef.current;
+
+        outputEntries.forEach(([, output], idx) => {
+          if (idx >= screens.length || !output.lines.length) return;
+
+          const screen = screens[idx];
+          const texture = renderMonitorTexture(output.lines);
+
+          // Dispose old texture
+          const oldTexture = monitorTexturesRef.current.get(idx);
+          if (oldTexture) oldTexture.dispose();
+
+          monitorTexturesRef.current.set(idx, texture);
+          (screen.material as THREE.MeshBasicMaterial).map = texture;
+          (screen.material as THREE.MeshBasicMaterial).color.setHex(0xffffff);
+          (screen.material as THREE.MeshBasicMaterial).needsUpdate = true;
+        });
+      } catch {
+        // Silently fail - monitors keep their default glow
+      }
+    };
+
+    fetchAndApply();
+    const interval = setInterval(fetchAndApply, 8000);
+    return () => {
+      clearInterval(interval);
+      monitorTexturesRef.current.forEach((t) => t.dispose());
+      monitorTexturesRef.current.clear();
+    };
+  }, [renderMonitorTexture]);
 
   return (
     <div
