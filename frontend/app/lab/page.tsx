@@ -225,19 +225,6 @@ export default function LabPage() {
       return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius];
     };
 
-    // Add 4090 agents with real status (only if actually running)
-    const agents4090: Agent[] = agent4090Status
-      .filter(a => a.status === 'working')
-      .map((a, index) => ({
-        id: a.id || a.name,
-        name: a.name,
-        iconKey: inferType(a.name, undefined),
-        color: TYPE_COLORS[inferType(a.name, undefined)] || TYPE_COLORS.agent,
-        position: getPositionForIndex(100 + index) as [number, number, number],
-        task: a.task || a.lastOutput || "Working...",
-        status: "working" as const,
-      }));
-
     const taskByOwner = new Map<string, Task>();
     tasks
       .filter((task) => task.status === "in_progress" && task.owner)
@@ -261,6 +248,22 @@ export default function LabPage() {
           position: getPositionForIndex(index),
           task: assignedTask?.activeForm || assignedTask?.subject || summarizeTask(agent?.task),
           status: assignedTask ? "working" : "thinking",
+        };
+      });
+
+    // Add 4090 agents with real status (only if actually running)
+    const agents4090: Agent[] = agent4090Status
+      .filter(a => a.status === 'working')
+      .map((a, index) => {
+        const agentType = inferType(a.name || a.id, (a as any).type);
+        return {
+          id: a.id || a.name,
+          name: formatName(a.name || a.id, agentType),
+          iconKey: agentType,
+          color: TYPE_COLORS[agentType] || TYPE_COLORS.agent,
+          position: getPositionForIndex(dynamicAgents.length + index),
+          task: a.task || a.lastOutput || "Working...",
+          status: "working" as const,
         };
       });
 

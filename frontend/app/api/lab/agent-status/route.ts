@@ -86,8 +86,38 @@ export async function GET() {
     } catch { /* fall through */ }
   }
 
-  // Read real agent data from agents.json
-  const allAgents = getRealAgents();
+  // Read agent data - try local first, fall back to remote SSH
+  // If local file exists but has no running agents, try remote too
+  let allAgents: AgentInfo[] | null = null;
+  let isRemote = false;
+
+  if (existsSync(AGENTS_FILE)) {
+    try {
+      const data = JSON.parse(readFileSync(AGENTS_FILE, 'utf-8'));
+      const localAgents: AgentInfo[] = Object.values(data);
+      const localSessions = getLiveSessions(false);
+      const localRunning = localAgents.filter(a => {
+        if (a.killed_at || a.status === 'killed') return false;
+        return localSessions.has(`rm-${a.name}`);
+      });
+      if (localRunning.length > 0) {
+        allAgents = localAgents;
+      }
+    } catch { /* fall through to remote */ }
+  }
+
+  // Fall back to remote SSH if no local running agents
+  if (!allAgents) {
+    isRemote = true;
+    try {
+      const raw = execSync(
+        `ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no ${REMOTE_HOST} "cat ${REMOTE_AGENTS_FILE} 2>/dev/null"`,
+        { encoding: 'utf-8', timeout: 5000 }
+      );
+      allAgents = Object.values(JSON.parse(raw));
+    } catch { /* no remote data */ }
+  }
+
   if (!allAgents) {
     return NextResponse.json({
       connected: false,
@@ -96,7 +126,6 @@ export async function GET() {
     });
   }
 
-  const isRemote = !existsSync(AGENTS_FILE);
   const liveSessions = getLiveSessions(isRemote);
 
   // Filter to only agents that are actually running (not killed, session alive)
