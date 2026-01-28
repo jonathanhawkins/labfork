@@ -8,6 +8,8 @@ import {
   statSync,
   writeFileSync,
 } from "fs";
+
+export const dynamic = "force-dynamic";
 import { homedir } from "os";
 
 // Research Manager paths

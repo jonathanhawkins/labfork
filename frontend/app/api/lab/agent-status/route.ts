@@ -1,84 +1,128 @@
 import { NextResponse } from 'next/server';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { execSync } from 'child_process';
 
-// Backend API URL - server-side routes use localhost since backend runs on same machine
+export const dynamic = "force-dynamic";
+
 const BACKEND_URL =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:8003';
 
+// Paths for local agents.json (works when frontend runs on same machine as orchestrator)
+const projectRoot = join(process.cwd(), '..');
+const AGENTS_FILE = join(projectRoot, '.skills', 'research-manager', 'state', 'agents.json');
+
+// Remote 4090 config
+const REMOTE_HOST = 'doc@100.83.78.111';
+const REMOTE_AGENTS_FILE = '~/dev/voice-clone-pipeline/.skills/research-manager/state/agents.json';
+
+interface AgentInfo {
+  name: string;
+  type: string;
+  task: string;
+  status: string;
+  started_at: string;
+  output_file: string;
+  killed_at?: string;
+}
+
 /**
- * Generate demo agent status for public Vercel deployment
+ * Read agents from local file or remote 4090 via SSH
  */
-function getDemoAgentStatus() {
-  const tasks = [
-    'Analyzing prosody patterns',
-    'Training emotion encoder',
-    'Evaluating voice quality',
-    'Processing audio samples',
-    'Optimizing model weights',
-    'Reviewing code changes',
-    'Testing API endpoints',
-    'Generating test cases',
-  ];
+function getRealAgents(): AgentInfo[] | null {
+  // Try local file first
+  if (existsSync(AGENTS_FILE)) {
+    try {
+      const data = JSON.parse(readFileSync(AGENTS_FILE, 'utf-8'));
+      const agents: AgentInfo[] = Object.values(data);
+      return agents;
+    } catch { /* fall through */ }
+  }
 
-  const outputs = [
-    'Epoch 147 complete - loss: 0.0234',
-    'Found 3 relevant papers',
-    'Implementing feature request #42',
-    'Running unit tests...',
-    'Refactoring emotion module',
-    'Validating audio quality metrics',
-  ];
+  // Try SSH to 4090
+  try {
+    const raw = execSync(
+      `ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no ${REMOTE_HOST} "cat ${REMOTE_AGENTS_FILE} 2>/dev/null"`,
+      { encoding: 'utf-8', timeout: 5000 }
+    );
+    const data = JSON.parse(raw);
+    const agents: AgentInfo[] = Object.values(data);
+    return agents;
+  } catch { /* fall through */ }
 
-  // Simulate realistic agent states
-  const now = Date.now();
-  const cyclePosition = (now / 30000) % 8; // 30 second cycles
+  return null;
+}
 
-  const agents = [
-    {
-      id: 'lab-manager',
-      name: 'Lab-Manager',
-      status: cyclePosition >= 2 && cyclePosition < 6 ? 'working' : 'idle',
-      task: cyclePosition >= 2 && cyclePosition < 6 ? tasks[Math.floor(now / 45000) % tasks.length] : undefined,
-      lastOutput: outputs[Math.floor(cyclePosition + 1) % outputs.length],
-    },
-  ];
-
-  return {
-    connected: true,
-    timestamp: new Date().toISOString(),
-    agents,
-  };
+/**
+ * Get all live tmux session names in one call
+ */
+function getLiveSessions(isRemote: boolean): Set<string> {
+  try {
+    const cmd = 'tmux list-sessions -F "#{session_name}" 2>/dev/null';
+    const raw = isRemote
+      ? execSync(`ssh -o ConnectTimeout=3 ${REMOTE_HOST} '${cmd}'`, { encoding: 'utf-8', timeout: 5000 })
+      : execSync(cmd, { encoding: 'utf-8' });
+    return new Set(raw.trim().split('\n').filter(Boolean));
+  } catch {
+    return new Set();
+  }
 }
 
 export async function GET() {
-  // Check if we have a real backend URL configured (ngrok/Tailscale tunnel)
+  // Try real backend first
   const hasRealBackend = BACKEND_URL && !BACKEND_URL.includes('localhost');
-
-  // On Vercel without a real backend, return demo data
-  const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
-  if (isVercel && !hasRealBackend) {
-    return NextResponse.json(getDemoAgentStatus());
+  if (hasRealBackend) {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/lab/agent-status`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      });
+      if (response.ok) {
+        return NextResponse.json(await response.json());
+      }
+    } catch { /* fall through */ }
   }
 
-  // Local development: try to fetch from real backend
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/lab/agent-status`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
+  // Read real agent data from agents.json
+  const allAgents = getRealAgents();
+  if (!allAgents) {
+    return NextResponse.json({
+      connected: false,
+      timestamp: new Date().toISOString(),
+      agents: [],
     });
-
-    if (!response.ok) {
-      throw new Error(`Backend returned ${response.status}`);
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error: any) {
-    // Fallback to demo status if backend unavailable
-    return NextResponse.json(getDemoAgentStatus());
   }
+
+  const isRemote = !existsSync(AGENTS_FILE);
+  const liveSessions = getLiveSessions(isRemote);
+
+  // Filter to only agents that are actually running (not killed, session alive)
+  const running = allAgents.filter(a => {
+    if (a.killed_at || a.status === 'killed') return false;
+    return liveSessions.has(`rm-${a.name}`);
+  });
+
+  const agents = running.map(a => {
+    // Extract task subject from the prompt (after "TASK #N: ")
+    const taskMatch = a.task?.match(/TASK #\d+:\s*(.+?)(?:\\n|\n|$)/);
+    const taskSubject = taskMatch ? taskMatch[1].trim() : a.task?.substring(0, 60) || 'Working...';
+
+    return {
+      id: a.name,
+      name: a.name,
+      status: 'working',
+      task: taskSubject,
+      type: a.type,
+      startedAt: a.started_at,
+    };
+  });
+
+  return NextResponse.json({
+    connected: true,
+    timestamp: new Date().toISOString(),
+    agents,
+  });
 }

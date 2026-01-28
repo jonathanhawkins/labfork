@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { readFileSync, readdirSync, existsSync, statSync } from "fs";
 import { join } from "path";
 
+// Force dynamic rendering - this route reads filesystem
+export const dynamic = "force-dynamic";
+
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
 
 // Paths

@@ -8,6 +8,8 @@ import {
   writeFileSync,
 } from "fs";
 
+export const dynamic = "force-dynamic";
+
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
 
 // Paths

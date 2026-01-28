@@ -150,54 +150,24 @@ function StatRow({ label, value }: { label: string; value: string | number }) {
 }
 
 export default function LabPage() {
-  const [demoMode, setDemoMode] = useState(false);
   const [agent4090Status, setAgent4090Status] = useState<Agent4090Status[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [researchAgents, setResearchAgents] = useState<
+    Record<string, ResearchAgent>
+  >({});
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [newTaskSubject, setNewTaskSubject] = useState("");
+  const [newTaskDescription, setNewTaskDescription] = useState("");
 
   const {
     activities,
     activeCount,
     isLoading: activitiesLoading,
     lastUpdated,
-    isDemo,
-  } = useLabActivities({ pollInterval: 3000, useDemoWhenIdle: demoMode });
+  } = useLabActivities({ pollInterval: 3000 });
 
   const agents = useMemo<Agent[]>(() => {
-    const useDemoAgents = demoMode || isDemo;
-    const baseAgents: Agent[] = [
-      {
-        id: "codex",
-        name: "Codex",
-        color: COLORS.codex,
-        position: [-3, 0, -2],
-        task: "Ready",
-        status: "idle",
-      },
-      {
-        id: "opus",
-        name: "Opus",
-        color: COLORS.opus,
-        position: [3, 0, -2],
-        task: "Ready",
-        status: "idle",
-      },
-      {
-        id: "explorer",
-        name: "Explorer",
-        color: COLORS.explorer,
-        position: [-3, 0, 3],
-        task: "Ready",
-        status: "idle",
-      },
-      {
-        id: "planner",
-        name: "Planner",
-        color: COLORS.planner,
-        position: [3, 0, 3],
-        task: "Ready",
-        status: "idle",
-      },
-    ];
-
     const normalizeAgentId = (raw?: string) =>
       (raw || "").trim().replace(/^rm:/, "");
 
@@ -255,41 +225,18 @@ export default function LabPage() {
       return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius];
     };
 
-    // Add 4090 agents with real status
-    const labManager4090 = agent4090Status.find(a => a.id === 'lab-manager');
-
-    const agents4090: Agent[] = [
-      {
-        id: "lab-manager",
-        name: "Lab-Manager",
-        iconKey: "lab-manager",
-        color: COLORS.labManager,
-        position: [0, 0, 4],
-        task: labManager4090?.task || labManager4090?.lastOutput || "Executing tasks...",
-        status: labManager4090?.status === 'working' ? 'working' : 'idle',
-      },
-    ];
-
-    if (useDemoAgents) {
-      const activeActivities = activities.filter((a) => a.active);
-      const updatedBaseAgents = baseAgents.map((agent) => {
-        const assignedActivity = activeActivities.find(
-          (a) => a.assignedAgent === agent.id
-        );
-
-        if (assignedActivity) {
-          return {
-            ...agent,
-            task: assignedActivity.message || assignedActivity.config.name,
-            status: "working" as const,
-          };
-        }
-
-        return agent;
-      });
-
-      return [...updatedBaseAgents, ...agents4090];
-    }
+    // Add 4090 agents with real status (only if actually running)
+    const agents4090: Agent[] = agent4090Status
+      .filter(a => a.status === 'working')
+      .map((a, index) => ({
+        id: a.id || a.name,
+        name: a.name,
+        iconKey: inferType(a.name, undefined),
+        color: TYPE_COLORS[inferType(a.name, undefined)] || TYPE_COLORS.agent,
+        position: getPositionForIndex(100 + index) as [number, number, number],
+        task: a.task || a.lastOutput || "Working...",
+        status: "working" as const,
+      }));
 
     const taskByOwner = new Map<string, Task>();
     tasks
@@ -318,14 +265,11 @@ export default function LabPage() {
       });
 
     return [...dynamicAgents, ...agents4090];
-  }, [activities, agent4090Status, demoMode, isDemo, researchAgents, tasks]);
+  }, [activities, agent4090Status, researchAgents, tasks]);
 
   const activityLog = useMemo(() => {
     return activitiesToLog(activities);
   }, [activities]);
-
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
 
   const sortedTasks = useMemo(() => {
     const statusOrder = { in_progress: 0, pending: 1, completed: 2 };
@@ -336,12 +280,6 @@ export default function LabPage() {
     });
   }, [tasks]);
 
-  const [researchAgents, setResearchAgents] = useState<
-    Record<string, ResearchAgent>
-  >({});
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [newTaskSubject, setNewTaskSubject] = useState("");
-  const [newTaskDescription, setNewTaskDescription] = useState("");
   const [isCreatingTask, setIsCreatingTask] = useState(false);
 
   const [autoSpawnEnabled, setAutoSpawnEnabled] = useState(true);
@@ -1239,36 +1177,11 @@ export default function LabPage() {
           title="Active Activities"
           defaultOpen
           badge={
-            <div className="flex items-center gap-2">
-              {activeCount > 0 && (
-                <span className="text-xs text-foreground-bright">{activeCount}</span>
-              )}
-              {isDemo && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200">
-                  Demo
-                </span>
-              )}
-            </div>
+            activeCount > 0 ? (
+              <span className="text-xs text-foreground-bright">{activeCount}</span>
+            ) : undefined
           }
         >
-          <div className="flex justify-end mb-2">
-            <button
-              onClick={() => setDemoMode(!demoMode)}
-              className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
-                demoMode
-                  ? "bg-foreground text-background"
-                  : "border border-border text-muted-foreground hover:text-foreground"
-              }`}
-              title={
-                demoMode
-                  ? "Showing demo activities for idle agents"
-                  : "Showing only real activities"
-              }
-            >
-              {demoMode ? "Demo ON" : "Demo OFF"}
-            </button>
-          </div>
-
           {activities.filter((a) => a.active).length > 0 ? (
             <div className="space-y-3">
               {activities

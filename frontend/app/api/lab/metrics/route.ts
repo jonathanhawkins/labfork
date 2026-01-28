@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { readFileSync, existsSync, writeFileSync, statSync } from "fs";
 import { join } from "path";
 
+export const dynamic = "force-dynamic";
+
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
 
 // Paths

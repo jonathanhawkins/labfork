@@ -15,6 +15,8 @@ import {
   FlaskConical,
   Bot,
   Target,
+  Eye,
+  Sliders,
 } from "lucide-react";
 
 const navItems = [
@@ -28,7 +30,9 @@ const navItems = [
   { href: "/training", label: "Training", icon: GraduationCap },
   { href: "/evaluate", label: "A/B Test", icon: FlaskConical },
   { href: "/lab", label: "Lab", icon: Bot },
+  { href: "/watch", label: "Watch", icon: Eye },
   { href: "/research", label: "Research", icon: Target },
+  { href: "/demos", label: "Demos", icon: Sliders },
 ];
 
 export function Navigation() {

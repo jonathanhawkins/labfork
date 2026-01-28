@@ -201,90 +201,39 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
   const [agent4090Status, setAgent4090Status] = useState<Agent4090Status[]>([]);
   const [gpuStats, setGpuStats] = useState<SanitizedGpuStats | null>(null);
 
-  // Use the activities hook with demo mode enabled for visual interest
   const {
     activities,
     activeCount,
     isLoading: activitiesLoading,
     lastUpdated,
-    isDemo,
-  } = useLabActivities({ pollInterval: 5000, useDemoWhenIdle: true });
+  } = useLabActivities({ pollInterval: 5000 });
 
-  // Build agent list with sanitized data
+  // Build agent list from real running agents only
   const agents = useMemo<Agent[]>(() => {
-    const baseAgents: Agent[] = [
-      {
-        id: "codex",
-        name: "Codex",
-        color: COLORS.codex,
-        position: [-3, 0, -2],
-        task: "Ready",
-        status: "idle",
-      },
-      {
-        id: "opus",
-        name: "Opus",
-        color: COLORS.opus,
-        position: [3, 0, -2],
-        task: "Ready",
-        status: "idle",
-      },
-      {
-        id: "explorer",
-        name: "Explorer",
-        color: COLORS.explorer,
-        position: [-3, 0, 3],
-        task: "Ready",
-        status: "idle",
-      },
-      {
-        id: "planner",
-        name: "Planner",
-        color: COLORS.planner,
-        position: [3, 0, 3],
-        task: "Ready",
-        status: "idle",
-      },
+    const POSITION_PRESETS: [number, number, number][] = [
+      [-3, 0, -2], [3, 0, -2], [-3, 0, 2], [3, 0, 2],
+      [-1.5, 0, -1.5], [1.5, 0, -1.5], [-1.5, 0, 1.5], [1.5, 0, 1.5],
     ];
 
-    // Add 4090 agents with sanitized status
-    const labManager4090 = agent4090Status.find((a) => a.id === "lab-manager");
+    const getPosition = (i: number): [number, number, number] => {
+      if (i < POSITION_PRESETS.length) return POSITION_PRESETS[i];
+      const angle = ((i % 8) / 8) * Math.PI * 2;
+      const radius = 4;
+      return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius];
+    };
 
-    const agents4090: Agent[] = [
-      {
-        id: "lab-manager",
-        name: "Lab-Manager",
+    // Only show 4090 agents that are actually working
+    return agent4090Status
+      .filter(a => a.status === 'working')
+      .map((a, index) => ({
+        id: a.id || a.name,
+        name: a.name,
         color: COLORS.labManager,
-        position: [0, 0, 4],
-        task: sanitizeMessage(
-          labManager4090?.task || labManager4090?.lastOutput || "Executing..."
-        ),
-        status: labManager4090?.status === "working" ? "working" : "idle",
-      },
-    ];
-
-    // Update base agents with activity data (sanitized)
-    const activeActivities = activities.filter((a) => a.active);
-    const updatedBaseAgents = baseAgents.map((agent) => {
-      const assignedActivity = activeActivities.find(
-        (a) => a.assignedAgent === agent.id
-      );
-
-      if (assignedActivity) {
-        return {
-          ...agent,
-          task: sanitizeMessage(
-            assignedActivity.message || assignedActivity.config.name
-          ),
-          status: "working" as const,
-        };
-      }
-
-      return agent;
-    });
-
-    return [...updatedBaseAgents, ...agents4090];
-  }, [activities, agent4090Status]);
+        position: getPosition(index),
+        task: sanitizeMessage(a.task || a.lastOutput || "Working..."),
+        status: "working" as const,
+      }));
+  }, [agent4090Status]);
 
   // Sanitized activity log
   const activityLog = useMemo(() => {
@@ -403,11 +352,6 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
                 </div>
                 )}
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  {isDemo && (
-                    <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-200">
-                      Demo
-                    </span>
-                  )}
                   <span className="text-[10px] sm:text-xs text-muted-foreground">
                     {activeCount} active
                   </span>
