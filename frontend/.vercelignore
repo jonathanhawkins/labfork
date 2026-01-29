@@ -3,55 +3,9 @@
 .next
 node_modules
 
-# Test files
+# Test files only
 __tests__
 vitest.config.ts
 vitest.setup.ts
 *.test.ts
 *.test.tsx
-
-# Local untracked features (not in git)
-app/api/demos
-app/api/domain
-app/api/domains
-app/api/lab/analyze-goal
-app/api/lab/hardware
-app/api/lab/token-usage
-app/api/labs
-app/api/papers
-app/api/public
-app/api/research
-app/api/suggestions
-app/api/tasks
-app/demos
-app/domains
-app/evaluate
-app/explore
-app/lab/new
-app/labs
-app/live
-app/papers
-app/research
-app/studio
-components/SketchProsodyEditor.tsx
-components/domain
-components/lab-wizard
-components/lab/Agent3D.tsx
-components/lab/DataHub3D.tsx
-components/lab/DataParticles3D.tsx
-components/lab/Decorations3D.tsx
-components/lab/TokenUsageWidget.tsx
-components/lab/Workstation3D.tsx
-components/lab/props
-components/labs
-components/papers
-docs
-lib/activities
-lib/auth
-lib/db
-lib/domain
-lib/lab-wizard
-lib/labs
-lib/papers
-scripts
-DESIGN_SYSTEM.md
