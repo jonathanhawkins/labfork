@@ -10,6 +10,9 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:8003';
 
+// Public agent state API (for Vercel deployment - can't SSH from cloud)
+const AGENT_STATE_URL = process.env.AGENT_STATE_URL || '';
+
 // Paths for local agents.json (works when frontend runs on same machine as orchestrator)
 const projectRoot = join(process.cwd(), '..');
 const AGENTS_FILE = join(projectRoot, '.skills', 'research-manager', 'state', 'agents.json');
@@ -106,7 +109,22 @@ export async function GET() {
     } catch { /* fall through to remote */ }
   }
 
-  // Fall back to remote SSH if no local running agents
+  // Fall back to public agent state API (for Vercel deployment)
+  if (!allAgents && AGENT_STATE_URL) {
+    isRemote = true;
+    try {
+      const response = await fetch(`${AGENT_STATE_URL}/agents`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        allAgents = Object.values(data);
+      }
+    } catch { /* no public API data */ }
+  }
+
+  // Fall back to remote SSH if no local running agents (only works from local network)
   if (!allAgents) {
     isRemote = true;
     try {
@@ -126,11 +144,15 @@ export async function GET() {
     });
   }
 
-  const liveSessions = getLiveSessions(isRemote);
+  // When using public API, we can't check tmux sessions, so trust the status field
+  const usePublicApi = !allAgents || AGENT_STATE_URL;
+  const liveSessions = usePublicApi ? new Set<string>() : getLiveSessions(isRemote);
 
   // Filter to only agents that are actually running (not killed, session alive)
   const running = allAgents.filter(a => {
     if (a.killed_at || a.status === 'killed') return false;
+    // For public API, trust status === 'running'
+    if (usePublicApi) return a.status === 'running';
     return liveSessions.has(`rm-${a.name}`);
   });
 
