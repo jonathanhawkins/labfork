@@ -81,7 +81,7 @@ export function ShareDialog({
   // Social share URLs
   const getTwitterUrl = useCallback(() => {
     const url = getFullUrl();
-    const text = `Check out "${lab.name}" on Voice Clone Lab!`;
+    const text = `Check out "${lab.name}" on LabFork!`;
     return `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
   }, [getFullUrl, lab.name]);
 

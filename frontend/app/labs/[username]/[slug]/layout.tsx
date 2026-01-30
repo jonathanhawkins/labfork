@@ -30,7 +30,7 @@ export async function generateMetadata(
 
   const title = `${lab.name} - ${lab.owner.displayName}`;
   const description = lab.description || `${lab.domainName} research lab by ${lab.owner.displayName}`;
-  const url = `https://voiceclone.lab/labs/${username}/${slug}`;
+  const url = `https://labfork.com/labs/${username}/${slug}`;
 
   return {
     title,
@@ -39,7 +39,7 @@ export async function generateMetadata(
       title,
       description,
       url,
-      siteName: "Voice Clone Lab",
+      siteName: "LabFork",
       type: "website",
       images: [
         {
