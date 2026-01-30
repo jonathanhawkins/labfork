@@ -35,6 +35,35 @@ export interface ForkDialogProps {
   className?: string;
 }
 
+/**
+ * Quick fork a lab without dialog - auto-generates slug and returns immediately
+ * Use this for "Fork & Launch" one-click functionality
+ */
+export async function quickForkLab(lab: Lab): Promise<{ success: boolean; lab?: Lab; error?: string }> {
+  try {
+    // Generate unique slug with timestamp suffix
+    const timestamp = Date.now().toString(36);
+    const autoSlug = `${lab.slug}-${timestamp}`;
+
+    const response = await fetch(`/api/labs/${lab.id}/fork`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: autoSlug, autoName: true }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      return { success: true, lab: data.lab };
+    } else {
+      return { success: false, error: data.error || "Failed to fork lab" };
+    }
+  } catch (err) {
+    console.error("Quick fork error:", err);
+    return { success: false, error: "Failed to fork lab. Please try again." };
+  }
+}
+
 export function ForkDialog({
   lab,
   isOpen,

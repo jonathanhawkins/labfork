@@ -72,15 +72,46 @@ export function LabWizard({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Get initial step from URL or default to welcome
+  // Get URL parameters
   const urlStep = searchParams.get("step") as LabWizardStep | null;
-  const initialStep = urlStep && WIZARD_STEPS.some((s) => s.id === urlStep)
-    ? urlStep
-    : "welcome";
+  const urlDomain = searchParams.get("domain");
+  const urlQuick = searchParams.get("quick") === "true";
+
+  // Determine initial step based on URL params
+  const getInitialStep = (): LabWizardStep => {
+    // Quick mode skips to review (requires domain)
+    if (urlQuick && urlDomain) return "review";
+    // If domain is specified, skip welcome
+    if (urlDomain) return "domain";
+    // Use URL step if valid
+    if (urlStep && WIZARD_STEPS.some((s) => s.id === urlStep)) return urlStep;
+    // Default to welcome
+    return "welcome";
+  };
+  const initialStep = getInitialStep();
+
+  // Pre-select domain from URL or prop
+  const getInitialDomain = () => {
+    if (urlDomain) {
+      return urlDomain;
+    }
+    return initialDomain;
+  };
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState<LabWizardStep>(initialStep);
-  const [config, setConfig] = useState<LabConfig>(getInitialConfig(initialDomain));
+  const [config, setConfig] = useState<LabConfig>(() => {
+    const baseConfig = getInitialConfig(initialDomain);
+    const domainSlug = getInitialDomain();
+    if (domainSlug) {
+      return {
+        ...baseConfig,
+        existingDomainSlug: domainSlug,
+        createNewDomain: false,
+      };
+    }
+    return baseConfig;
+  });
   const [analysis, setAnalysis] = useState<GoalAnalysisResult | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);

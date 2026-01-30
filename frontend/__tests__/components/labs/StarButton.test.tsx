@@ -170,7 +170,7 @@ describe("StarButton", () => {
     expect(button).toBeDisabled();
   });
 
-  it("applies size classes correctly", () => {
+  it("applies size classes with 44px minimum touch targets", () => {
     const { rerender } = render(
       <StarButton
         labId="lab-1"
@@ -181,8 +181,9 @@ describe("StarButton", () => {
     );
 
     let button = screen.getByRole("button");
-    expect(button).toHaveClass("px-2");
-    expect(button).toHaveClass("py-1");
+    // Small size now has 44px minimum height for accessibility
+    expect(button).toHaveClass("px-3");
+    expect(button).toHaveClass("min-h-[44px]");
 
     rerender(
       <StarButton
@@ -194,8 +195,9 @@ describe("StarButton", () => {
     );
 
     button = screen.getByRole("button");
-    expect(button).toHaveClass("px-4");
-    expect(button).toHaveClass("py-2");
+    // Large size has 48px minimum height
+    expect(button).toHaveClass("px-5");
+    expect(button).toHaveClass("min-h-[48px]");
   });
 });
 
@@ -233,7 +235,7 @@ describe("StarIconButton", () => {
     });
   });
 
-  it("applies correct size classes", () => {
+  it("applies correct size classes with 44px minimum touch targets", () => {
     const { rerender } = render(
       <StarIconButton
         labId="lab-1"
@@ -243,8 +245,9 @@ describe("StarIconButton", () => {
     );
 
     let button = screen.getByRole("button");
-    expect(button).toHaveClass("w-7");
-    expect(button).toHaveClass("h-7");
+    // All sizes now have 44px minimum for accessibility
+    expect(button).toHaveClass("min-w-[44px]");
+    expect(button).toHaveClass("min-h-[44px]");
 
     rerender(
       <StarIconButton
@@ -255,7 +258,8 @@ describe("StarIconButton", () => {
     );
 
     button = screen.getByRole("button");
-    expect(button).toHaveClass("w-11");
-    expect(button).toHaveClass("h-11");
+    // Large size has 48px minimum
+    expect(button).toHaveClass("min-w-[48px]");
+    expect(button).toHaveClass("min-h-[48px]");
   });
 });

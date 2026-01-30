@@ -28,7 +28,7 @@ describe("ProjectIdeasSection", () => {
       render(<ProjectIdeasSection />);
 
       expect(
-        screen.getByText(/Use AI Research Labs to accelerate breakthrough projects/i)
+        screen.getByText(/Use LabFork to accelerate breakthrough projects/i)
       ).toBeInTheDocument();
     });
 
@@ -118,14 +118,14 @@ describe("ProjectIdeasSection", () => {
   });
 
   describe("Project Data", () => {
-    it("should have exactly 10 projects", () => {
-      expect(projectIdeas).toHaveLength(10);
+    it("should have exactly 11 projects", () => {
+      expect(projectIdeas).toHaveLength(11);
     });
 
     it("should have unique slugs for all projects", () => {
       const slugs = projectIdeas.map((p) => p.slug);
       const uniqueSlugs = new Set(slugs);
-      expect(uniqueSlugs.size).toBe(10);
+      expect(uniqueSlugs.size).toBe(11);
     });
 
     it("should have all required fields for each project", () => {
@@ -163,15 +163,15 @@ describe("ProjectIdeasSection", () => {
     it("should have Start Building links with correct project and domain params", () => {
       render(<ProjectIdeasSection />);
 
-      // Find all Start Building links (20 total: 10 desktop + 10 mobile)
+      // Find all Start Building links (22 total: 11 desktop + 11 mobile)
       const startBuildingLinks = screen.getAllByText("Start Building");
-      expect(startBuildingLinks.length).toBe(20);
+      expect(startBuildingLinks.length).toBe(22);
 
-      // Check first project link
+      // Check first project link (Firefly Network is now first)
       const firstLink = startBuildingLinks[0].closest("a");
       expect(firstLink).toHaveAttribute(
         "href",
-        "/lab/new?project=atmospheric-water-harvester&domain=climate-modeling"
+        "/lab/new?project=firefly-network&domain=firefly-network"
       );
     });
   });

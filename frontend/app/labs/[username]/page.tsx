@@ -6,7 +6,7 @@
  * Lists all public labs by a specific user.
  */
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import {
   User,
@@ -21,13 +21,13 @@ import type { Lab } from "@/lib/labs/types";
 import { getCurrentUser } from "@/lib/auth/mock-user";
 
 interface UserLabsPageProps {
-  params: Promise<{
+  params: {
     username: string;
-  }>;
+  };
 }
 
 export default function UserLabsPage({ params }: UserLabsPageProps) {
-  const { username } = use(params);
+  const { username } = params;
 
   const [labs, setLabs] = useState<Lab[]>([]);
   const [isLoading, setIsLoading] = useState(true);

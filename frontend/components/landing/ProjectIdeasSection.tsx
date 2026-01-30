@@ -393,15 +393,22 @@ export function ProjectIdeasSection({
           </p>
         </div>
 
-        {/* Desktop Grid (hidden on mobile) */}
-        <div className="hidden lg:grid lg:grid-cols-5 gap-4 mb-8">
-          {projects.slice(0, 5).map((project, index) => (
+        {/* Desktop Grid (hidden on mobile) - First row with featured project larger */}
+        <div className="hidden lg:grid lg:grid-cols-4 gap-4 mb-4">
+          {projects.slice(0, 4).map((project, index) => (
             <ProjectCard key={project.slug} project={project} index={index} />
           ))}
         </div>
-        <div className="hidden lg:grid lg:grid-cols-5 gap-4">
-          {projects.slice(5, 10).map((project, index) => (
-            <ProjectCard key={project.slug} project={project} index={index + 5} />
+        <div className="hidden lg:grid lg:grid-cols-4 gap-4 mb-4">
+          {projects.slice(4, 8).map((project, index) => (
+            <ProjectCard key={project.slug} project={project} index={index + 4} />
+          ))}
+        </div>
+        <div className="hidden lg:flex lg:justify-center lg:gap-4">
+          {projects.slice(8, 11).map((project, index) => (
+            <div key={project.slug} className="w-1/4 max-w-[280px]">
+              <ProjectCard project={project} index={index + 8} />
+            </div>
           ))}
         </div>
 

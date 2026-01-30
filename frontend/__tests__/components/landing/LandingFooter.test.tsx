@@ -12,7 +12,7 @@ describe("LandingFooter", () => {
       render(<LandingFooter />);
 
       expect(
-        screen.getByText("Ready to Accelerate Your Research?")
+        screen.getByText("Ready to Fork Your First Lab?")
       ).toBeInTheDocument();
     });
 
@@ -20,7 +20,7 @@ describe("LandingFooter", () => {
       render(<LandingFooter />);
 
       expect(
-        screen.getByText(/Join 1,000\+ researchers using AI Research Labs/i)
+        screen.getByText(/Join 1,000\+ researchers using LabFork/i)
       ).toBeInTheDocument();
     });
 
@@ -99,7 +99,7 @@ describe("LandingFooter", () => {
 
       expect(screen.getByText("Company")).toBeInTheDocument();
       expect(screen.getByText("About")).toBeInTheDocument();
-      expect(screen.getByText("Careers")).toBeInTheDocument();
+      expect(screen.getByText("Contact")).toBeInTheDocument();
       expect(screen.getByText("Privacy")).toBeInTheDocument();
       expect(screen.getByText("Terms")).toBeInTheDocument();
     });
@@ -109,14 +109,14 @@ describe("LandingFooter", () => {
     it("should render brand name", () => {
       render(<LandingFooter />);
 
-      expect(screen.getByText("AI Research Labs")).toBeInTheDocument();
+      expect(screen.getByText("LabFork")).toBeInTheDocument();
     });
 
     it("should render brand tagline", () => {
       render(<LandingFooter />);
 
       expect(
-        screen.getByText("Collective intelligence for breakthrough discoveries.")
+        screen.getByText("Fork research labs. Watch AI agents work. Collaborate globally.")
       ).toBeInTheDocument();
     });
   });
@@ -154,13 +154,13 @@ describe("LandingFooter", () => {
     it("should render copyright", () => {
       render(<LandingFooter />);
 
-      expect(screen.getByText(/2026 AI Research Labs/i)).toBeInTheDocument();
+      expect(screen.getByText(/2026 LabFork/i)).toBeInTheDocument();
     });
 
     it("should render tech stack mention", () => {
       render(<LandingFooter />);
 
-      expect(screen.getByText(/Built with Next\.js, Three\.js, PyTorch/i)).toBeInTheDocument();
+      expect(screen.getByText(/Built with Next\.js, Three\.js, Claude/i)).toBeInTheDocument();
     });
 
     it("should render Star on GitHub link", () => {

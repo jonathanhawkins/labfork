@@ -13,3 +13,5 @@ export { FeedItem } from "./FeedItem";
 export { SuggestionCard } from "./SuggestionCard";
 export { SuggestionForm } from "./SuggestionForm";
 export { NotificationBell } from "./NotificationBell";
+export { FeedSeeder } from "./FeedSeeder";
+export { FeedPageClient } from "./FeedPageClient";

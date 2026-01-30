@@ -368,6 +368,15 @@ export default function LabPage() {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [gpuStatsOpen, setGpuStatsOpen] = useState(false);
   const [agentOutputs, setAgentOutputs] = useState<Record<string, { lines: string[]; file: string }>>({});
+  const [demoResult, setDemoResult] = useState<{
+    agent: string;
+    task: string;
+    response: string;
+    duration_ms: number;
+    simulated: boolean;
+  } | null>(null);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [selectedDemoAgent, setSelectedDemoAgent] = useState("synergy-detector");
   const fullscreenRef = useRef<HTMLDivElement>(null);
 
   const toggleFullscreen = useCallback(async () => {
@@ -1196,6 +1205,73 @@ export default function LabPage() {
             </div>
           </Section>
         )}
+
+        <Section title="AI Agent Demo" defaultOpen>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground mb-2">
+              Test Ollama-powered agents
+            </div>
+            <select
+              value={selectedDemoAgent}
+              onChange={(e) => setSelectedDemoAgent(e.target.value)}
+              className="w-full px-3 py-2 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-foreground"
+            >
+              <option value="synergy-detector">Synergy Detector</option>
+              <option value="pattern-recognizer">Pattern Recognizer</option>
+              <option value="gap-analyzer">Gap Analyzer</option>
+              <option value="evolution-engine">Evolution Engine</option>
+              <option value="transfer-agent">Transfer Agent</option>
+              <option value="lab-manager">Lab Manager</option>
+            </select>
+            <button
+              onClick={async () => {
+                setDemoLoading(true);
+                setDemoResult(null);
+                try {
+                  const response = await fetch("/api/agents/demo", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ agent: selectedDemoAgent }),
+                  });
+                  const data = await response.json();
+                  setDemoResult(data);
+                } catch (error) {
+                  console.error("Demo failed:", error);
+                } finally {
+                  setDemoLoading(false);
+                }
+              }}
+              disabled={demoLoading}
+              className="w-full py-2 px-4 bg-foreground text-background rounded text-sm hover:bg-foreground-bright disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {demoLoading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  Run Demo Task
+                </>
+              )}
+            </button>
+            {demoResult && (
+              <div className="border border-border rounded overflow-hidden">
+                <div className="px-3 py-2 border-b border-border bg-background-elevated flex items-center justify-between">
+                  <span className="text-xs text-foreground-bright">{demoResult.agent}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {demoResult.simulated ? "Simulated" : `${demoResult.duration_ms}ms`}
+                  </span>
+                </div>
+                <div className="p-3 max-h-[200px] overflow-y-auto text-xs">
+                  <div className="text-muted-foreground mb-2 italic">{demoResult.task}</div>
+                  <div className="text-foreground whitespace-pre-wrap">{demoResult.response}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </Section>
 
         <Section title="Token Usage" defaultOpen>
           <TokenUsageWidget />

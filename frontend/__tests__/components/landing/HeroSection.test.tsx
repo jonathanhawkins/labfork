@@ -11,15 +11,15 @@ describe("HeroSection", () => {
     it("should render the main headline", () => {
       render(<HeroSection />);
 
-      expect(screen.getByText("AI Research Labs")).toBeInTheDocument();
-      expect(screen.getByText("Collective Intelligence")).toBeInTheDocument();
+      expect(screen.getByText("LabFork")).toBeInTheDocument();
+      expect(screen.getByText("Fork. Watch. Discover.")).toBeInTheDocument();
     });
 
     it("should render the subheadline", () => {
       render(<HeroSection />);
 
       expect(
-        screen.getByText(/Watch AI agents implement research papers/i)
+        screen.getByText(/Fork research labs\. Watch AI agents implement papers/i)
       ).toBeInTheDocument();
     });
 

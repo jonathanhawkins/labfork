@@ -38,6 +38,15 @@ describe("WizardStepHardware", () => {
       ok: true,
       json: () => Promise.resolve({ success: false }),
     }));
+    // Mock environment variable for quick connect
+    vi.stubGlobal("process", {
+      ...process,
+      env: {
+        ...process.env,
+        NEXT_PUBLIC_REMOTE_GPU_HOST: "192.0.2.100",
+        NEXT_PUBLIC_REMOTE_GPU_USER: "doc",
+      },
+    });
   });
 
   afterEach(() => {

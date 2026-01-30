@@ -5,26 +5,26 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded text-sm font-normal transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-muted-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded text-sm font-normal transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-muted-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.98]",
   {
     variants: {
       variant: {
         default:
-          "bg-foreground text-background hover:bg-foreground-bright",
+          "bg-foreground text-background hover:bg-foreground-bright active:bg-foreground-bright",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/90",
         outline:
-          "border border-border bg-transparent text-foreground hover:bg-accent hover:text-foreground-bright",
+          "border border-border bg-transparent text-foreground hover:bg-accent hover:text-foreground-bright active:bg-accent",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "text-muted-foreground hover:text-foreground hover:bg-accent",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/80",
+        ghost: "text-muted-foreground hover:text-foreground hover:bg-accent active:bg-accent",
         link: "text-foreground underline-offset-4 hover:underline hover:text-foreground-bright",
       },
       size: {
-        default: "h-8 px-4 py-2",
-        sm: "h-7 rounded px-3 text-xs",
-        lg: "h-9 rounded px-6",
-        icon: "h-8 w-8",
+        default: "min-h-[44px] px-4 py-2",
+        sm: "min-h-[44px] rounded px-3 text-xs",
+        lg: "min-h-[44px] rounded px-6",
+        icon: "min-h-[44px] min-w-[44px]",
       },
     },
     defaultVariants: {

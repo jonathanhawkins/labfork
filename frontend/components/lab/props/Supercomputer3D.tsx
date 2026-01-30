@@ -357,23 +357,40 @@ export function createSupercomputer3D(options: Supercomputer3DOptions): Supercom
   // === MIDDLE SECTION - Status display and lights ===
   const middleY = chassisHeight / 2 + 0.3;
 
-  // Status screen
-  const screenGeometry = new THREE.BoxGeometry(0.6, 0.35, 0.02);
-  const screenMaterial = new THREE.MeshBasicMaterial({
-    color: COLORS.screenGlow,
-    transparent: true,
-    opacity: 0.9,
-  });
-  const screen = new THREE.Mesh(screenGeometry, screenMaterial);
-  screen.position.set(0, middleY, chassisDepth / 2 + 0.02);
-  group.add(screen);
-
-  // Screen border
+  // Screen border (behind screen)
   const screenBorderGeometry = new THREE.BoxGeometry(0.65, 0.4, 0.01);
   const screenBorderMaterial = new THREE.MeshToonMaterial({ color: 0x333344 });
   const screenBorder = new THREE.Mesh(screenBorderGeometry, screenBorderMaterial);
   screenBorder.position.set(0, middleY, chassisDepth / 2 + 0.01);
+  screenBorder.renderOrder = 1;
   group.add(screenBorder);
+
+  // Screen glow layer (soft glow behind the screen)
+  const screenGlowGeometry = new THREE.PlaneGeometry(0.7, 0.45);
+  const screenGlowMaterial = new THREE.MeshBasicMaterial({
+    color: COLORS.screenGlow,
+    transparent: true,
+    opacity: 0.3,
+    side: THREE.FrontSide,
+  });
+  const screenGlow = new THREE.Mesh(screenGlowGeometry, screenGlowMaterial);
+  screenGlow.position.set(0, middleY, chassisDepth / 2 + 0.02);
+  screenGlow.renderOrder = 1;
+  group.add(screenGlow);
+
+  // Status screen (in front of border, glowing teal)
+  // Using PlaneGeometry to ensure front face is always visible
+  const screenGeometry = new THREE.PlaneGeometry(0.6, 0.35);
+  const screenMaterial = new THREE.MeshBasicMaterial({
+    color: COLORS.screenGlow,
+    transparent: true,
+    opacity: 0.9,
+    side: THREE.FrontSide,
+  });
+  const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+  screen.position.set(0, middleY, chassisDepth / 2 + 0.03);  // Positioned in front of glow layer
+  screen.renderOrder = 3;  // Render after glow
+  group.add(screen);
 
   // Status light strips (vertical columns)
   const lightColumns = 3;
@@ -816,7 +833,10 @@ export function animateSupercomputer3D(
 ): void {
   const gpuStats = options?.gpuStats;
   const training = gpuStats?.training;
-  const isProcessing = gpuStats?.connected ?? options?.isProcessing ?? refs.group.userData.isProcessing ?? true;
+  // Explicit isProcessing option takes precedence, then gpuStats.connected, then defaults
+  const isProcessing = options?.isProcessing !== undefined
+    ? options.isProcessing
+    : (gpuStats?.connected ?? refs.group.userData.isProcessing ?? true);
   const loadLevel = gpuStats ? gpuStats.utilization / 100 : (options?.loadLevel ?? 0.5);
   const progress = options?.progress ?? 50;
   const chassisHeight = refs.group.userData.chassisHeight ?? 3.0;
@@ -976,18 +996,20 @@ export function animateSupercomputer3D(
     }
   });
 
-  // Animate screen
+  // Animate screen - ensure it always glows teal/cyan
   if (refs.screenMesh) {
     const screenMat = refs.screenMesh.material as THREE.MeshBasicMaterial;
     if (isProcessing) {
-      // Pulsing glow
-      const pulse = 0.7 + Math.sin(time * 3) * 0.2;
+      // Pulsing glow with high visibility
+      const pulse = 0.8 + Math.sin(time * 3) * 0.15;
       screenMat.opacity = pulse;
-      // Slight color shift
+      // Slight color shift (cyan/teal range) with higher lightness for visibility
       const hue = 0.45 + Math.sin(time * 0.5) * 0.05;
-      screenMat.color.setHSL(hue, 0.8, 0.5);
+      screenMat.color.setHSL(hue, 1.0, 0.55);  // Full saturation, higher lightness
     } else {
-      screenMat.opacity = 0.4;
+      // Idle state - bright teal glow (visible even when not processing)
+      screenMat.opacity = 0.7;
+      screenMat.color.setHex(COLORS.screenGlow);  // Use the defined teal color
     }
   }
 

@@ -16,12 +16,15 @@ import {
   Target,
   Layers,
   Bot,
+  Cpu,
+  BarChart3,
 } from "lucide-react";
 
 // Primary navigation items (always visible)
 const primaryNavItems = [
   { href: "/explore", label: "Explore", icon: Compass, description: "Browse public labs" },
   { href: "/watch", label: "Watch", icon: Eye, description: "Live agent view" },
+  { href: "/contribute", label: "Contribute", icon: Cpu, description: "Donate compute power" },
   { href: "/projects/firefly-network", label: "Firefly", icon: Lightbulb, featured: true, description: "Featured project" },
 ];
 
@@ -34,6 +37,7 @@ const labsDropdownItems = [
 
 // More dropdown items
 const moreDropdownItems = [
+  { href: "/analytics", label: "Analytics", icon: BarChart3, description: "Network health & stats" },
   { href: "/demos", label: "Demos", icon: Sliders, description: "Research technique demos" },
   { href: "/feed", label: "Feed", icon: Rss, description: "Activity feed" },
   { href: "/research", label: "Research", icon: Target, description: "Research dashboard" },

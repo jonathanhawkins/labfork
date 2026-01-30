@@ -39,7 +39,8 @@ import {
 import type { Lab } from "@/lib/labs/types";
 import { getLabPath } from "@/lib/labs/types";
 import { StarButton } from "./StarButton";
-import { ForkDialog } from "./ForkDialog";
+import { ForkDialog, quickForkLab } from "./ForkDialog";
+import { useRouter } from "next/navigation";
 
 export interface LabHeaderProps {
   /** Lab data */
@@ -134,6 +135,28 @@ export function LabHeader({
 }: LabHeaderProps) {
   const [isForkDialogOpen, setIsForkDialogOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isQuickForking, setIsQuickForking] = useState(false);
+  const router = useRouter();
+
+  const handleQuickFork = async () => {
+    if (isQuickForking) return;
+    setIsQuickForking(true);
+    try {
+      const result = await quickForkLab(lab);
+      if (result.success && result.lab) {
+        onForkSuccess?.(result.lab);
+        // Redirect to the forked lab
+        router.push(getLabPath(result.lab.owner.username, result.lab.slug));
+      } else {
+        // Fall back to dialog on error
+        setIsForkDialogOpen(true);
+      }
+    } catch {
+      setIsForkDialogOpen(true);
+    } finally {
+      setIsQuickForking(false);
+    }
+  };
 
   const DomainIcon = getDomainIcon(lab.domainSlug);
   const domainColor = getDomainColor(lab.domainSlug);
@@ -251,17 +274,39 @@ export function LabHeader({
               onToggle={onStarToggle}
             />
 
-            {/* Fork button */}
-            <button
-              onClick={() => setIsForkDialogOpen(true)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors",
-                "border-border bg-background hover:bg-foreground-muted/10 text-foreground-muted hover:text-foreground"
-              )}
-            >
-              <GitFork className="w-4 h-4" />
-              <span className="font-medium">{lab.stats.forks}</span>
-            </button>
+            {/* Fork buttons */}
+            <div className="flex items-center">
+              {/* Quick Fork & Launch */}
+              <button
+                onClick={handleQuickFork}
+                disabled={isQuickForking}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-l-lg border-y border-l transition-colors min-h-[44px]",
+                  "bg-foreground text-background hover:bg-foreground-bright border-foreground",
+                  "disabled:opacity-70"
+                )}
+                title="Fork and launch immediately"
+              >
+                {isQuickForking ? (
+                  <span className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                ) : (
+                  <GitFork className="w-4 h-4" />
+                )}
+                <span className="font-medium">Fork & Launch</span>
+              </button>
+
+              {/* Fork count / dialog trigger */}
+              <button
+                onClick={() => setIsForkDialogOpen(true)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1.5 text-sm rounded-r-lg border transition-colors min-h-[44px]",
+                  "border-border bg-background hover:bg-foreground-muted/10 text-foreground-muted hover:text-foreground"
+                )}
+                title="Fork with custom name"
+              >
+                <span className="font-medium">{lab.stats.forks}</span>
+              </button>
+            </div>
 
             {/* Share button */}
             <button

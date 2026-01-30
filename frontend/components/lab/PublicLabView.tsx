@@ -12,6 +12,8 @@ import {
   ThermometerSun,
   HardDrive,
   Server,
+  Monitor,
+  Zap,
 } from "lucide-react";
 
 // ============== Fun Agent Names ==============
@@ -214,9 +216,18 @@ interface PublicLabViewProps {
   showSuggestions?: boolean;
 }
 
+// Compute network stats interface
+interface ComputeNetworkStats {
+  totalDevices: number;
+  busyDevices: number;
+  tierCounts: { power: number; standard: number; crowd: number };
+  totalCompute: number; // TFLOPS
+}
+
 export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
   const [agent4090Status, setAgent4090Status] = useState<Agent4090Status[]>([]);
   const [gpuStats, setGpuStats] = useState<SanitizedGpuStats | null>(null);
+  const [computeNetworkStats, setComputeNetworkStats] = useState<ComputeNetworkStats | null>(null);
 
   const {
     activities,
@@ -299,6 +310,40 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
 
     fetchGpuStats();
     const interval = setInterval(fetchGpuStats, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch compute network stats
+  useEffect(() => {
+    const fetchComputeStats = async () => {
+      try {
+        const response = await fetch("/api/compute/devices");
+        const data = await response.json();
+
+        if (data.success && data.devices) {
+          const devices = data.devices;
+          const tierCounts = {
+            power: devices.filter((d: { tier: string }) => d.tier === 'power').length,
+            standard: devices.filter((d: { tier: string }) => d.tier === 'standard').length,
+            crowd: devices.filter((d: { tier: string }) => d.tier === 'crowd').length,
+          };
+          const busyDevices = devices.filter((d: { status: string }) => d.status === 'busy').length;
+          const totalCompute = devices.reduce((acc: number, d: { compute?: number }) => acc + (d.compute || 0), 0);
+
+          setComputeNetworkStats({
+            totalDevices: data.count,
+            busyDevices,
+            tierCounts,
+            totalCompute,
+          });
+        }
+      } catch {
+        // Silently fail - will use demo visualization
+      }
+    };
+
+    fetchComputeStats();
+    const interval = setInterval(fetchComputeStats, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -438,6 +483,57 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
               )}
             </div>
           )}
+
+          {/* Compute Network Stats */}
+          <div className="border-b border-border p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Monitor className="w-4 h-4 text-green-500" />
+                <span className="text-sm text-foreground-bright">
+                  Compute Network
+                </span>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-2 bg-background rounded border border-border">
+                <div className="text-xs text-muted-foreground">Devices</div>
+                <div className="text-sm text-foreground flex items-center gap-1">
+                  <span className="text-green-400 font-medium">
+                    {computeNetworkStats?.totalDevices || '...'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">online</span>
+                </div>
+              </div>
+              <div className="p-2 bg-background rounded border border-border">
+                <div className="text-xs text-muted-foreground">Active</div>
+                <div className="text-sm text-foreground flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  <span className="text-amber-400 font-medium">
+                    {computeNetworkStats?.busyDevices || '...'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {computeNetworkStats && (
+              <div className="mt-3 flex items-center gap-2 text-[10px]">
+                <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                  {computeNetworkStats.tierCounts.power} power
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  {computeNetworkStats.tierCounts.standard} standard
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">
+                  {computeNetworkStats.tierCounts.crowd} crowd
+                </span>
+              </div>
+            )}
+            {computeNetworkStats && computeNetworkStats.totalCompute > 0 && (
+              <div className="mt-2 text-xs text-muted-foreground">
+                {computeNetworkStats.totalCompute.toFixed(1)} TFLOPS total compute
+              </div>
+            )}
+          </div>
 
           {/* Agent List - horizontal scroll on mobile, vertical on desktop */}
           <div className="p-3 sm:p-4 border-b border-border">

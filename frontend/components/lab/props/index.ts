@@ -8,6 +8,7 @@ export * from './ServerRack3D';
 export * from './WaveformDisplay3D';
 export * from './Supercomputer3D';
 export * from './EmotionVerify3D';
+export * from './ContributorDevices3D';
 
 import * as THREE from 'three';
 import { PropType } from '../activities';

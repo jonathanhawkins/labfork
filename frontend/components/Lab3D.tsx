@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { CSS2DRenderer, CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer";
@@ -24,6 +24,17 @@ import {
   GpuStatsData,
   TrainingData,
 } from "./lab/props/Supercomputer3D";
+import {
+  ContributorDevice,
+  ContributorDevices3DRefs,
+  createContributorDevices3D,
+  updateContributorDevices3D,
+  animateContributorDevices3D,
+  disposeContributorDevices3D,
+  getDeviceAtIntersection,
+  createDeviceStatsLabel,
+  updateDeviceStatsLabel,
+} from "./lab/props/ContributorDevices3D";
 
 // Agent definitions
 interface Agent {
@@ -41,6 +52,8 @@ interface Lab3DProps {
   onAgentClick?: (agent: Agent) => void;
   onComputerClick?: () => void;  // Called when supercomputer is clicked
   showDemoProps?: boolean;  // Show demo props for testing
+  showContributors?: boolean;  // Show distributed compute network contributors
+  contributorDevices?: ContributorDevice[];  // External device list (optional)
 }
 
 // Pastel colors - Katamari Damacy style
@@ -173,7 +186,7 @@ const getStatusColor = (status: string): string => {
   }
 };
 
-export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgentClick, onComputerClick, showDemoProps = true }: Lab3DProps) {
+export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgentClick, onComputerClick, showDemoProps = true, showContributors = true, contributorDevices: externalDevices }: Lab3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -246,6 +259,12 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
   // Raycaster for click detection
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
+
+  // Contributor devices visualization
+  const contributorDevicesRef = useRef<ContributorDevices3DRefs | null>(null);
+  const contributorStatsLabelRef = useRef<CSS2DObject | null>(null);
+  const selectedDeviceRef = useRef<string | null>(null);  // Changed from hover to click-based
+  const [fetchedDevices, setFetchedDevices] = useState<ContributorDevice[]>([]);
 
   // Helper: Find the best available slot for an agent near a target position
   const findBestSlot = useCallback((targetPosition: [number, number, number], preferredProp?: string): WorkSlot | null => {
@@ -1138,6 +1157,24 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
       }
     }
 
+    // Create contributor devices visualization (distributed compute network)
+    // Position TO THE LEFT of supercomputer (which is at [-6, 0, -5])
+    if (showContributors) {
+      const contributorRefs = createContributorDevices3D({
+        position: [-8, 0.5, -5],  // To the left of supercomputer
+        radius: 1.5,
+        maxDevices: 100,
+      });
+      scene.add(contributorRefs.group);
+      contributorDevicesRef.current = contributorRefs;
+
+      // Add stats label above the device cluster
+      const statsLabel = createDeviceStatsLabel(0, 0);
+      statsLabel.position.y = 1.5;  // Raise label higher to not overlap devices
+      contributorRefs.group.add(statsLabel);
+      contributorStatsLabelRef.current = statsLabel;
+    }
+
     // Central hub visualization (like a data nexus)
     const hubGeometry = new THREE.TorusGeometry(1, 0.1, 8, 32);
     const hubMaterial = new THREE.MeshToonMaterial({
@@ -1379,6 +1416,13 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
         }
       });
 
+      // Animate contributor devices
+      if (contributorDevicesRef.current) {
+        animateContributorDevices3D(contributorDevicesRef.current, time, {
+          hoveredDeviceId: selectedDeviceRef.current,  // Now click-based, not hover
+        });
+      }
+
       // Animate particles (flowing/orbiting)
       particlesRef.current.forEach((particles) => {
         const positions = particles.geometry.attributes.position.array as Float32Array;
@@ -1456,7 +1500,20 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
 
       raycasterRef.current.setFromCamera(mouseRef.current, camera);
 
-      // First check for supercomputer click
+      // First check for contributor device click (toggle selection)
+      if (contributorDevicesRef.current) {
+        const device = getDeviceAtIntersection(contributorDevicesRef.current, raycasterRef.current);
+        if (device) {
+          // Toggle selection: if same device clicked, deselect; otherwise select new one
+          selectedDeviceRef.current = selectedDeviceRef.current === device.id ? null : device.id;
+          return;
+        } else {
+          // Clicked elsewhere - deselect
+          selectedDeviceRef.current = null;
+        }
+      }
+
+      // Check for supercomputer click
       const supercomputerProp = demoPropsRef.current.get('demo-supercomputer');
       if (supercomputerProp && onComputerClickRef.current) {
         const supercomputerIntersects = raycasterRef.current.intersectObjects(
@@ -1491,10 +1548,28 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
 
     containerRef.current.addEventListener("click", handleClick);
 
+    // Handle mousemove for cursor change on hoverable elements
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!containerRef.current || !contributorDevicesRef.current) return;
+
+      const rect = containerRef.current.getBoundingClientRect();
+      mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycasterRef.current.setFromCamera(mouseRef.current, camera);
+
+      // Change cursor if hovering over a clickable device
+      const device = getDeviceAtIntersection(contributorDevicesRef.current, raycasterRef.current);
+      containerRef.current.style.cursor = device ? 'pointer' : 'grab';
+    };
+
+    containerRef.current.addEventListener("mousemove", handleMouseMove);
+
     // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
       containerRef.current?.removeEventListener("click", handleClick);
+      containerRef.current?.removeEventListener("mousemove", handleMouseMove);
       cancelAnimationFrame(animationRef.current);
 
       // Traverse entire scene and dispose all geometries/materials (prevent GPU memory leak)
@@ -1526,6 +1601,17 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
       });
       agentMeshesRef.current.clear();
       agentLabelsRef.current.clear();
+
+      // Dispose contributor devices
+      if (contributorDevicesRef.current) {
+        disposeContributorDevices3D(contributorDevicesRef.current);
+        contributorDevicesRef.current = null;
+      }
+      if (contributorStatsLabelRef.current) {
+        contributorStatsLabelRef.current.removeFromParent();
+        contributorStatsLabelRef.current.element.remove();
+        contributorStatsLabelRef.current = null;
+      }
 
       // Dispose renderer
       renderer.dispose();
@@ -1829,6 +1915,83 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     };
   }, [renderMonitorTexture]);
 
+  // Fetch contributor devices from compute network API
+  useEffect(() => {
+    if (!showContributors) return;
+
+    const abortController = new AbortController();
+
+    const fetchContributorDevices = async () => {
+      try {
+        const response = await fetch('/api/compute/devices', { signal: abortController.signal });
+        const data = await response.json();
+
+        if (data.success && data.devices) {
+          // Map API response to our ContributorDevice format
+          const devices: ContributorDevice[] = data.devices.map((d: {
+            id: string;
+            name: string;
+            tier: 'power' | 'standard' | 'crowd';
+            status: 'online' | 'busy' | 'offline' | 'paused';
+            compute?: number;
+            platform?: string;
+            stats?: {
+              tasksCompleted: number;
+              creditsEarned: number;
+              totalComputeTime: number;
+            };
+          }) => ({
+            id: d.id,
+            name: d.name,
+            tier: d.tier,
+            status: d.status,
+            compute: d.compute,
+            platform: d.platform,
+            stats: d.stats,
+          }));
+
+          setFetchedDevices(devices);
+        }
+      } catch {
+        // Silently fail - will use demo data or external devices
+      }
+    };
+
+    // Fetch immediately and then every 10 seconds
+    fetchContributorDevices();
+    const interval = setInterval(fetchContributorDevices, 10000);
+
+    return () => {
+      abortController.abort();
+      clearInterval(interval);
+    };
+  }, [showContributors]);
+
+  // Update contributor devices visualization when devices change
+  useEffect(() => {
+    if (!contributorDevicesRef.current) return;
+
+    // Use external devices if provided, otherwise use fetched devices
+    const devices = externalDevices || fetchedDevices;
+
+    // Show real devices only - no demo data
+    updateContributorDevices3D(contributorDevicesRef.current, devices, {
+      radius: 1.5,  // Smaller radius to cluster near supercomputer
+      maxDevices: 100,
+    });
+
+    // Update stats label
+    if (contributorStatsLabelRef.current) {
+      const busyCount = devices.filter(d => d.status === 'busy').length;
+      const tierCounts = {
+        power: devices.filter(d => d.tier === 'power').length,
+        standard: devices.filter(d => d.tier === 'standard').length,
+        crowd: devices.filter(d => d.tier === 'crowd').length,
+      };
+      updateDeviceStatsLabel(contributorStatsLabelRef.current, devices.length, busyCount, tierCounts);
+    }
+  }, [fetchedDevices, externalDevices]);
+
   return (
     <div
       ref={containerRef}
@@ -1836,4 +1999,72 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
       style={{ minHeight: "500px" }}
     />
   );
+}
+
+/**
+ * Generate demo devices for visual demonstration when no real devices are connected
+ */
+function generateDemoDevices(): ContributorDevice[] {
+  const devices: ContributorDevice[] = [];
+
+  // Device name pools for each tier
+  const powerNames = ['RTX-4090-Alpha', 'A100-Cluster', 'H100-Node', 'M4-Max-Studio', 'RTX-4080-Beast'];
+  const standardNames = ['MacBook-Pro', 'RTX-3070-Home', 'M2-Mini', 'GTX-1080-Lab', 'RX-6800-Gaming'];
+  const crowdNames = ['iPhone-Safari', 'Pixel-Chrome', 'iPad-Pro', 'Galaxy-Tab', 'Desktop-Firefox', 'Laptop-Edge'];
+
+  // Generate power tier devices (3-5)
+  const powerCount = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < powerCount; i++) {
+    devices.push({
+      id: `power-${i}`,
+      name: powerNames[i % powerNames.length],
+      tier: 'power',
+      status: Math.random() > 0.3 ? 'busy' : 'online',
+      compute: 40 + Math.random() * 80,
+      platform: 'cuda',
+      stats: {
+        tasksCompleted: Math.floor(Math.random() * 500) + 100,
+        creditsEarned: Math.floor(Math.random() * 2000) + 500,
+        totalComputeTime: Math.floor(Math.random() * 10000) + 1000,
+      },
+    });
+  }
+
+  // Generate standard tier devices (8-15)
+  const standardCount = 8 + Math.floor(Math.random() * 8);
+  for (let i = 0; i < standardCount; i++) {
+    devices.push({
+      id: `standard-${i}`,
+      name: standardNames[i % standardNames.length],
+      tier: 'standard',
+      status: Math.random() > 0.5 ? 'busy' : Math.random() > 0.3 ? 'online' : 'paused',
+      compute: 5 + Math.random() * 35,
+      platform: Math.random() > 0.5 ? 'cuda' : 'metal',
+      stats: {
+        tasksCompleted: Math.floor(Math.random() * 200) + 20,
+        creditsEarned: Math.floor(Math.random() * 500) + 50,
+        totalComputeTime: Math.floor(Math.random() * 5000) + 500,
+      },
+    });
+  }
+
+  // Generate crowd tier devices (15-30)
+  const crowdCount = 15 + Math.floor(Math.random() * 16);
+  for (let i = 0; i < crowdCount; i++) {
+    devices.push({
+      id: `crowd-${i}`,
+      name: crowdNames[i % crowdNames.length],
+      tier: 'crowd',
+      status: Math.random() > 0.6 ? 'busy' : Math.random() > 0.4 ? 'online' : 'offline',
+      compute: 0.5 + Math.random() * 4.5,
+      platform: 'webgpu',
+      stats: {
+        tasksCompleted: Math.floor(Math.random() * 50) + 5,
+        creditsEarned: Math.floor(Math.random() * 100) + 10,
+        totalComputeTime: Math.floor(Math.random() * 1000) + 100,
+      },
+    });
+  }
+
+  return devices;
 }

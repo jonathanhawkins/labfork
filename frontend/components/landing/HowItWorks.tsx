@@ -108,11 +108,12 @@ export function HowItWorks() {
                 setActiveStep(idx);
                 setIsPaused(true);
               }}
-              className={`flex items-center gap-3 px-6 py-3 rounded-xl transition-all ${
+              className={`flex items-center gap-3 px-6 py-3 min-h-[44px] rounded-xl transition-all active:scale-[0.98] ${
                 activeStep === idx
                   ? "bg-white/10 border border-white/20"
-                  : "bg-transparent border border-transparent hover:bg-white/5"
+                  : "bg-transparent border border-transparent hover:bg-white/5 active:bg-white/10"
               }`}
+              aria-label={`Step ${step.number}: ${step.title}`}
             >
               <span
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
@@ -156,6 +157,7 @@ export function HowItWorks() {
           className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm overflow-hidden"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
+          onTouchStart={() => setIsPaused(true)}
         >
           {/* Color accent */}
           <div
@@ -184,8 +186,8 @@ export function HowItWorks() {
                   {steps[activeStep].description}
                 </p>
 
-                {/* Step indicator dots */}
-                <div className="flex items-center gap-2">
+                {/* Step indicator dots - with 44px touch targets */}
+                <div className="flex items-center gap-1">
                   {steps.map((_, idx) => (
                     <button
                       key={idx}
@@ -193,16 +195,37 @@ export function HowItWorks() {
                         setActiveStep(idx);
                         setIsPaused(true);
                       }}
-                      className={`w-2 h-2 rounded-full transition-all ${
-                        activeStep === idx
-                          ? "w-8"
-                          : "bg-gray-600 hover:bg-gray-500"
-                      }`}
-                      style={{
-                        backgroundColor: activeStep === idx ? steps[activeStep].color : undefined,
-                      }}
-                    />
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-95"
+                      aria-label={`Go to step ${idx + 1}`}
+                    >
+                      <span
+                        className={`h-2 rounded-full transition-all ${
+                          activeStep === idx
+                            ? "w-8"
+                            : "w-2 bg-gray-600 hover:bg-gray-500"
+                        }`}
+                        style={{
+                          backgroundColor: activeStep === idx ? steps[activeStep].color : undefined,
+                        }}
+                      />
+                    </button>
                   ))}
+                  {/* Play/Pause button for mobile */}
+                  <button
+                    onClick={() => setIsPaused(!isPaused)}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center ml-2 text-gray-500 hover:text-white active:scale-95"
+                    aria-label={isPaused ? "Resume auto-advance" : "Pause auto-advance"}
+                  >
+                    {isPaused ? (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
               </div>
 

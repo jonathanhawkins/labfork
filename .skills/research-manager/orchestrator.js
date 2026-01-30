@@ -1522,10 +1522,12 @@ async function mainLoop() {
     runCleanupIfNeeded();
 
     // 6. Check for story research completion and trigger proposals
-    const proposalResults = checkStoryCompletionAndProposals();
-    if (proposalResults.length > 0) {
-      log('info', 'Proposal actions taken', { results: proposalResults });
-    }
+    // DISABLED: Auto-proposal causes runaway agent spawning. Use manual: rm proposal generate <story>
+    // const proposalResults = checkStoryCompletionAndProposals();
+    // if (proposalResults.length > 0) {
+    //   log('info', 'Proposal actions taken', { results: proposalResults });
+    // }
+    const proposalResults = [];
 
     // 7. Auto-spawn (skip if we just triggered a proposal)
     if (proposalResults.some(r => r.success)) {
@@ -1667,6 +1669,11 @@ function hasProposal(storyId) {
 
   if (!proposal) return { exists: false };
 
+  // If proposal is being generated, treat as exists to prevent duplicate spawning
+  if (proposal.status === 'generating') {
+    return { exists: true, status: 'generating', documentExists: false };
+  }
+
   // Check if proposal document exists on disk
   const projectRoot = path.join(__dirname, '..', '..');
   const proposalPaths = [
@@ -1720,6 +1727,10 @@ function triggerProposalGeneration(storyId, storyTitle = null) {
   }
 }
 
+// Track recent proposal generation attempts to prevent rapid re-triggering
+const proposalGenerationCooldowns = {};
+const PROPOSAL_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes cooldown
+
 // Check all stories for research completion and trigger proposals
 function checkStoryCompletionAndProposals() {
   const stories = getTasksByStory();
@@ -1749,10 +1760,32 @@ function checkStoryCompletionAndProposals() {
       continue;
     }
 
+    // Check if a research-lead agent is already running for this story
+    const agents = readJSON(AGENTS_FILE, {});
+    const runningResearchLead = Object.entries(agents).some(([id, agent]) => {
+      return agent.status === 'running' &&
+             id.toLowerCase().includes(`research-lead-${storyId.toLowerCase()}`);
+    });
+
+    if (runningResearchLead) {
+      log('debug', `Research lead already running for ${storyId}, skipping`);
+      continue;
+    }
+
+    // Check cooldown - don't retry proposal generation too quickly
+    const lastAttempt = proposalGenerationCooldowns[storyId];
+    if (lastAttempt && (Date.now() - lastAttempt) < PROPOSAL_COOLDOWN_MS) {
+      log('debug', `Proposal generation for ${storyId} on cooldown, skipping`);
+      continue;
+    }
+
     // Research complete, no proposal - trigger generation
     log('info', `Story ${storyId} research complete, generating proposal`, {
       completedTasks: researchStatus.completed,
     });
+
+    // Set cooldown BEFORE attempting to prevent rapid retries
+    proposalGenerationCooldowns[storyId] = Date.now();
 
     const genResult = triggerProposalGeneration(storyId);
     results.push({
@@ -1760,6 +1793,9 @@ function checkStoryCompletionAndProposals() {
       action: 'proposal-generation-triggered',
       success: genResult.success,
     });
+
+    // Only trigger one proposal per cycle to prevent overload
+    break;
   }
 
   return results;

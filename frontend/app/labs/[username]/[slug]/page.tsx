@@ -10,7 +10,7 @@
  * - Tasks list
  */
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -32,16 +32,16 @@ import type { Lab } from "@/lib/labs/types";
 import { getCurrentUser } from "@/lib/auth/mock-user";
 
 interface LabPortalPageProps {
-  params: Promise<{
+  params: {
     username: string;
     slug: string;
-  }>;
+  };
 }
 
 type TabId = "overview" | "tasks" | "activity" | "settings";
 
 export default function LabPortalPage({ params }: LabPortalPageProps) {
-  const { username, slug } = use(params);
+  const { username, slug } = params;
   const router = useRouter();
 
   const [lab, setLab] = useState<Lab | null>(null);
