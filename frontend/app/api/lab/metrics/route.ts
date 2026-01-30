@@ -5,6 +5,7 @@ import { join } from "path";
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
+const AGENT_STATE_URL = process.env.AGENT_STATE_URL || '';
 
 // Paths
 const projectRoot = join(process.cwd(), "..");
@@ -328,6 +329,221 @@ function calculateMetrics(): Metrics {
 }
 
 /**
+ * Fetch data from remote agent state API (for Vercel)
+ */
+async function fetchRemoteData(): Promise<{
+  progress: { history: ProgressHistory[] };
+  agents: Record<string, any>;
+} | null> {
+  if (!AGENT_STATE_URL) return null;
+
+  try {
+    const [progressRes, agentsRes] = await Promise.all([
+      fetch(`${AGENT_STATE_URL}/progress`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      }),
+      fetch(`${AGENT_STATE_URL}/agents`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      }),
+    ]);
+
+    if (!progressRes.ok || !agentsRes.ok) {
+      console.error('[Metrics] Remote fetch failed:', progressRes.status, agentsRes.status);
+      return null;
+    }
+
+    const progress = await progressRes.json();
+    const agents = await agentsRes.json();
+
+    return { progress, agents };
+  } catch (e) {
+    console.error('[Metrics] Remote fetch error:', e);
+    return null;
+  }
+}
+
+/**
+ * Calculate metrics from provided data
+ */
+function calculateMetricsFromData(
+  history: ProgressHistory[],
+  agents: Record<string, any>
+): Metrics {
+  const now = Date.now();
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+  // Get running agents count from agents data
+  const runningAgentsCount = Object.values(agents).filter((a: any) => a.status === "running").length;
+
+  // Filter for different time periods
+  const last24hHistory = history.filter(
+    (h) => new Date(h.timestamp).getTime() > oneDayAgo
+  );
+  const last7dHistory = history.filter(
+    (h) => new Date(h.timestamp).getTime() > sevenDaysAgo
+  );
+
+  // Overall stats
+  const completed = history.filter((h) => h.outcome === "completed");
+  const failed = history.filter((h) => h.outcome !== "completed");
+
+  const totalTasksCompleted = completed.length;
+  const totalTasksFailed = failed.length;
+  const successRate =
+    history.length > 0 ? (totalTasksCompleted / history.length) * 100 : 0;
+  const avgCompletionTime =
+    completed.length > 0
+      ? completed.reduce((sum, h) => sum + h.duration, 0) / completed.length
+      : 0;
+  const avgProgressScore =
+    history.length > 0
+      ? history.reduce((sum, h) => sum + h.progressScore, 0) / history.length
+      : 0;
+
+  // Last 24h
+  const last24hCompleted = last24hHistory.filter((h) => h.outcome === "completed");
+  const last24hFailed = last24hHistory.filter((h) => h.outcome !== "completed");
+
+  // By outcome
+  const byOutcome = {
+    completed: history.filter((h) => h.outcome === "completed").length,
+    stuck: history.filter((h) => h.outcome === "stuck").length,
+    error: history.filter((h) => h.outcome === "error").length,
+    timeout: history.filter((h) => h.outcome === "timeout").length,
+  };
+
+  // By task type
+  const researchHistory = history.filter((h) => h.agentName.includes("researcher"));
+  const taskHistory = history.filter((h) => h.agentName.includes("task-"));
+
+  const byTaskType = {
+    research: {
+      count: researchHistory.length,
+      avgDuration:
+        researchHistory.length > 0
+          ? researchHistory.reduce((sum, h) => sum + h.duration, 0) /
+            researchHistory.length
+          : 0,
+      successRate:
+        researchHistory.length > 0
+          ? (researchHistory.filter((h) => h.outcome === "completed").length /
+              researchHistory.length) *
+            100
+          : 0,
+    },
+    task: {
+      count: taskHistory.length,
+      avgDuration:
+        taskHistory.length > 0
+          ? taskHistory.reduce((sum, h) => sum + h.duration, 0) / taskHistory.length
+          : 0,
+      successRate:
+        taskHistory.length > 0
+          ? (taskHistory.filter((h) => h.outcome === "completed").length /
+              taskHistory.length) *
+            100
+          : 0,
+    },
+  };
+
+  // Daily history
+  const dailyMap = new Map<string, DailyMetrics>();
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(now - i * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+    dailyMap.set(date, {
+      date,
+      tasksCompleted: 0,
+      tasksFailed: 0,
+      totalDuration: 0,
+      avgDuration: 0,
+      avgProgressScore: 0,
+      researchAgents: 0,
+      taskAgents: 0,
+      costEstimate: 0,
+    });
+  }
+
+  for (const h of last7dHistory) {
+    const date = h.timestamp.split("T")[0];
+    const daily = dailyMap.get(date);
+    if (daily) {
+      if (h.outcome === "completed") {
+        daily.tasksCompleted++;
+      } else {
+        daily.tasksFailed++;
+      }
+      daily.totalDuration += h.duration;
+      daily.costEstimate += estimateCost(h.duration);
+      if (h.agentName.includes("researcher")) {
+        daily.researchAgents++;
+      } else {
+        daily.taskAgents++;
+      }
+    }
+  }
+
+  // Calculate averages for daily
+  for (const daily of Array.from(dailyMap.values())) {
+    const total = daily.tasksCompleted + daily.tasksFailed;
+    if (total > 0) {
+      daily.avgDuration = daily.totalDuration / total;
+    }
+  }
+
+  const dailyHistory = Array.from(dailyMap.values()).sort(
+    (a, b) => a.date.localeCompare(b.date)
+  );
+
+  // Cost estimates
+  const todayDate = new Date().toISOString().split("T")[0];
+  const todayMetrics = dailyMap.get(todayDate);
+  const estimatedCostToday = todayMetrics?.costEstimate || 0;
+  const estimatedCostTotal = history.reduce(
+    (sum, h) => sum + estimateCost(h.duration),
+    0
+  );
+
+  return {
+    totalTasksCompleted,
+    totalTasksFailed,
+    successRate: Math.round(successRate * 10) / 10,
+    avgCompletionTime: Math.round(avgCompletionTime * 10) / 10,
+    avgProgressScore: Math.round(avgProgressScore),
+
+    last24h: {
+      completed: last24hCompleted.length,
+      failed: last24hFailed.length,
+      avgDuration:
+        last24hHistory.length > 0
+          ? Math.round(
+              (last24hHistory.reduce((sum, h) => sum + h.duration, 0) /
+                last24hHistory.length) *
+                10
+            ) / 10
+          : 0,
+    },
+
+    byOutcome,
+
+    currentAgents: runningAgentsCount,
+    currentPendingTasks: 0, // Will be filled by caller if needed
+
+    dailyHistory,
+    byTaskType,
+
+    estimatedCostToday: Math.round(estimatedCostToday * 100) / 100,
+    estimatedCostTotal: Math.round(estimatedCostTotal * 100) / 100,
+
+    orchestratorUptime: null, // Can't get from remote
+  };
+}
+
+/**
  * GET /api/lab/metrics
  * Returns orchestrator metrics
  */
@@ -351,6 +567,20 @@ export async function GET(request: Request) {
       } catch (error) {
         console.error("[Metrics] Backend fetch failed, falling back to local:", error);
       }
+    }
+
+    // Check if we're on Vercel and should use remote data
+    const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
+
+    if (isVercel && AGENT_STATE_URL) {
+      const remoteData = await fetchRemoteData();
+      if (remoteData) {
+        const history = remoteData.progress?.history || [];
+        const metrics = calculateMetricsFromData(history, remoteData.agents);
+        return NextResponse.json(metrics);
+      }
+      // Return empty metrics if remote fetch failed
+      return NextResponse.json(calculateMetricsFromData([], {}));
     }
 
     const metrics = calculateMetrics();

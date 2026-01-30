@@ -12,15 +12,26 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Voice Clone Pipeline",
-  description: "Exploring prosody-controlled voice synthesis through multi-layer analysis",
+  title: "LabFork - Open Platform for AI Research",
+  description: "Fork research labs, watch AI agents implement papers, discover synergies across domains. The open platform for collective AI research.",
   icons: {
     icon: [
       {
-        url: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23888888' rx='8' width='100' height='100'/><circle cx='50' cy='50' r='25' fill='none' stroke='%230a0a0a' stroke-width='4'/><circle cx='50' cy='50' r='8' fill='%230a0a0a'/></svg>",
+        url: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%233b82f6'/><stop offset='100%25' stop-color='%238b5cf6'/></linearGradient></defs><rect fill='url(%23g)' rx='20' width='100' height='100'/><path d='M50 20 L50 45 M35 55 L50 45 L65 55 M35 55 L35 75 M65 55 L65 75' stroke='white' stroke-width='8' stroke-linecap='round' fill='none'/><circle cx='35' cy='78' r='6' fill='white'/><circle cx='65' cy='78' r='6' fill='white'/></svg>",
         type: "image/svg+xml",
       },
     ],
+  },
+  openGraph: {
+    title: "LabFork - Open Platform for AI Research",
+    description: "Fork research labs, watch AI agents implement papers, discover synergies across domains.",
+    siteName: "LabFork",
+    url: "https://labfork.com",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "LabFork - Open Platform for AI Research",
+    description: "Fork research labs, watch AI agents implement papers, discover synergies across domains.",
   },
 };
 

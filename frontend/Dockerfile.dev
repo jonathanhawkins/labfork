@@ -1,0 +1,21 @@
+# AI Research Lab - Frontend Development Dockerfile
+# Hot reload enabled for development
+
+FROM node:20-alpine
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* ./
+RUN npm install
+
+# Copy source files
+COPY . .
+
+# Set development environment
+ENV NODE_ENV=development
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

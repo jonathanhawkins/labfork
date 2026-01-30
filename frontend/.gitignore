@@ -1,1 +1,23 @@
+# Vercel
 .vercel
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build info
+*.tsbuildinfo
+
+# Environment
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+.vitest/
+
+# OS
+.DS_Store

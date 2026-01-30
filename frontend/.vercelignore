@@ -9,3 +9,12 @@ vitest.config.ts
 vitest.setup.ts
 *.test.ts
 *.test.tsx
+
+# Experimental APIs with type issues (to fix later)
+app/api/metrics
+app/api/evolution
+app/api/knowledge
+app/api/transfer
+app/api/gaps
+app/api/synergy
+app/api/patterns

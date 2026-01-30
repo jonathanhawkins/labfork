@@ -5,6 +5,7 @@ import { join } from "path";
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
+const AGENT_STATE_URL = process.env.AGENT_STATE_URL || '';
 
 // Paths
 const projectRoot = join(process.cwd(), "..");
@@ -287,6 +288,119 @@ function getRetryRecommendation(taskId: string): { shouldRetry: boolean; reason:
 }
 
 /**
+ * Fetch data from remote agent state API (for Vercel)
+ */
+async function fetchRemoteProgressData(): Promise<{
+  progress: { history: ProgressHistory[] };
+  agents: Record<string, any>;
+} | null> {
+  if (!AGENT_STATE_URL) return null;
+
+  try {
+    const [progressRes, agentsRes] = await Promise.all([
+      fetch(`${AGENT_STATE_URL}/progress`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      }),
+      fetch(`${AGENT_STATE_URL}/agents`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      }),
+    ]);
+
+    if (!progressRes.ok || !agentsRes.ok) {
+      console.error('[Progress] Remote fetch failed:', progressRes.status, agentsRes.status);
+      return null;
+    }
+
+    const progress = await progressRes.json();
+    const agents = await agentsRes.json();
+
+    return { progress, agents };
+  } catch (e) {
+    console.error('[Progress] Remote fetch error:', e);
+    return null;
+  }
+}
+
+/**
+ * Build progress response from provided data
+ */
+function buildProgressResponse(history: ProgressHistory[], agents: Record<string, any>) {
+  const recentHistory = history.slice(-20);
+
+  const stats = {
+    totalAttempts: history.length,
+    completed: history.filter(h => h.outcome === "completed").length,
+    stuck: history.filter(h => h.outcome === "stuck").length,
+    errors: history.filter(h => h.outcome === "error").length,
+    timeouts: history.filter(h => h.outcome === "timeout").length,
+    avgDuration: history.length > 0
+      ? Math.round(history.reduce((sum, h) => sum + h.duration, 0) / history.length)
+      : 0,
+    avgProgressScore: history.length > 0
+      ? Math.round(history.reduce((sum, h) => sum + h.progressScore, 0) / history.length)
+      : 0,
+  };
+
+  // For remote agents, we can't analyze log files, so just return basic info
+  const progressReports: AgentProgress[] = [];
+  for (const [name, agent] of Object.entries(agents)) {
+    if ((agent as any).status === "running") {
+      const taskMatch = name.match(/^task-(\d+)-/);
+      progressReports.push({
+        name,
+        taskId: taskMatch ? taskMatch[1] : undefined,
+        startedAt: (agent as any).started_at,
+        lastActivity: 0,
+        filesRead: 0,
+        filesWritten: 0,
+        filesEdited: 0,
+        toolCalls: 0,
+        tasksCreated: 0,
+        tasksCompleted: 0,
+        webSearches: 0,
+        errors: 0,
+        progressScore: 50, // Default for remote agents
+        status: "active",
+        statusReason: "Running (remote)",
+      });
+    }
+  }
+
+  // Find tasks needing retry
+  const pendingRetries: { taskId: string; recommendation: { shouldRetry: boolean; reason: string; strategy?: string } }[] = [];
+  const failedTaskIds = new Set(
+    history
+      .filter(h => h.taskId && h.outcome !== "completed")
+      .map(h => h.taskId!)
+  );
+
+  for (const taskId of Array.from(failedTaskIds)) {
+    const taskHistory = history.filter(h => h.taskId === taskId);
+    const failures = taskHistory.filter(h => h.outcome !== "completed");
+    const successes = taskHistory.filter(h => h.outcome === "completed");
+
+    if (successes.length === 0 && failures.length < 3) {
+      pendingRetries.push({
+        taskId,
+        recommendation: {
+          shouldRetry: true,
+          reason: `Attempt ${failures.length + 1} of 3`,
+        },
+      });
+    }
+  }
+
+  return {
+    agents: progressReports,
+    history: recentHistory,
+    stats,
+    pendingRetries,
+  };
+}
+
+/**
  * GET /api/lab/progress
  * Returns progress for all running agents and history
  */
@@ -310,6 +424,18 @@ export async function GET(request: Request) {
       } catch (error) {
         console.error("[Progress] Backend fetch failed, falling back to local:", error);
       }
+    }
+
+    // Check if we're on Vercel and should use remote data
+    const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
+
+    if (isVercel && AGENT_STATE_URL) {
+      const remoteData = await fetchRemoteProgressData();
+      if (remoteData) {
+        const history = remoteData.progress?.history || [];
+        return NextResponse.json(buildProgressResponse(history, remoteData.agents));
+      }
+      return NextResponse.json(buildProgressResponse([], {}));
     }
 
     // Get running agents

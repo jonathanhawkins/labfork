@@ -24,6 +24,9 @@ const BACKEND_URL =
   'http://localhost:8003';
 const HAS_BACKEND = Boolean(process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL);
 
+// Public agent state API (for Vercel deployment - can't SSH from cloud)
+const AGENT_STATE_URL = process.env.AGENT_STATE_URL || '';
+
 function normalizeAgentId(raw?: string | null): string | undefined {
   if (!raw) return undefined;
   const trimmed = raw.trim();
@@ -387,9 +390,30 @@ export async function GET() {
   // Check if we have a real backend URL configured (ngrok/Tailscale tunnel)
   const hasRealBackend = BACKEND_URL && !BACKEND_URL.includes('localhost');
 
-  // On Vercel without a real backend, return empty state (no fake data)
+  // On Vercel without a real backend, try AGENT_STATE_URL for activities
   const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
   if (isVercel && !hasRealBackend) {
+    // Try to fetch from public agent state API
+    if (AGENT_STATE_URL) {
+      try {
+        const response = await fetch(`${AGENT_STATE_URL}/agents`, {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(5000),
+        });
+        if (response.ok) {
+          const agents = await response.json();
+          const researchActivities = buildResearchAgentActivities(agents);
+          return NextResponse.json({
+            activities: researchActivities,
+            timestamp: new Date().toISOString(),
+            connected: true,
+          });
+        }
+      } catch (e) {
+        console.error('[Activities API] Failed to fetch from AGENT_STATE_URL:', e);
+      }
+    }
+
     return NextResponse.json({
       activities: [],
       timestamp: new Date().toISOString(),
@@ -444,9 +468,8 @@ export async function GET() {
     ];
 
     // Deduplicate by id
-    const uniqueActivities = Array.from(
-      new Map(activities.map((a) => [a.id, a])).values()
-    );
+    const activityMap = new Map(activities.map((a) => [a.id, a]));
+    const uniqueActivities = Array.from(activityMap.values());
 
     return NextResponse.json({
       activities: uniqueActivities,

@@ -80,11 +80,11 @@ export default function WatchPage() {
                 <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-foreground animate-pulse" />
               </div>
               <div>
-                <h1 className="text-sm sm:text-base text-foreground-bright">
-                  Voice Clone Pipeline
+                <h1 className="text-sm sm:text-base font-semibold bg-gradient-to-r from-blue-400 to-purple-400 text-transparent bg-clip-text">
+                  LabFork
                 </h1>
                 <p className="text-[10px] sm:text-xs text-muted-foreground">
-                  AI Research Lab - Live View
+                  Live Research Lab View
                 </p>
               </div>
             </div>
@@ -204,9 +204,9 @@ export default function WatchPage() {
         <div className="max-w-[1600px] mx-auto px-4 py-3">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-4">
-              <span>Voice Clone Pipeline</span>
+              <span className="font-medium">LabFork</span>
               <span className="text-foreground-subtle">|</span>
-              <span>AI-powered voice synthesis research</span>
+              <span>Fork. Watch. Discover.</span>
             </div>
             <div className="flex items-center gap-4">
               <a
@@ -216,7 +216,7 @@ export default function WatchPage() {
                 Full Lab (Admin)
               </a>
               <a
-                href="https://github.com/your-org/voice-clone-pipeline"
+                href="https://github.com/labfork"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-foreground transition-colors"

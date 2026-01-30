@@ -11,6 +11,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
+const AGENT_STATE_URL = process.env.AGENT_STATE_URL || '';
 
 // Paths
 const projectRoot = join(process.cwd(), "..");
@@ -183,6 +184,81 @@ async function killAgent(agentName: string): Promise<boolean> {
  * GET /api/lab/health
  * Returns health status of all agents
  */
+/**
+ * Fetch agents from remote agent state API (for Vercel)
+ */
+async function fetchRemoteAgents(): Promise<Record<string, AgentInfo> | null> {
+  if (!AGENT_STATE_URL) return null;
+
+  try {
+    const response = await fetch(`${AGENT_STATE_URL}/agents`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) {
+      console.error('[Health] Remote fetch failed:', response.status);
+      return null;
+    }
+
+    return await response.json();
+  } catch (e) {
+    console.error('[Health] Remote fetch error:', e);
+    return null;
+  }
+}
+
+/**
+ * Build health response from agents data
+ */
+function buildHealthResponse(agents: Record<string, AgentInfo>) {
+  const healthReports: AgentHealth[] = [];
+  const stuckAgents: string[] = [];
+  const errorAgents: string[] = [];
+
+  for (const [name, agent] of Object.entries(agents)) {
+    if (agent.status === "running") {
+      // For remote agents, create basic health info
+      const startTime = new Date(agent.started_at).getTime();
+      const runningFor = Math.round((Date.now() - startTime) / 60000);
+
+      const health: AgentHealth = {
+        name,
+        status: agent.status,
+        runningFor,
+        lastActivity: 0, // Can't determine from remote
+        logSize: 0,
+        isStuck: runningFor > 60, // Consider stuck after 1 hour
+        stuckReason: runningFor > 60 ? `Running for ${runningFor} minutes` : undefined,
+        hasErrors: false,
+        errors: [],
+      };
+
+      healthReports.push(health);
+      if (health.isStuck) stuckAgents.push(name);
+    }
+  }
+
+  const killedAgents = Object.entries(agents)
+    .filter(([_, a]) => a.status === "killed")
+    .map(([name]) => name);
+
+  return {
+    healthy: stuckAgents.length === 0 && errorAgents.length === 0,
+    runningCount: healthReports.length,
+    stuckCount: stuckAgents.length,
+    errorCount: errorAgents.length,
+    killedCount: killedAgents.length,
+    agents: healthReports,
+    stuckAgents,
+    errorAgents,
+    killedAgents: killedAgents.slice(0, 10),
+    recommendations: healthReports.length === 0
+      ? ["No agents currently running. Use POST /api/lab/auto-spawn to start work."]
+      : [],
+  };
+}
+
 export async function GET(request: Request) {
   try {
     if (BACKEND_URL) {
@@ -203,6 +279,17 @@ export async function GET(request: Request) {
       } catch (error) {
         console.error("[Health] Backend fetch failed, falling back to local:", error);
       }
+    }
+
+    // Check if we're on Vercel and should use remote data
+    const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
+
+    if (isVercel && AGENT_STATE_URL) {
+      const remoteAgents = await fetchRemoteAgents();
+      if (remoteAgents) {
+        return NextResponse.json(buildHealthResponse(remoteAgents));
+      }
+      return NextResponse.json(buildHealthResponse({}));
     }
 
     const agents = getAllAgents();
