@@ -236,7 +236,15 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
     lastUpdated,
   } = useLabActivities({ pollInterval: 5000 });
 
-  // Build agent list from real running agents only
+  // Demo agents to show when no real agents are running
+  const DEMO_AGENTS: Agent[] = [
+    { id: "opus", name: "Opus", color: COLORS.opus, position: [-3, 0, -2], task: "Analyzing research papers", status: "working" },
+    { id: "codex", name: "Codex", color: COLORS.codex, position: [3, 0, -2], task: "Implementing prosody model", status: "working" },
+    { id: "explorer", name: "Scout", color: COLORS.explorer, position: [-3, 0, 2], task: "Searching for synergies", status: "thinking" },
+    { id: "planner", name: "Planner", color: COLORS.planner, position: [3, 0, 2], task: "Scheduling training runs", status: "idle" },
+  ];
+
+  // Build agent list from real running agents, fall back to demo agents
   const agents = useMemo<Agent[]>(() => {
     const POSITION_PRESETS: [number, number, number][] = [
       [-3, 0, -2], [3, 0, -2], [-3, 0, 2], [3, 0, 2],
@@ -250,8 +258,8 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
       return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius];
     };
 
-    // Only show 4090 agents that are actually working
-    return agent4090Status
+    // Get real working agents
+    const realAgents = agent4090Status
       .filter(a => a.status === 'working')
       .map((a, index) => ({
         id: a.id || a.name,
@@ -261,14 +269,29 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
         task: sanitizeMessage(a.task || a.lastOutput || "Working..."),
         status: "working" as const,
       }));
+
+    // If no real agents, show demo agents
+    return realAgents.length > 0 ? realAgents : DEMO_AGENTS;
   }, [agent4090Status]);
 
-  // Sanitized activity log
+  // Demo activities when no real activities
+  const DEMO_ACTIVITIES = [
+    { time: new Date(Date.now() - 30000), agent: "Opus", action: "Completed analysis of voice prosody patterns" },
+    { time: new Date(Date.now() - 60000), agent: "Codex", action: "Training step 2847/5000 - loss: 0.0234" },
+    { time: new Date(Date.now() - 120000), agent: "Scout", action: "Found synergy: EmoProsody + StyleTransfer" },
+    { time: new Date(Date.now() - 180000), agent: "Planner", action: "Scheduled overnight training batch" },
+    { time: new Date(Date.now() - 240000), agent: "Opus", action: "Reviewing MaskGCT paper implementation" },
+  ];
+
+  // Sanitized activity log with demo fallback
   const activityLog = useMemo(() => {
-    return activitiesToLog(activities).map((entry) => ({
+    const realActivities = activitiesToLog(activities).map((entry) => ({
       ...entry,
       action: sanitizeMessage(entry.action),
     }));
+
+    // If no real activities, show demo activities
+    return realActivities.length > 0 ? realActivities : DEMO_ACTIVITIES;
   }, [activities]);
 
   // Fetch 4090 agent status
@@ -313,6 +336,14 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
     return () => clearInterval(interval);
   }, []);
 
+  // Demo compute stats as fallback
+  const DEMO_COMPUTE_STATS: ComputeNetworkStats = {
+    totalDevices: 12,
+    busyDevices: 8,
+    tierCounts: { power: 2, standard: 5, crowd: 5 },
+    totalCompute: 45.2,
+  };
+
   // Fetch compute network stats
   useEffect(() => {
     const fetchComputeStats = async () => {
@@ -320,7 +351,7 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
         const response = await fetch("/api/compute/devices");
         const data = await response.json();
 
-        if (data.success && data.devices) {
+        if (data.success && data.devices && data.devices.length > 0) {
           const devices = data.devices;
           const tierCounts = {
             power: devices.filter((d: { tier: string }) => d.tier === 'power').length,
@@ -336,9 +367,13 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
             tierCounts,
             totalCompute,
           });
+        } else {
+          // No real devices, use demo stats
+          setComputeNetworkStats(DEMO_COMPUTE_STATS);
         }
       } catch {
-        // Silently fail - will use demo visualization
+        // API failed, use demo stats
+        setComputeNetworkStats(DEMO_COMPUTE_STATS);
       }
     };
 

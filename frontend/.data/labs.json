@@ -1,0 +1,271 @@
+[
+  {
+    "id": "lab_ml0jyof3b7c5tc",
+    "slug": "firefly-core",
+    "name": "Firefly Core",
+    "description": "Core MPPT algorithms and hardware integration for the Firefly mesh network",
+    "domainSlug": "firefly-network",
+    "domainName": "Firefly Network",
+    "owner": {
+      "id": "user_demo1",
+      "username": "spark_research",
+      "displayName": "Spark Research",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 128,
+      "forks": 34,
+      "tasks": 12,
+      "papers": 8,
+      "experiments": 8,
+      "viewers": 4,
+      "views": 1
+    },
+    "tags": [
+      "mppt",
+      "solar",
+      "mesh",
+      "hardware"
+    ],
+    "primaryColor": "#f59e0b",
+    "createdAt": "2026-01-30T07:19:29.823Z",
+    "updatedAt": "2026-01-30T07:19:42.125Z",
+    "lastActivityAt": "2026-01-30T07:19:29.823Z"
+  },
+  {
+    "id": "lab_ml0jyof4i872zs",
+    "slug": "thread-protocol",
+    "name": "Thread Protocol Implementation",
+    "description": "Thread mesh networking protocol for IoT devices in the Firefly network",
+    "domainSlug": "firefly-network",
+    "domainName": "Firefly Network",
+    "owner": {
+      "id": "user_demo3",
+      "username": "firefly_dev",
+      "displayName": "Firefly Developer",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 67,
+      "forks": 18,
+      "tasks": 8,
+      "papers": 4,
+      "experiments": 5,
+      "viewers": 4
+    },
+    "tags": [
+      "thread",
+      "mesh",
+      "iot",
+      "protocol"
+    ],
+    "primaryColor": "#f59e0b",
+    "createdAt": "2026-01-30T07:19:29.824Z",
+    "updatedAt": "2026-01-30T07:19:29.825Z",
+    "lastActivityAt": "2026-01-30T07:19:29.824Z"
+  },
+  {
+    "id": "lab_ml0jyof5o9w562",
+    "slug": "emotion-tts",
+    "name": "Emotion TTS Research",
+    "description": "Prosody and emotion control in text-to-speech synthesis using neural networks",
+    "domainSlug": "voice-clone",
+    "domainName": "Voice Cloning",
+    "owner": {
+      "id": "user_demo2",
+      "username": "voice_pioneer",
+      "displayName": "Voice Pioneer",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 89,
+      "forks": 27,
+      "tasks": 15,
+      "papers": 12,
+      "experiments": 10,
+      "viewers": 1
+    },
+    "tags": [
+      "tts",
+      "prosody",
+      "emotion",
+      "neural"
+    ],
+    "primaryColor": "#3b82f6",
+    "createdAt": "2026-01-30T07:19:29.825Z",
+    "updatedAt": "2026-01-30T07:19:29.826Z",
+    "lastActivityAt": "2026-01-30T07:19:29.825Z"
+  },
+  {
+    "id": "lab_ml0jyof6tmxsm2",
+    "slug": "zero-shot-clone",
+    "name": "Zero-Shot Voice Cloning",
+    "description": "Speaker adaptation with minimal reference audio using VALL-E and Pocket TTS",
+    "domainSlug": "voice-clone",
+    "domainName": "Voice Cloning",
+    "owner": {
+      "id": "user_demo4",
+      "username": "ai_researcher",
+      "displayName": "AI Researcher",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 156,
+      "forks": 42,
+      "tasks": 9,
+      "papers": 7,
+      "experiments": 6,
+      "viewers": 3
+    },
+    "tags": [
+      "zero-shot",
+      "vall-e",
+      "speaker-adaptation"
+    ],
+    "primaryColor": "#3b82f6",
+    "createdAt": "2026-01-30T07:19:29.826Z",
+    "updatedAt": "2026-01-30T07:19:29.827Z",
+    "lastActivityAt": "2026-01-30T07:19:29.826Z"
+  },
+  {
+    "id": "lab_ml0jyof8f6dmvx",
+    "slug": "transformer-signals",
+    "name": "Transformer Signals",
+    "description": "Momentum signal generation using transformer architectures for algorithmic trading",
+    "domainSlug": "quant-trading",
+    "domainName": "Quantitative Trading",
+    "owner": {
+      "id": "user_demo4",
+      "username": "ai_researcher",
+      "displayName": "AI Researcher",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 203,
+      "forks": 56,
+      "tasks": 18,
+      "papers": 15,
+      "experiments": 12,
+      "viewers": 2
+    },
+    "tags": [
+      "transformer",
+      "momentum",
+      "signals",
+      "ml"
+    ],
+    "primaryColor": "#22c55e",
+    "createdAt": "2026-01-30T07:19:29.828Z",
+    "updatedAt": "2026-01-30T07:19:29.830Z",
+    "lastActivityAt": "2026-01-30T07:19:29.828Z"
+  },
+  {
+    "id": "lab_ml0jyofcafqwpe",
+    "slug": "portfolio-opt",
+    "name": "Portfolio Optimization",
+    "description": "Deep reinforcement learning for dynamic portfolio rebalancing",
+    "domainSlug": "quant-trading",
+    "domainName": "Quantitative Trading",
+    "owner": {
+      "id": "user_demo5",
+      "username": "open_hardware",
+      "displayName": "Open Hardware",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 78,
+      "forks": 21,
+      "tasks": 6,
+      "papers": 9,
+      "experiments": 4,
+      "viewers": 4
+    },
+    "tags": [
+      "rl",
+      "portfolio",
+      "optimization"
+    ],
+    "primaryColor": "#22c55e",
+    "createdAt": "2026-01-30T07:19:29.832Z",
+    "updatedAt": "2026-01-30T07:19:29.835Z",
+    "lastActivityAt": "2026-01-30T07:19:29.832Z"
+  },
+  {
+    "id": "lab_ml0jyofgd8g7tz",
+    "slug": "sim2real",
+    "name": "Sim2Real Transfer",
+    "description": "Domain randomization and transfer learning for robotic manipulation",
+    "domainSlug": "robotics",
+    "domainName": "Robotics",
+    "owner": {
+      "id": "user_demo5",
+      "username": "open_hardware",
+      "displayName": "Open Hardware",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 112,
+      "forks": 31,
+      "tasks": 11,
+      "papers": 14,
+      "experiments": 7,
+      "viewers": 1
+    },
+    "tags": [
+      "sim2real",
+      "manipulation",
+      "transfer-learning"
+    ],
+    "primaryColor": "#a855f7",
+    "createdAt": "2026-01-30T07:19:29.836Z",
+    "updatedAt": "2026-01-30T07:19:29.837Z",
+    "lastActivityAt": "2026-01-30T07:19:29.836Z"
+  },
+  {
+    "id": "lab_ml0jyofhtcn2ft",
+    "slug": "protein-folding",
+    "name": "Protein Folding Explorer",
+    "description": "AlphaFold-based analysis and prediction for novel protein structures",
+    "domainSlug": "biotech",
+    "domainName": "Biotech",
+    "owner": {
+      "id": "user_demo1",
+      "username": "spark_research",
+      "displayName": "Spark Research",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 234,
+      "forks": 67,
+      "tasks": 22,
+      "papers": 28,
+      "experiments": 15,
+      "viewers": 4
+    },
+    "tags": [
+      "alphafold",
+      "protein",
+      "structure"
+    ],
+    "primaryColor": "#ec4899",
+    "createdAt": "2026-01-30T07:19:29.837Z",
+    "updatedAt": "2026-01-30T07:19:29.838Z",
+    "lastActivityAt": "2026-01-30T07:19:29.837Z"
+  }
+]
