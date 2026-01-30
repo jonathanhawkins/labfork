@@ -31,7 +31,9 @@ export async function POST(request: NextRequest) {
 
     // In a real implementation, this would use a backend SSH service
     // For now, we simulate responses based on known hosts
-    const isKnownHost = host === "100.83.78.111" && user === "doc";
+    const knownGpuHost = process.env.REMOTE_GPU_HOST || '';
+    const knownGpuUser = process.env.REMOTE_GPU_USER || 'doc';
+    const isKnownHost = knownGpuHost && host === knownGpuHost && user === knownGpuUser;
 
     switch (action) {
       case "test": {

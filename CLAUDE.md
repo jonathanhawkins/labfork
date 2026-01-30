@@ -173,27 +173,33 @@ npm run lint     # ESLint
 
 ## Remote Training on RTX 4090 (Windows WSL)
 
-A Windows 10 machine with RTX 4090 (24GB VRAM) is available for faster training via Tailscale VPN.
+A remote GPU machine (e.g., RTX 4090 with 24GB VRAM) can be configured for faster training.
 
-**IMPORTANT**: Always use conda environment `voice` when running commands on the 4090 machine!
+**Setup**: Set environment variables in `.env`:
+```bash
+REMOTE_GPU_HOST=your-gpu-host-ip
+REMOTE_GPU_USER=your-username
+```
+
+**IMPORTANT**: Always use the configured conda environment when running commands on the GPU machine!
 
 ### Connection Details
-- **Tailscale IP**: `100.83.78.111`
-- **User**: `doc`
-- **Project Path**: `~/dev/voice-clone-pipeline`
+- **Host**: Set via `REMOTE_GPU_HOST` env var
+- **User**: Set via `REMOTE_GPU_USER` env var (default: `doc`)
+- **Project Path**: `~/dev/labfork`
 - **Conda Environment**: `voice` (REQUIRED for all Python commands)
 
 ### Connecting to Training Session
 
 ```bash
-# SSH into WSL instance
-ssh doc@100.83.78.111
+# SSH into remote machine (replace with your configured host)
+ssh $REMOTE_GPU_USER@$REMOTE_GPU_HOST
 
 # Or attach to existing tmux training session
-ssh doc@100.83.78.111 -t "source ~/miniconda3/bin/activate && conda activate voice && tmux attach -t training"
+ssh $REMOTE_GPU_USER@$REMOTE_GPU_HOST -t "source ~/miniconda3/bin/activate && conda activate voice && tmux attach -t training"
 
 # If no session exists, create one
-ssh doc@100.83.78.111 -t "tmux new-session -s training"
+ssh $REMOTE_GPU_USER@$REMOTE_GPU_HOST -t "tmux new-session -s training"
 ```
 
 ### Running Training on RTX 4090
@@ -204,7 +210,7 @@ ssh doc@100.83.78.111 -t "tmux new-session -s training"
 # On the Windows WSL machine
 source ~/miniconda3/bin/activate
 conda activate voice
-cd ~/dev/voice-clone-pipeline/training
+cd ~/dev/labfork/training
 
 # RECOMMENDED: LoRA training (0.07% of params, prevents overfitting)
 python train_lora_deepseek.py --config config/rtx_4090_lora.yaml
@@ -221,13 +227,12 @@ python train_csm_final.py --config config/rtx_4090_deepseek.yaml
 ### Syncing Project Files
 
 ```bash
-# From Mac to Windows (run on Mac)
+# From local to remote (run on local machine)
 rsync -avz --progress --exclude 'node_modules' --exclude '.next' --exclude 'venv' \
-  /Users/light/dev/web-apps/voice-clone-pipeline/ \
-  doc@100.83.78.111:~/dev/voice-clone-pipeline/
+  ./ \
+  $REMOTE_GPU_USER@$REMOTE_GPU_HOST:~/dev/labfork/
 
-# Don't forget to update data paths after syncing
-# Mac paths (/Users/light/...) need to be changed to Linux paths (/home/doc/...)
+# Don't forget to update data paths after syncing if needed
 ```
 
 ### Monitoring GPU
@@ -243,17 +248,64 @@ watch -n 1 /usr/lib/wsl/lib/nvidia-smi
 
 ```bash
 # Simple SSH connection
-ssh doc@100.83.78.111
+ssh $REMOTE_GPU_USER@$REMOTE_GPU_HOST
 
 # Run a command with conda environment
-ssh doc@100.83.78.111 "source ~/miniconda3/bin/activate && conda activate voice && <your_command>"
+ssh $REMOTE_GPU_USER@$REMOTE_GPU_HOST "source ~/miniconda3/bin/activate && conda activate voice && <your_command>"
 
-# Check GPU status
-ssh doc@100.83.78.111 "/usr/lib/wsl/lib/nvidia-smi"
+# Check GPU status (WSL2 path)
+ssh $REMOTE_GPU_USER@$REMOTE_GPU_HOST "/usr/lib/wsl/lib/nvidia-smi"
 
 # Check PyTorch CUDA
-ssh doc@100.83.78.111 "source ~/miniconda3/bin/activate && conda activate voice && python -c 'import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))'"
+ssh $REMOTE_GPU_USER@$REMOTE_GPU_HOST "source ~/miniconda3/bin/activate && conda activate voice && python -c 'import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))'"
 ```
+
+### Troubleshooting: SSH Connection Fails After Reboot (WSL2)
+
+**Problem**: SSH to your remote GPU hangs or refuses connection after Windows/WSL reboot.
+
+**Cause**: WSL2 gets a new IP address on each restart, but the Windows port proxy still points to the old IP. Tailscale runs on Windows, not WSL2, so port forwarding is required.
+
+**Fix** (run in PowerShell as Administrator on Windows):
+```powershell
+# 1. Get current WSL2 IP
+wsl hostname -I
+
+# 2. Update port proxy (replace <WSL_IP> with IP from step 1)
+netsh interface portproxy delete v4tov4 listenport=22 listenaddress=0.0.0.0
+netsh interface portproxy add v4tov4 listenport=22 listenaddress=0.0.0.0 connectport=22 connectaddress=<WSL_IP>
+
+# 3. Also update other forwarded ports if needed
+netsh interface portproxy delete v4tov4 listenport=3003 listenaddress=0.0.0.0
+netsh interface portproxy add v4tov4 listenport=3003 listenaddress=0.0.0.0 connectport=3003 connectaddress=<WSL_IP>
+netsh interface portproxy delete v4tov4 listenport=8003 listenaddress=0.0.0.0
+netsh interface portproxy add v4tov4 listenport=8003 listenaddress=0.0.0.0 connectport=8003 connectaddress=<WSL_IP>
+
+# 4. Verify
+netsh interface portproxy show all
+```
+
+**Also ensure SSH is running in WSL2**:
+```bash
+sudo service ssh start
+sudo service ssh status
+```
+
+### Troubleshooting: Research Agents Get Stuck / Ollama Connection Issues
+
+**Problem**: Research orchestrator shows "No viable tasks", agents fail with "stuck" status, Ollama connection errors.
+
+**Cause**: WSL2 can't access Ollama running on Windows `127.0.0.1:11434`.
+
+**Fix**: Enable localhost forwarding in `C:\Users\Doc Holiday\.wslconfig`:
+```ini
+[wsl2]
+localhostForwarding=true
+```
+
+Then restart WSL: `wsl --shutdown`
+
+**Full troubleshooting guide**: See [docs/WSL2_OLLAMA_TROUBLESHOOTING.md](../docs/WSL2_OLLAMA_TROUBLESHOOTING.md) for complete instructions on resetting stuck tasks and verification steps.
 
 ### Known Issues & Required Fixes for LoRA Training
 
@@ -318,172 +370,7 @@ ssh doc@100.83.78.111 "source ~/miniconda3/bin/activate && conda activate voice 
 - **Backend**: FastAPI, PyTorch, torchaudio, Whisper, Parselmouth, Transformers
 - **Training**: PyTorch, PEFT (LoRA), Accelerate, WandB
 
-## FREE Local Claude Code (claude-free)
+## Additional Documentation
 
-Run Claude Code for FREE using local Ollama models instead of paid Anthropic API.
-
-### Setup (One-time)
-
-```bash
-# 1. Install Ollama (if not installed)
-brew install ollama
-
-# 2. Download qwen3-coder model (18GB)
-ollama pull qwen3-coder:30b
-
-# 3. Create 32k context model (REQUIRED - Claude Code needs 20k+ tokens for tools)
-cat > /tmp/Modelfile.qwen3-coder-32k << 'EOF'
-FROM qwen3-coder:30b
-PARAMETER num_ctx 32768
-EOF
-ollama create qwen3-coder-32k -f /tmp/Modelfile.qwen3-coder-32k
-```
-
-### Usage
-
-```bash
-# Start Ollama (if not running)
-ollama serve &
-
-# Run FREE Claude Code
-./scripts/claude-free
-
-# Or in tmux
-tmux new-session -s claude-free "./scripts/claude-free"
-```
-
-### Key Details
-
-- **Model**: qwen3-coder-32k (30B MoE, ~3B active params)
-- **Memory**: ~21GB GPU (fits on 48GB M4 Pro)
-- **Context**: 32768 tokens (required for tool definitions)
-- **Tools**: All Claude Code tools work (Bash, Read, Write, Edit, etc.)
-
-### Troubleshooting
-
-If tools don't work, check context size:
-```bash
-ollama ps  # Should show CONTEXT: 32768
-```
-
-If context is 4096, the model needs to be recreated with `num_ctx 32768`.
-
-## AI Cost Optimization Strategy
-
-Use FREE local models for exploration/research, automatically route complex coding tasks to paid OpenAI Codex.
-
-### What is Codex?
-
-**Codex** = OpenAI's Codex CLI (https://github.com/openai/codex)
-- **NOT a free tool** - Uses OpenAI API (paid)
-- Terminal-based coding agent from OpenAI
-- Much better at coding than local Ollama models
-- Used automatically by orchestrator for reviews and complex tasks
-
-### Installation
-
-```bash
-# Mac (via Homebrew)
-brew install --cask codex
-
-# Linux (4090 machine)
-# Download from https://github.com/openai/codex/releases/latest
-curl -fsSL https://github.com/openai/codex/releases/download/rust-v0.92.0/codex-x86_64-unknown-linux-musl.tar.gz | tar -xz
-mv codex-x86_64-unknown-linux-musl ~/bin/codex
-chmod +x ~/bin/codex
-
-# Login with OpenAI account
-codex login
-```
-
-### Task Routing (Automatic)
-
-The orchestrator automatically routes tasks based on complexity:
-
-| Task Type | Agent Type | Model | Cost |
-|-----------|------------|-------|------|
-| Simple exploration, research | Ollama | qwen3-coder-32k | FREE |
-| Reviews, audits, validation | **Codex** | codex-mini-latest | Paid (~$0.50/task) |
-| Complex multi-file work | **Codex** | codex-mini-latest | Paid (~$1-2/task) |
-| Architecture, refactoring | **Codex** | codex-mini-latest | Paid (~$2-5/task) |
-
-**No manual routing needed** - the orchestrator picks the right tool automatically.
-
-### Available Tools
-
-```bash
-# Lab manager (Claude Code + Ollama) - FREE
-./scripts/claude-free
-tmux new-session -s claude-free "./scripts/claude-free"
-
-# Research orchestrator on 4090 - Hybrid (FREE + Paid)
-ssh doc@100.83.78.111 -t "tmux attach -t lab-manager"
-```
-
-## 4090 Research System (Hybrid: FREE + Paid)
-
-The 4090 runs a **hybrid system** that automatically uses the right tool:
-- **Ollama (FREE)** for simple exploration and web research
-- **Codex (PAID)** for complex coding, reviews, and implementations
-
-### How It Works
-
-The orchestrator (`orchestrator.js`) automatically selects the right agent:
-
-```javascript
-// Simple task → Ollama (FREE)
-"Explore DiffStyleTTS approach" → type: "ollama"
-
-// Complex task → Codex (PAID)
-"Review prosody implementation" → type: "codex" (keyword: review)
-"Refactor multi-file architecture" → type: "codex" (keyword: refactor)
-```
-
-### Setup on 4090
-
-```bash
-# SSH into 4090
-ssh doc@100.83.78.111
-
-# Install Codex CLI (one-time)
-cd /tmp
-curl -fsSL https://github.com/openai/codex/releases/download/rust-v0.92.0/codex-x86_64-unknown-linux-musl.tar.gz -o codex.tar.gz
-tar -xzf codex.tar.gz
-mkdir -p ~/bin
-mv codex-x86_64-unknown-linux-musl ~/bin/codex
-chmod +x ~/bin/codex
-
-# Login with OpenAI account
-~/bin/codex login
-
-# Start orchestrator
-cd ~/dev/voice-clone-pipeline
-.skills/research-manager/rm orchestrator start
-
-# Start Ollama
-nohup ollama serve > /tmp/ollama.log 2>&1 &
-```
-
-### Monitoring
-
-```bash
-# Check orchestrator status
-ssh doc@100.83.78.111 "cd ~/dev/voice-clone-pipeline && .skills/research-manager/rm orchestrator status"
-
-# View logs
-ssh doc@100.83.78.111 "cd ~/dev/voice-clone-pipeline && .skills/research-manager/rm orchestrator logs"
-
-# Check GPU usage
-ssh doc@100.83.78.111 "/usr/lib/wsl/lib/nvidia-smi"
-
-# Check what agents are running
-ssh doc@100.83.78.111 "tmux list-sessions"
-```
-
-### Cost Estimate
-
-With hybrid routing:
-- ~5-10 Codex calls per day = $5-15/day
-- Simple exploration = FREE (Ollama)
-- **Much cheaper than all-paid** ($100+/day)
-- **Much better than all-free** (8.9% completion rate → 40-60%)
+- **[Ollama & Cost Strategy](docs/OLLAMA_AND_COST_STRATEGY.md)**: FREE local Claude Code with Ollama, AI cost optimization, 4090 hybrid research system
+- **[WSL2 Ollama Troubleshooting](docs/WSL2_OLLAMA_TROUBLESHOOTING.md)**: Fixing WSL2/Ollama connection issues

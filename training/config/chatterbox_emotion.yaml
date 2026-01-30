@@ -1,0 +1,166 @@
+# Chatterbox Emotion Exaggeration Configuration
+# Based on Chatterbox by Resemble AI (December 2025)
+#
+# Key features:
+# - Single-parameter emotion exaggeration (0.0=monotone to 2.0=dramatic)
+# - Native paralinguistic tags: [laugh], [sigh], [cough], [chuckle], etc.
+# - CFG weight control for pacing adjustment
+# - Zero-shot voice cloning from 5 seconds of reference
+#
+# GitHub: https://github.com/resemble-ai/chatterbox
+# HuggingFace: ResembleAI/chatterbox-turbo
+
+# Model Configuration
+model:
+  # Dimensions
+  input_dim: 768            # Input feature dim (wav2vec2/HuBERT)
+  hidden_dim: 512           # Hidden layer dimension
+  emotion_dim: 256          # Emotion embedding dimension
+  output_dim: 2048          # Output to match CSM hidden dim
+  speaker_dim: 256          # Speaker embedding dimension
+  tag_embedding_dim: 128    # Paralinguistic tag embedding dim
+
+  # Emotion exaggeration settings
+  default_exaggeration: 0.5  # Default level (natural)
+  min_exaggeration: 0.0      # Monotone
+  max_exaggeration: 2.0      # Theatrical
+
+  # CFG (Classifier-Free Guidance) settings
+  default_cfg_weight: 0.5
+  min_cfg_weight: 0.0
+  max_cfg_weight: 1.0
+
+  # Paralinguistic tags
+  max_tags_per_utterance: 10
+
+  # Single-step decoder (distilled)
+  use_single_step_decoder: true
+  decoder_hidden_dim: 512
+  decoder_num_layers: 4
+  decoder_num_heads: 8
+
+  # Architecture
+  dropout: 0.1
+  use_layer_norm: true
+
+  # Integration
+  num_prosody_tokens: 4
+
+# Data Configuration
+train_manifest: "../data/emotion_train.json"
+val_manifest: "../data/emotion_val.json"
+max_audio_length: 500
+max_seq_length: 1000
+
+# Feature extraction
+feature_extractor: "wav2vec2"  # wav2vec2, hubert, or mel
+feature_model: "facebook/wav2vec2-base-960h"
+
+# Training
+epochs: 100
+batch_size: 16
+learning_rate: 1.0e-4
+warmup_steps: 1000
+weight_decay: 0.01
+
+# Loss weights
+exag_consistency_weight: 1.0  # Exaggeration consistency
+tag_weight: 0.5               # Tag reconstruction
+speaker_weight: 0.5           # Speaker preservation
+prosody_weight: 1.0           # Prosody quality
+
+# Optimizer
+optimizer: "adamw"
+adam_beta1: 0.9
+adam_beta2: 0.999
+gradient_clip: 1.0
+
+# Checkpointing
+checkpoint_dir: "../checkpoints/chatterbox_emotion"
+save_every: 5
+log_every: 100
+eval_every: 500
+
+# Hardware
+device: "cuda"
+num_workers: 4
+gradient_accumulation: 1
+use_amp: true
+
+# Evaluation
+eval_exaggeration_levels: [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+
+# Paralinguistic tag descriptions
+paralinguistic_tags:
+  # Laughter family
+  laugh: "natural laughter"
+  chuckle: "soft chuckle"
+  giggle: "light giggle"
+  snicker: "quiet snicker"
+
+  # Breathing family
+  sigh: "relaxed or resigned sigh"
+  gasp: "sudden gasp of surprise"
+  exhale: "audible exhale"
+  inhale: "audible inhale"
+  yawn: "tired yawn"
+
+  # Throat sounds
+  cough: "clearing cough"
+  clear_throat: "throat clearing"
+  sniff: "quick sniff"
+
+  # Hesitation/fillers
+  hmm: "thinking hmm"
+  uh: "hesitation uh"
+  um: "hesitation um"
+  er: "hesitation er"
+  ah: "realization ah"
+
+  # Emotional reactions
+  sob: "emotional sobbing"
+  cry: "crying"
+  whimper: "soft whimper"
+  groan: "frustrated groan"
+
+  # Surprise
+  oh: "surprise oh"
+  wow: "impressed wow"
+  huh: "confused huh"
+
+  # Affirmation/negation
+  mmhmm: "agreement mmhmm"
+  uh_huh: "casual yes"
+  nuh_uh: "casual no"
+  tsk: "disapproval tsk"
+
+# Exaggeration level guidelines
+exaggeration_guidelines:
+  0.0: "Monotone - completely flat, no emotional expression"
+  0.25: "Subdued - minimal emotional variation"
+  0.5: "Natural - balanced, typical emotional expression (default)"
+  0.75: "Expressive - enhanced emotional conveyance"
+  1.0: "Enhanced - clear, deliberate emotional emphasis"
+  1.25: "Strong - pronounced emotional expression"
+  1.5: "Dramatic - highly expressive, theatrical"
+  2.0: "Theatrical - maximum expression, may speed up speech"
+
+# CFG weight interaction with exaggeration
+# Higher exaggeration tends to speed up speech
+# Lower cfg_weight compensates with slower, more deliberate pacing
+cfg_exaggeration_recommendations:
+  - exaggeration: 0.5
+    cfg_weight: 0.5
+    note: "Default balanced settings"
+  - exaggeration: 0.75
+    cfg_weight: 0.45
+    note: "Slightly reduced CFG for natural pacing"
+  - exaggeration: 1.0
+    cfg_weight: 0.4
+    note: "Lower CFG to prevent rushing"
+  - exaggeration: 1.5
+    cfg_weight: 0.35
+    note: "Significantly reduced CFG for dramatic effect"
+  - exaggeration: 2.0
+    cfg_weight: 0.3
+    note: "Minimum CFG for theatrical delivery"

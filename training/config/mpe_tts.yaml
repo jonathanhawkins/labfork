@@ -1,0 +1,164 @@
+# MPE-TTS Configuration
+# Multi-Modal Prompt Emotion Encoder for Expressive TTS
+# Based on "MPE-TTS" (Interspeech 2025, arXiv:2505.18453)
+
+model:
+  # ========== Multi-Modal Encoder Settings ==========
+
+  # Speech branch (Emotion2Vec+ Large)
+  emotion2vec_model: "iic/emotion2vec_plus_large"
+  speech_emotion_dim: 768
+  use_pretrained_emotion2vec: true
+
+  # Text/Image branch (CLIP)
+  clip_model: "openai/clip-vit-base-patch32"
+  clip_dim: 512
+  freeze_clip: true
+
+  # Adapter settings (for text/image to emotion alignment)
+  adapter_hidden_dim: 512
+  adapter_num_layers: 2
+  adapter_dropout: 0.1
+  adapter_activation: "gelu"
+
+  # Shared emotion latent space
+  emotion_latent_dim: 256
+
+  # Emotion categories (MEAD-TTS style)
+  num_emotions: 8
+  emotion_labels:
+    - "neutral"
+    - "happy"
+    - "sad"
+    - "angry"
+    - "surprised"
+    - "fearful"
+    - "disgusted"
+    - "contempt"
+
+  # ========== Content Encoder ==========
+  content_encoder_layers: 5
+  content_encoder_dim: 512
+
+  # ========== Timbre Encoder (ECAPA-TDNN style) ==========
+  timbre_dim: 192
+
+  # ========== Prosody Encoder (VQ) ==========
+  prosody_codebook_size: 512
+  prosody_code_dim: 64
+  prosody_num_quantizers: 2
+
+  # ========== Prosody Predictor ==========
+  # Paper: 8 Transformer layers, 8 heads, 768 dims
+  predictor_num_layers: 8
+  predictor_num_heads: 8
+  predictor_dim: 768
+  predictor_ff_dim: 3072
+  predictor_dropout: 0.1
+
+  # ========== Output Settings ==========
+  output_dim: 2048  # CSM prosody hidden dimension
+  num_prosody_tokens: 4
+
+  # ========== Training Settings ==========
+  dropout: 0.1
+  use_layer_norm: true
+
+  # Loss weights
+  mse_weight: 1.0      # MSE for modality alignment
+  ecl_weight: 0.5      # Emotion Consistency Loss
+  prosody_weight: 1.0  # Prosody prediction loss
+  reconstruction_weight: 0.5
+
+  # Three-stage training epochs
+  stage1_epochs: 100   # MPEE training
+  stage2_steps: 500000 # Acoustic pre-training
+  stage2_finetune_epochs: 50
+  stage3_epochs: 50    # Prosody predictor
+
+  warmup_steps: 40000  # Codebook warmup
+
+  # ========== Inference Settings ==========
+  default_intensity: 0.8
+  emotion_scale: 1.0
+
+training:
+  # Data
+  manifest_path: "../data/emotion_manifest.json"
+  val_manifest_path: "../data/emotion_manifest_val.json"
+  max_audio_length: 15.0
+  sample_rate: 16000
+
+  # Optimization
+  batch_size: 8
+  num_workers: 4
+
+  # Stage 1 (MPEE)
+  stage1_learning_rate: 1e-4
+  stage1_weight_decay: 0.01
+
+  # Stage 3 (Prosody Predictor)
+  stage3_learning_rate: 5e-5
+  stage3_weight_decay: 0.01
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/mpe_tts"
+  save_every_n_epochs: 10
+
+  # Logging
+  log_every_n_steps: 100
+  eval_every_n_epochs: 1
+
+evaluation:
+  # Alignment metrics
+  compute_modality_alignment: true
+  alignment_threshold: 0.8
+
+  # Emotion classification
+  compute_emotion_accuracy: true
+
+  # Prosody metrics
+  compute_prosody_diversity: true
+
+inference:
+  # Default settings
+  default_modality: "text"  # "text", "speech", or "image"
+  default_emotion: "neutral"
+  default_intensity: 0.8
+
+  # Interpolation
+  interpolation_method: "spherical"  # "linear" or "spherical"
+  transition_steps: 10
+
+  # Multi-modal fusion
+  enable_modality_fusion: false  # Combine multiple modalities
+  fusion_weights:
+    speech: 0.5
+    text: 0.3
+    image: 0.2
+
+# Novel interfaces enabled by MPE-TTS
+interfaces:
+  # Facial expression → Emotion
+  facial_expression:
+    enabled: true
+    face_detection: "mediapipe"  # "mediapipe", "dlib", or "opencv"
+    emotion_model: "fer2013"     # Facial expression recognition model
+
+  # Text description → Emotion
+  text_description:
+    enabled: true
+    max_length: 128
+    examples:
+      - "expressing genuine happiness and warmth"
+      - "speaking with deep sadness and melancholy"
+      - "conveying intense anger and frustration"
+
+  # Reference audio → Emotion
+  reference_audio:
+    enabled: true
+    min_duration: 1.0  # seconds
+    max_duration: 10.0

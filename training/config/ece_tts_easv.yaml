@@ -1,0 +1,204 @@
+# ECE-TTS EASV (Emotion-Adaptive Spherical Vectors) Training Configuration
+#
+# Key Innovation: emb_out = emb_neutral + α * (emb_emotion - emb_neutral)
+#
+# SUCCESS CRITERIA:
+# - Intensity=0.5 should produce weaker emotion than intensity=1.0
+# - Intensity=1.5 should produce stronger/exaggerated emotion
+# - Happy pitch contour at intensity=1.5 > intensity=1.0 > intensity=0.5
+
+# Model paths
+model_path: ../models/csm-1b
+
+# Data
+train_manifest: ../data/splits/train.json
+val_manifest: ../data/splits/val.json
+prosody_cache_dir: ../data/prosody_cache
+
+# Output
+output_dir: ../models/checkpoints/easv_v1
+
+# =============================================================================
+# EASV CONFIGURATION
+# =============================================================================
+
+easv:
+  # VAD dimensions
+  vad_dim: 3
+
+  # Embedding dimensions
+  embedding_dim: 256
+  hidden_dim: 512
+  output_dim: 2048
+
+  # Emotions
+  num_emotions: 8  # neutral, happy, sad, angry, surprised, calm, fearful, disgusted
+
+  # Learnable components
+  use_learnable_neutral: true  # Learn refined neutral anchor
+  use_learnable_directions: true  # Learn refined emotion directions
+  use_adaptive_scaling: true  # Per-emotion intensity scaling
+
+  # Intensity range (ECE-TTS specific)
+  default_intensity: 1.0
+  min_intensity: 0.0
+  max_intensity: 2.0
+
+  # Prosody tokens
+  num_prosody_tokens: 4
+
+  # Regularization
+  dropout: 0.1
+  use_layer_norm: true
+
+# =============================================================================
+# TRAINING SETTINGS
+# =============================================================================
+
+num_epochs: 30
+batch_size: 8
+learning_rate: 0.0001
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# Optimizer
+optimizer: adamw
+adam_beta1: 0.9
+adam_beta2: 0.98
+adam_epsilon: 1.0e-9
+
+# Scheduler
+scheduler: cosine
+warmup_steps: 500
+min_lr: 1.0e-6
+
+# =============================================================================
+# LOSS WEIGHTS
+# =============================================================================
+
+loss:
+  # Classification: emotion should be predictable from embedding
+  classification_weight: 0.5
+
+  # Reconstruction: VAD should be recoverable from embedding
+  reconstruction_weight: 1.0
+
+  # Monotonicity: higher α → larger distance from neutral
+  monotonicity_weight: 0.5
+
+  # Orthogonality: emotion directions should be distinct
+  orthogonality_weight: 0.2
+
+  # Neutral regularization: keep neutral anchor near origin
+  neutral_reg_weight: 0.1
+
+  # Prosody alignment: tokens should align with ground truth prosody
+  prosody_alignment_weight: 1.0
+
+# =============================================================================
+# INTENSITY TRAINING
+# =============================================================================
+
+intensity_training:
+  # Sample intensities during training
+  sample_intensities: [0.3, 0.5, 0.7, 1.0, 1.3, 1.5]
+
+  # Enforce monotonicity constraint
+  enforce_monotonicity: true
+
+  # Curriculum: start with limited range, expand
+  use_curriculum: true
+  curriculum_start_range: [0.7, 1.3]  # Start with ±30%
+  curriculum_end_range: [0.0, 2.0]  # Full range
+  curriculum_epochs: 10  # Epochs to expand
+
+  # Intensity augmentation probability
+  augment_intensity_prob: 0.5
+
+# =============================================================================
+# DATA AUGMENTATION
+# =============================================================================
+
+augmentation:
+  # Energy augmentation for emotion-specific patterns
+  energy_augmentation:
+    enabled: true
+    angry_boost_db: 4.0
+    happy_boost_db: 2.0
+    sad_reduce_db: -4.0
+    calm_reduce_db: -2.0
+    probability: 0.3
+
+  # Pitch augmentation
+  pitch_augmentation:
+    enabled: true
+    semitone_range: [-2.0, 2.0]
+    probability: 0.2
+
+  # Intensity jittering (small random changes)
+  intensity_jitter:
+    enabled: true
+    jitter_range: 0.1
+    probability: 0.5
+
+# =============================================================================
+# EVALUATION / VERIFICATION
+# =============================================================================
+
+evaluation:
+  # Evaluate at these intensities
+  eval_intensities: [0.5, 1.0, 1.5]
+
+  # SUCCESS CRITERIA thresholds
+  monotonicity_threshold: 0.9  # 90% of pairs should be monotonic
+
+  # Emotion classification accuracy target
+  min_classification_accuracy: 0.7
+
+  # F0 correlation with intensity (for pitch-based emotions)
+  min_f0_intensity_correlation: 0.3
+
+  # Run verification after each epoch
+  verify_every_epoch: true
+
+# =============================================================================
+# VALIDATION / LOGGING
+# =============================================================================
+
+log_every: 10
+save_every_epochs: 5
+validate_every_epochs: 1
+
+# Metrics to track
+track_metrics:
+  - monotonicity_ratio  # Fraction of intensity pairs with correct ordering
+  - emotion_accuracy  # Emotion classification accuracy
+  - neutral_distance  # Avg distance of neutral anchor from origin
+  - direction_orthogonality  # Avg pairwise similarity of directions
+
+# Early stopping
+early_stopping:
+  enabled: true
+  patience: 5
+  metric: monotonicity_ratio
+  mode: max
+
+# =============================================================================
+# HARDWARE / PERFORMANCE
+# =============================================================================
+
+# Mixed precision
+use_amp: true
+amp_dtype: bfloat16  # bfloat16 for stability
+
+# Gradient accumulation
+gradient_accumulation_steps: 2
+
+# DataLoader
+num_workers: 4
+pin_memory: true
+prefetch_factor: 2
+
+# Checkpointing
+save_best_only: false  # Save all checkpoints for analysis
+max_checkpoints: 5

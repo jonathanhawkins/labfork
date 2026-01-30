@@ -18,7 +18,7 @@ tmux new-session -d -s lab-manager -x 140 -y 40 "./scripts/claude-free"
 sleep 12
 
 # Send the lab manager initialization prompt
-tmux send-keys -t lab-manager "You are the LAB MANAGER for the voice-clone-pipeline project. Your responsibilities:
+tmux send-keys -t lab-manager "You are the LAB MANAGER for the labfork project. Your responsibilities:
 
 1. MONITOR: Check task status, pending work, git changes
 2. TRIAGE: Prioritize research implementations

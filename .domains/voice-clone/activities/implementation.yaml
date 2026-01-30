@@ -1,0 +1,34 @@
+# Implementation Activity Configuration
+# Defines how code implementation is visualized in the 3D lab
+
+id: implementation
+name: Code Implementation
+description: Writing and implementing prosody/emotion TTS techniques
+icon: Code
+tags:
+  - coding
+  - development
+  - implementation
+priority: 6
+
+visualization:
+  prop: null
+  animation: typing
+  particles: code-rain
+  color: 0x22c55e  # Green for coding
+  workLocation: desk
+  showProgress: true
+  highlightProp: false
+
+agentBehavior:
+  defaultStatus: working
+  typingSpeed: 1.2
+  faceProp: false
+
+progressDetection:
+  patterns:
+    - "Writing.*?file"
+    - "Creating.*?module"
+    - "Implementing.*?function"
+  completionPattern: "Implementation complete|Code committed|Tests passing"
+  completionMessage: "Implementation completed"

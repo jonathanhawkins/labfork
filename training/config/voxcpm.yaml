@@ -1,0 +1,167 @@
+# VoxCPM: Tokenizer-Free TTS for Context-Aware Speech Generation
+# Based on arXiv:2509.24650
+#
+# Key Innovation: Hierarchical semantic-acoustic modeling with semi-discrete
+# residual representations (FSQ), trained end-to-end under diffusion objective.
+#
+# Benefits:
+# - Tokenizer-free: No external speech tokenizers needed
+# - Continuous space: Preserves prosody nuances lost in discrete tokenization
+# - End-to-end: Single diffusion objective for all components
+# - Fast inference: RTF ~0.17 on RTX 4090 (6x realtime)
+# - Zero-shot cloning: Captures timbre, accent, emotional tone from 3-10s reference
+
+model:
+  # Audio settings
+  sample_rate: 16000
+  vae_frame_rate: 25  # 25 Hz (40ms per frame)
+  vae_latent_dim: 64  # VAE latent dimension
+
+  # TSLM (Text-Semantic Language Model)
+  # Paper: 24 layers, 1024 hidden, 4096 FFN
+  tslm_hidden_dim: 1024
+  tslm_ffn_dim: 4096
+  tslm_num_layers: 24
+  tslm_num_heads: 16
+  tslm_vocab_size: 50000  # Text vocabulary size
+
+  # FSQ (Finite Scalar Quantization)
+  # Paper: 256 dimensions, 9 levels
+  fsq_dim: 256
+  fsq_levels: 9  # Quantization levels per dimension
+  fsq_enabled: true
+
+  # RALM (Residual Acoustic Language Model)
+  # Paper: 6 layers, 1024 hidden, 4096 FFN
+  ralm_hidden_dim: 1024
+  ralm_ffn_dim: 4096
+  ralm_num_layers: 6
+  ralm_num_heads: 16
+
+  # LocDiT (Local Diffusion Transformer)
+  # Paper: 4 layers, 1024 hidden, 4096 FFN
+  locdit_hidden_dim: 1024
+  locdit_ffn_dim: 4096
+  locdit_num_layers: 4
+  locdit_num_heads: 16
+  locdit_patch_size: 4  # Frames per patch
+
+  # Flow matching
+  num_diffusion_steps: 50
+  cfg_scale: 2.0  # Classifier-free guidance scale (paper optimal)
+  cfg_mask_prob: 0.1  # Masking probability during training
+
+  # Causal Audio VAE
+  # Paper: 25 Hz frame rate, 640x total downsampling
+  vae_hidden_dim: 512
+  vae_num_blocks: 4
+  vae_strides: [2, 5, 8, 8]  # 640x total
+
+  # Training
+  dropout: 0.1
+  stop_loss_weight: 1.0
+  flow_loss_weight: 1.0
+
+  # CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+# Compact variant for faster training/inference
+model_compact:
+  # Reduced architecture (for development/testing)
+  tslm_num_layers: 12  # Half the layers
+  tslm_hidden_dim: 768
+  tslm_ffn_dim: 3072
+  ralm_num_layers: 4
+  ralm_hidden_dim: 768
+  locdit_num_layers: 3
+  locdit_hidden_dim: 768
+  num_diffusion_steps: 25  # Fewer steps
+
+data:
+  # Training data manifest
+  train_manifest: "../data/manifest.json"
+  val_manifest: "../data/val_manifest.json"
+
+  # Audio preprocessing
+  max_audio_len: 480000  # 30 seconds at 16kHz
+  min_audio_len: 16000   # 1 second minimum
+
+  # Text preprocessing
+  max_text_len: 512
+
+  # Dataset settings
+  precomputed_dir: null  # Optional precomputed features
+
+training:
+  # Optimization (paper settings)
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  batch_size: 8  # Per GPU
+  gradient_accumulation: 4
+  max_steps: 500000
+
+  # Learning rate schedule
+  warmup_steps: 10000
+  lr_schedule: "cosine"
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Mixed precision
+  use_amp: true
+  amp_dtype: "bfloat16"
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/voxcpm"
+  log_interval: 100
+  eval_interval: 5000
+  save_interval: 10000
+
+  # Hardware
+  device: "cuda"
+  num_workers: 8
+
+  # Distributed training
+  distributed: false
+  world_size: 1
+
+  # VAE pretraining (optional separate stage)
+  vae_pretrain_steps: 50000
+  vae_learning_rate: 1e-4
+
+inference:
+  # Generation settings
+  num_diffusion_steps: 50
+  cfg_scale: 2.0
+  temperature: 1.0
+
+  # Voice cloning
+  min_reference_duration: 3.0   # Minimum 3 seconds
+  max_reference_duration: 10.0  # Maximum 10 seconds
+
+  # Streaming
+  enable_streaming: false
+  chunk_size: 100  # Frames per chunk
+
+  # RTF optimization
+  use_torch_compile: true
+  torch_compile_mode: "max-autotune"
+
+# Performance benchmarks (from paper)
+# =====================================
+# VoxCPM-0.5B on SEED-TTS-EVAL:
+#   - English WER: 1.85%
+#   - Chinese CER: 0.93%
+#   - English SIM: 72.9%
+#   - Chinese SIM: 77.2%
+#   - RTF: 0.17 on RTX 4090
+
+# Training tips
+# =============
+# 1. FSQ creates natural semantic-acoustic specialization without explicit labels
+# 2. CFG scale 2.0 provides optimal intelligibility-similarity balance
+# 3. Reference audio 3-10s captures timbre, accent, and emotional tone
+# 4. Flow matching is more stable than DDPM for end-to-end training
+# 5. Causal VAE enables streaming synthesis with low latency
+# 6. Use compact variant for initial experiments before full training

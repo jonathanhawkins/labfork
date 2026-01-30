@@ -1,0 +1,28 @@
+# Evaluation Activity Template
+# Customize for your domain's evaluation activities
+
+id: evaluation
+name: Evaluation
+description: Evaluating model performance with metrics
+icon: BarChart
+
+visualization:
+  animation: focused
+  particles: data-flow
+  color: 0xf59e0b
+  workLocation: supercomputer
+  showProgress: true
+  highlightProp: true
+
+agentBehavior:
+  defaultStatus: working
+  typingSpeed: 1.0
+  faceProp: true
+
+progressDetection:
+  patterns:
+    - "Evaluating\\s+(\\w+)"
+    - "Computing\\s+(\\w+)"
+    - "(\\d+)%\\s+complete"
+  completionPattern: "Evaluation complete"
+  completionMessage: "Metrics computed"

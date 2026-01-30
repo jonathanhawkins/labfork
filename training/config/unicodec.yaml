@@ -1,0 +1,96 @@
+# UniCodec: Universal Speech Token Learning
+# Based on arXiv:2503.12115
+
+model:
+  # Audio settings
+  sample_rate: 16000
+  hop_length: 320  # 20ms at 16kHz (50 Hz token rate)
+  mel_dim: 80
+
+  # Global encoder (speaker/style)
+  global_dim: 256
+  global_hidden_dim: 512
+  global_num_layers: 3
+  global_num_heads: 8
+
+  # Local-semantic encoder (content + prosody)
+  semantic_dim: 256
+  semantic_hidden_dim: 512
+  semantic_num_layers: 6
+  semantic_num_heads: 8
+  semantic_codebook_size: 1024
+  semantic_num_quantizers: 2
+
+  # Local-residual encoder (acoustic details)
+  residual_dim: 128
+  residual_hidden_dim: 256
+  residual_num_layers: 4
+  residual_num_heads: 4
+  residual_codebook_size: 512
+  residual_num_quantizers: 4
+
+  # SSL distillation
+  ssl_model: "wav2vec2"  # wav2vec2 or hubert
+  ssl_dim: 768
+  ssl_layer: 7  # Mid-layer for prosody-rich features
+  distillation_weight: 1.0
+
+  # Decoder
+  decoder_hidden_dim: 512
+  decoder_num_layers: 6
+  decoder_num_heads: 8
+  decoder_ffn_dim: 2048
+
+  # Prosody predictor
+  prosody_num_tokens: 8
+  prosody_hidden_dim: 256
+  use_prosody_predictor: true
+
+  # Training
+  dropout: 0.1
+  commitment_cost: 0.25
+  ema_decay: 0.99
+
+  # CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+data:
+  # Training data manifest
+  train_manifest: "../data/manifest.json"
+  val_manifest: "../data/val_manifest.json"
+
+  # Precomputed features directory (optional)
+  precomputed_dir: null
+
+  # Dataset settings
+  max_len: 500  # Max sequence length (frames)
+
+training:
+  # Optimization
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  batch_size: 8
+  warmup_steps: 1000
+  max_steps: 100000
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/unicodec"
+  log_interval: 100
+  eval_interval: 1000
+  save_interval: 5000
+
+  # Hardware
+  device: "cuda"
+  num_workers: 4
+
+  # Optional: Use live SSL extraction (slower but more accurate)
+  use_ssl_extraction: false
+
+# Prosody-specific training tips
+# ================================
+# 1. SSL distillation is key for preserving paralinguistic info
+# 2. Mid-layer SSL features (layer 7) contain rich prosody information
+# 3. Semantic codebook learns content + prosody patterns together
+# 4. Monitor semantic perplexity - should be > 100 for good usage
+# 5. distillation_weight=1.0 provides balanced training

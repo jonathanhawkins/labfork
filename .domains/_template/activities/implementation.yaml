@@ -1,0 +1,28 @@
+# Implementation Activity Template
+# Customize for your domain's coding activities
+
+id: implementation
+name: Implementation
+description: Writing code to implement research findings
+icon: Code
+
+visualization:
+  animation: typing
+  particles: code-rain
+  color: 0x22c55e
+  workLocation: terminal
+  showProgress: true
+  highlightProp: true
+
+agentBehavior:
+  defaultStatus: working
+  typingSpeed: 1.2
+  faceProp: true
+
+progressDetection:
+  patterns:
+    - "Writing\\s+(\\w+)"
+    - "Implementing\\s+(\\w+)"
+    - "Creating\\s+(\\w+)"
+  completionPattern: "Implementation complete"
+  completionMessage: "Code written successfully"

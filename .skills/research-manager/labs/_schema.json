@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Lab Configuration",
+  "description": "Configuration schema for a research lab in the multi-lab research manager",
+  "type": "object",
+  "required": ["id", "name", "taskListId"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique lab identifier (lowercase, hyphens allowed)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Display name for the lab"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Short description of the lab's purpose"
+    },
+    "taskListId": {
+      "type": "string",
+      "description": "Claude Code task list ID for this lab (maps to ~/.claude/tasks/<taskListId>/)"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this lab is active (inactive labs are paused)"
+    },
+    "domain": {
+      "type": "string",
+      "description": "Optional link to .domains/<domain-slug>/ for research config"
+    },
+    "settings": {
+      "type": "object",
+      "description": "Lab-specific settings",
+      "properties": {
+        "maxAgents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3,
+          "description": "Maximum concurrent agents for this lab"
+        },
+        "autoSpawn": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether orchestrator auto-spawns agents for this lab"
+        },
+        "researchInterval": {
+          "type": "integer",
+          "minimum": 5,
+          "default": 30,
+          "description": "Minutes between research sessions"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary metadata for the lab",
+      "additionalProperties": true
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the lab was created"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the lab was last updated"
+    }
+  }
+}

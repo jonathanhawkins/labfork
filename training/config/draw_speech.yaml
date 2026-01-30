@@ -1,0 +1,97 @@
+# DrawSpeech Training Configuration
+# Sketch-conditioned prosody generation
+
+# Model architecture
+sketch:
+  sketch_length: 100          # Number of points in sketch (normalized time)
+  num_curves: 2               # pitch + energy curves
+  hidden_dim: 256
+  num_conv_layers: 4
+  kernel_size: 5
+  num_transformer_layers: 2
+  num_heads: 4
+  dropout: 0.1
+  sketch_embed_dim: 512
+  normalize_sketches: true
+  use_delta_encoding: true
+  smooth_sigma: 2.0           # Gaussian smoothing for sketch curves
+
+flow:
+  prosody_dim: 2048           # Match existing ProsodyEncoder output
+  text_dim: 768               # Text encoder dimension
+  use_text_conditioning: true
+  sigma_min: 0.001
+  use_ot_coupling: true       # Optimal transport for better training
+  ot_reg: 0.05
+  ot_normalize_cost: true
+  variance_scale: 1.0
+  hidden_dim: 512
+  num_layers: 4
+  num_heads: 8
+  dropout: 0.1
+  num_prosody_tokens: 4
+  num_ode_steps_inference: 50
+  ode_method: "euler"
+
+# Conditioning
+sketch_conditioning: "cross_attention"  # or "concat"
+sketch_dropout: 0.1
+
+# Classifier-free guidance
+use_cfg: true
+cfg_scale: 2.0                # Guidance strength during inference
+cfg_dropout: 0.1              # Probability of dropping conditioning during training
+
+combine_text_sketch: true
+
+# Training settings
+training:
+  batch_size: 16
+  gradient_accumulation: 2
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 500
+  max_steps: 50000
+  eval_interval: 500
+  save_interval: 2000
+  log_interval: 100
+
+  # Learning rate schedule
+  lr_schedule: "cosine"
+  lr_min: 1.0e-6
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Mixed precision
+  fp16: false  # Use float32 for stability
+  bf16: true   # Use bf16 if available
+
+# Data
+data:
+  manifest: "../data/emotion_manifest.json"
+  max_audio_length: 15.0      # seconds
+  min_audio_length: 0.5
+  sample_rate: 24000
+
+  # Sketch augmentation
+  augment_sketches: true
+  sketch_noise_std: 0.05      # Add noise to ground truth sketches
+  sketch_smooth_range: [1.0, 4.0]  # Random smoothing sigma range
+  sketch_shift_range: [-0.1, 0.1]  # Random vertical shift
+
+# Model paths
+paths:
+  checkpoint_dir: "../checkpoints/draw_speech"
+  prosody_encoder: "../checkpoints/prosody_v5/best.pt"  # Pre-trained prosody encoder
+  text_encoder: null           # Will use CSM's text encoder
+
+# Hardware
+device: "auto"                 # auto, cuda, mps, cpu
+num_workers: 4
+
+# Logging
+wandb:
+  project: "voice-clone-draw-speech"
+  name: "draw_speech_v1"
+  tags: ["draw_speech", "sketch", "prosody", "flow"]

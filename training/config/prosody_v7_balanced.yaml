@@ -1,0 +1,128 @@
+# Prosody V7 Training Configuration
+# Key improvements:
+# 1. Balanced emotion sampling (critical for avoiding bias)
+# 2. Energy augmentation (boost angry, reduce sad)
+# 3. Proper pitch separation tracking
+# 4. Higher prosody loss weight
+
+# Model paths
+model_path: ../models/csm-1b
+
+# Data - using the correct RAVDESS-based splits
+train_manifest: ../data/splits/train.json
+val_manifest: ../data/splits/val.json
+prosody_cache_dir: ../data/prosody_cache
+
+# Output
+output_dir: ../models/checkpoints/prosody_v7
+
+# Training settings
+num_epochs: 30
+batch_size: 4
+learning_rate: 0.00005
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# LoRA settings (prevents overfitting)
+use_lora: true
+lora_r: 16
+lora_alpha: 32
+lora_target_modules:
+  - q_proj
+  - v_proj
+  - k_proj
+lora_dropout: 0.1
+
+# Prosody encoder settings
+hidden_size: 2048
+num_prosody_tokens: 4
+dropout: 0.1
+
+# Temporal encoder (for keyframe support)
+train_temporal: true
+num_temporal_segments: 4
+
+# =============================================================================
+# V7: CRITICAL SETTINGS FOR EMOTION DIFFERENTIATION
+# =============================================================================
+
+# BALANCED SAMPLING - crucial for emotion discrimination
+balance_emotions: true
+
+# ENERGY AUGMENTATION - helps separate angry/sad
+energy_augmentation:
+  enabled: true
+  angry_boost_db: 6.0
+  happy_boost_db: 3.0
+  sad_reduce_db: -6.0
+  calm_reduce_db: -3.0
+  probability: 0.5
+
+# Gradient detachment - prevents emotion head from corrupting acoustic features
+detach_emotion_grad: true
+detach_energy_grad: true
+
+# Early stopping based on pitch pattern preservation
+early_stopping_patience: 5
+
+# Curriculum learning - start with easy emotions
+use_curriculum: true
+curriculum_start: 0.4
+curriculum_increment: 0.1
+
+# Emotion loss warmup - ramp up over epochs
+emotion_warmup_epochs: 10
+
+# =============================================================================
+# LOSS WEIGHTS (adjusted for better emotion control)
+# =============================================================================
+
+# Core prosody losses
+prosody_loss_weight: 3.0     # Increased from 2.0
+temporal_loss_weight: 1.0
+
+# Auxiliary losses
+energy_loss_weight: 1.5      # Increased for better energy separation
+emotion_loss_weight: 1.0
+
+# Audio loss (disabled for pure prosody training)
+use_audio_loss: false
+audio_loss_weight: 0.1
+
+# Scale for prosody conditioning (how much prosody influences output)
+prosody_scale: 0.2           # Increased from 0.1
+
+# =============================================================================
+# VALIDATION SETTINGS
+# =============================================================================
+
+log_every: 10
+save_every_epochs: 5
+validate_every_epochs: 1
+
+# Metrics to track
+track_metrics:
+  - pitch_separation     # Happy vs sad Hz separation (target: > 30 Hz)
+  - emotion_accuracy     # Emotion classification accuracy
+  - f0_correlation       # F0 correlation with ground truth
+
+# =============================================================================
+# PITCH PATTERN VALIDATION
+# =============================================================================
+
+# Expected pitch ordering for validation
+expected_pitch_order:
+  - fearful
+  - angry
+  - happy
+  - surprised
+  - neutral
+  - calm
+  - sad
+
+# Success criteria
+min_happy_sad_separation: 30  # Hz
+min_f0_correlation: 0.1
+
+# Stop training if pitch pattern inverts for N epochs
+pitch_inversion_patience: 3

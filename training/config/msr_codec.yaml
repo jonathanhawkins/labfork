@@ -1,0 +1,85 @@
+# MSR-Codec: Multi-Stream Residual Speech Codec Configuration
+#
+# 4-stream disentanglement with cascaded residual architecture:
+# 1. Semantic (HuBERT) - linguistic content
+# 2. Timbre (speaker embedding) - speaker identity
+# 3. Prosody (VQ1, 32-128 codes) - prosodic patterns
+# 4. Residual (VQ2, 64-128 codes) - fine-grained details
+#
+# Target: ~424-524 bps, 62.5 tokens/sec, >200x compression
+
+model:
+  # Input dimensions
+  mel_dim: 80
+  semantic_dim: 768  # HuBERT feature dimension
+  sample_rate: 16000
+  hop_length: 320  # 20ms at 16kHz
+
+  # Semantic Encoder (uses HuBERT features)
+  semantic_codebook_size: 500
+  use_semantic_quantization: false  # Use continuous features
+
+  # Timbre Encoder (global speaker embedding)
+  timbre_dim: 256
+  timbre_hidden_dim: 512
+  timbre_num_layers: 3
+
+  # Acoustic Encoder
+  acoustic_dim: 256
+  acoustic_hidden_dim: 512
+  acoustic_num_layers: 4
+
+  # Prosody VQ (VQ1) - small codebook forces abstraction
+  prosody_codebook_size: 64  # 32-128 range
+  prosody_code_dim: 64
+  prosody_num_heads: 1
+  prosody_commitment_cost: 0.25
+  prosody_ema_decay: 0.99
+
+  # Residual VQ (VQ2) - fine-grained details
+  residual_codebook_size: 128  # 64-128 range
+  residual_code_dim: 64
+  residual_num_heads: 1
+  residual_commitment_cost: 0.25
+  residual_ema_decay: 0.99
+
+  # Progressive Residual Fusion
+  fusion_hidden_dim: 256
+  fusion_dropout: 0.1
+
+  # Decoder
+  decoder_hidden_dim: 512
+  decoder_num_layers: 6
+  decoder_num_heads: 8
+  decoder_ffn_dim: 2048
+
+  # General
+  dropout: 0.1
+
+  # CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_epochs: 5
+  grad_clip: 1.0
+
+  # Logging
+  log_interval: 50
+  save_interval: 5
+  val_interval: 1
+
+data:
+  train_manifest: ../data/train_manifest.json
+  val_manifest: ../data/val_manifest.json
+  num_workers: 4
+  pin_memory: true
+
+checkpoint:
+  dir: ../checkpoints/msr_codec
+  save_best: true
+  save_last: true

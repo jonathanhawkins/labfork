@@ -1,0 +1,63 @@
+# Dual-Codebook VQ-VAE Configuration
+# Based on "Improved Prosody from Learned F0 Codebook Representations for VQ-VAE"
+# (Interspeech 2020)
+
+model:
+  # Input dimensions
+  mel_dim: 80          # Mel spectrogram channels
+  f0_dim: 1            # F0 is 1-dimensional
+  f0_context: 5        # Context frames for F0 encoding (total = 2*context + 1)
+
+  # F0 Codebook settings (smaller for prosody abstraction)
+  f0_codebook_size: 64    # Small codebook forces learning abstract prosody patterns
+  f0_code_dim: 64         # Dimension per F0 code
+  f0_num_layers: 3        # Encoder depth
+  f0_hidden_dim: 256      # Encoder hidden dimension
+  f0_num_heads: 4         # Attention heads
+
+  # Content Codebook settings (larger for phonetic variety)
+  content_codebook_size: 512  # Larger codebook for phonetic diversity
+  content_code_dim: 256       # Dimension per content code
+  content_num_layers: 4       # Encoder depth
+  content_hidden_dim: 512     # Encoder hidden dimension
+  content_num_heads: 8        # Attention heads
+
+  # Decoder settings
+  decoder_hidden_dim: 512
+  decoder_num_layers: 4
+  decoder_num_heads: 8
+  decoder_ffn_dim: 2048
+
+  # Training settings
+  dropout: 0.1
+  commitment_cost: 0.25
+  ema_decay: 0.99
+
+  # Speaker embedding
+  num_speakers: 100
+  speaker_embed_dim: 256
+  use_speaker_embedding: true
+
+  # Output for CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+training:
+  # Data
+  manifest: "../data/dual_codebook_features/manifest.json"
+  features_dir: "../data/dual_codebook_features"
+  max_len: 500
+  batch_size: 8
+  num_workers: 4
+
+  # Optimization
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  warmup_steps: 1000
+  max_steps: 100000
+
+  # Checkpoints
+  checkpoint_dir: "../checkpoints/dual_codebook"
+  log_interval: 100
+  eval_interval: 1000
+  save_interval: 5000

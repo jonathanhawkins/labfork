@@ -96,7 +96,7 @@ class LiveVoiceTransformer:
         """Find voice samples directory."""
         possible_paths = [
             Path(__file__).parent.parent / "data" / "voice_samples",
-            Path.home() / "dev" / "voice-clone-pipeline" / "data" / "voice_samples",
+            Path.home() / "dev" / "labfork" / "data" / "voice_samples",
         ]
         for path in possible_paths:
             if path.exists():

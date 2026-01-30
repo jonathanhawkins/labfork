@@ -1,0 +1,106 @@
+# DS-TTS Training Configuration
+# Dual-Style Encoding Network for Expressive TTS
+#
+# Based on: arXiv:2506.01020 "DS-TTS: A Dual-Style Text-to-Speech Model
+#           with Enhanced Feature Modulation for Superior Speaker Similarity"
+#
+# Key components:
+# - DuSEN: Dual-style encoding from mel + MFCC
+# - SGF: Style Gating-FiLM for integration
+# - DyGN: Dynamic variance adapter
+
+# Model Configuration
+model:
+  # Input dimensions
+  mel_dim: 80  # Mel-spectrogram bands
+  mfcc_dim: 13  # MFCC coefficients
+  mfcc_include_delta: true  # Include delta and delta-delta (13 * 3 = 39)
+
+  # Dual encoder dimensions
+  mel_encoder_hidden: 256  # Mel encoder hidden
+  mfcc_encoder_hidden: 256  # MFCC encoder hidden
+  style_dim: 128  # Individual encoder output (mel or mfcc)
+  combined_style_dim: 256  # Fused dual-style dimension
+
+  # Mel encoder architecture
+  mel_conv_channels: [32, 32, 64, 64, 128]
+  mel_conv_kernels: [3, 3, 3, 3, 3]
+  mel_conv_strides: [1, 2, 1, 2, 1]
+  mel_gru_hidden: 128
+  mel_num_gru_layers: 1
+
+  # MFCC encoder architecture
+  mfcc_conv_channels: [32, 64, 128]
+  mfcc_conv_kernels: [3, 3, 3]
+  mfcc_conv_strides: [1, 2, 1]
+  mfcc_gru_hidden: 128
+  mfcc_num_gru_layers: 1
+
+  # SGF (Style Gating-FiLM) settings
+  sgf_hidden_dim: 256
+  sgf_num_layers: 2
+  use_layer_norm: true
+  use_gating: true
+  gate_activation: "sigmoid"  # sigmoid, softmax, or tanh
+
+  # DyGN (Dynamic Variance Adapter) settings
+  dygn_hidden_dim: 128
+  dygn_num_layers: 2
+  use_pitch_variance: true
+  use_energy_variance: true
+  use_duration_variance: true
+  variance_scale_range: [0.5, 2.0]
+
+  # Text encoder (integration)
+  text_hidden_dim: 256
+
+  # Output dimensions
+  output_dim: 2048  # CSM prosody hidden dimension
+  num_prosody_tokens: 4
+
+  # Regularization
+  dropout: 0.1
+  use_spectral_norm: false
+
+  # Audio processing
+  sample_rate: 16000
+  hop_length: 256
+  n_fft: 1024
+
+# Data Configuration
+train_manifest: "../data/ds_tts_train.json"
+val_manifest: "../data/ds_tts_val.json"
+feature_dir: "../data/ds_tts_features"
+max_mel_len: 500
+
+# Training Configuration
+num_epochs: 100
+batch_size: 16
+learning_rate: 1.0e-4
+warmup_steps: 1000
+weight_decay: 0.01
+
+# Loss weights
+style_consistency_weight: 0.1  # Encourage complementary mel/mfcc styles
+gate_balance_weight: 0.1  # Prevent mode collapse to single encoder
+variance_weight: 0.1  # Variance prediction loss
+orthogonality_weight: 0.05  # Enforce style disentanglement
+
+# Optimizer
+adam_beta1: 0.9
+adam_beta2: 0.999
+gradient_clip: 1.0
+
+# Checkpointing
+checkpoint_dir: "../checkpoints/ds_tts"
+save_every: 5
+log_every: 50
+
+# Hardware
+device: "cuda"
+num_workers: 4
+gradient_accumulation: 1
+use_amp: true
+
+# Synthetic data (when manifest not available)
+num_synthetic_samples: 1000

@@ -1,0 +1,81 @@
+# EmoVoice Training Configuration
+# LLM-based Emotional TTS with Freestyle Natural Language Control
+#
+# Based on: arXiv:2504.12867 "EmoVoice: LLM-based Emotional Text-To-Speech Model
+#           with Freestyle Text Prompting"
+#
+# Two-phase training:
+# - Phase 1: Pre-training on neutral TTS data
+# - Phase 2: Fine-tuning on emotion-labeled data with natural language descriptions
+
+# Model Configuration
+model:
+  # LLM Backbone
+  llm_model_name: "Qwen/Qwen2.5-0.5B"
+  llm_hidden_dim: 896
+  llm_num_layers: 24
+  use_pretrained_llm: true
+  freeze_llm_layers: 0
+
+  # Audio Tokens
+  num_audio_tokens: 4096
+  audio_token_rate: 50
+
+  # Phoneme Boost (EmoVoice-PP)
+  use_phoneme_boost: true
+  num_phoneme_tokens: 256
+  phoneme_rate: 11
+
+  # Semantic Group Modeling
+  semantic_group_size: 3
+
+  # Architecture
+  embedding_dim: 512
+  hidden_dim: 1024
+  output_dim: 2048
+  num_prosody_tokens: 4
+  dropout: 0.1
+
+# Data Configuration
+train_manifest: "../data/emovoice_train.json"
+val_manifest: "../data/emovoice_val.json"
+max_audio_length: 500
+max_text_length: 256
+max_desc_length: 64
+
+# Phase 1: Pre-training (neutral TTS)
+pretrain_epochs: 50
+pretrain_lr: 1.0e-4
+pretrain_batch_size: 16
+
+# Phase 2: Fine-tuning (emotion-labeled)
+finetune_epochs: 30
+finetune_lr: 1.0e-5
+finetune_batch_size: 8
+
+# Optimizer
+warmup_steps: 1000
+weight_decay: 0.0
+adam_beta1: 0.9
+adam_beta2: 0.999
+
+# Loss Weights
+audio_weight: 1.0
+phoneme_weight: 0.3
+emotion_class_weight: 0.2
+contrastive_weight: 0.1
+
+# Checkpointing
+checkpoint_dir: "../checkpoints/emovoice"
+save_every: 5
+log_every: 100
+
+# Hardware
+device: "cuda"
+num_workers: 4
+gradient_accumulation: 1
+use_amp: true
+
+# Phase Control
+skip_pretrain: false
+pretrain_checkpoint: null

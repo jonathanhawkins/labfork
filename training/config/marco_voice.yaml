@@ -1,0 +1,169 @@
+# Marco-Voice: Rotational Emotion Embedding Training Configuration
+# Based on arXiv:2508.02038 - A Unified Framework for Expressive Speech Synthesis
+#
+# Key innovations:
+# - Rotational emotion embeddings (direction from neutral)
+# - Cross-orthogonal constraint for speaker-emotion disentanglement
+# - In-batch contrastive learning
+# - Emotion-LM cross-attention
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+model:
+  # Input/output dimensions
+  input_dim: 768              # wav2vec2/HuBERT feature dim
+  emotion_dim: 256            # Emotion embedding dimension
+  speaker_dim: 256            # Speaker embedding dimension
+  hidden_dim: 512             # Hidden layer dimension
+  output_dim: 2048            # Output to match prosody encoder (CSM)
+
+  # Rotational embedding settings
+  num_emotion_pairs: 10       # (emotional, neutral) pairs to aggregate
+  temperature: 0.07           # Contrastive loss temperature
+
+  # Cross-attention for LM integration
+  num_attention_heads: 8
+  attention_dropout: 0.1
+
+  # Loss weights (from paper)
+  lambda_orth: 0.1            # Cross-orthogonal constraint
+  lambda_contrast: 0.5        # In-batch contrastive loss
+
+  # Training settings
+  dropout: 0.1
+  use_layer_norm: true
+
+  # Number of emotions
+  num_emotions: 7             # neutral, happy, angry, sad, surprised, calm, fearful
+
+  # Prosody tokens
+  num_prosody_tokens: 4       # Prefix tokens for CSM
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+
+training:
+  # Dataset
+  manifest_path: ../data/emotion_manifest.json   # Must include neutral samples per speaker
+  require_neutral_pairs: true                     # Require (emotional, neutral) pairs
+
+  # Optimization
+  batch_size: 16              # Per-GPU batch size
+  gradient_accumulation: 2    # Effective batch = 32
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 1000
+  max_steps: 100000
+
+  # LR schedule
+  lr_scheduler: cosine
+  min_lr: 1.0e-6
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Mixed precision
+  use_amp: true
+  amp_dtype: bfloat16         # or float16
+
+  # Checkpoint
+  checkpoint_dir: ../checkpoints/marco_voice
+  save_every_steps: 2000
+  eval_every_steps: 500
+  log_every_steps: 100
+
+  # Early stopping
+  patience: 10                # Epochs without improvement
+  min_delta: 0.001
+
+  # Data augmentation
+  augmentation:
+    time_stretch: true
+    pitch_shift: false        # Avoid for emotion training
+    add_noise: true
+    noise_snr_range: [15, 30]
+
+# =============================================================================
+# Feature Extraction
+# =============================================================================
+
+features:
+  # Audio settings
+  sample_rate: 16000
+  max_duration: 15.0          # Seconds
+  min_duration: 0.5
+
+  # Feature extractor
+  feature_extractor: wav2vec2  # wav2vec2, hubert, wavlm
+  feature_model: facebook/wav2vec2-base-960h
+  freeze_feature_extractor: true   # Freeze early layers
+  freeze_layers: 8            # Number of layers to freeze
+
+  # Mel spectrogram (for speaker encoder)
+  n_mels: 80
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+
+# =============================================================================
+# Loss Configuration
+# =============================================================================
+
+loss:
+  # Main losses
+  classification_weight: 1.0   # Emotion classification loss
+  orthogonal_weight: 0.1       # Cross-orthogonal constraint (lambda_orth)
+  contrastive_weight: 0.5      # In-batch contrastive (lambda_contrast)
+
+  # Additional supervision
+  intensity_weight: 0.2        # Intensity prediction loss
+  direction_regularization: 0.05  # Keep directions unit-norm
+
+  # Label smoothing
+  label_smoothing: 0.1
+
+# =============================================================================
+# Evaluation
+# =============================================================================
+
+evaluation:
+  # Metrics
+  metrics:
+    - emotion_accuracy        # Classification accuracy
+    - emotion_f1              # Weighted F1 score
+    - speaker_disentanglement # Speaker classification accuracy (should be low)
+    - orthogonality_score     # Mean cosine similarity (should be low)
+    - contrastive_loss        # In-batch contrastive value
+
+  # Visualization
+  visualize_embeddings: true
+  tsne_perplexity: 30
+  umap_n_neighbors: 15
+
+# =============================================================================
+# Hardware
+# =============================================================================
+
+hardware:
+  # M4 Pro Mac (64GB)
+  num_workers: 4
+  pin_memory: true
+  device: mps                 # mps for Mac, cuda for GPU
+
+  # For RTX 4090 (24GB)
+  # num_workers: 8
+  # device: cuda
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+logging:
+  project: labfork
+  name: marco-voice-training
+  log_dir: ../logs/marco_voice
+  use_wandb: false            # Set to true if wandb configured
+  wandb_project: voice-clone-prosody

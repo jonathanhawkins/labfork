@@ -1,0 +1,35 @@
+# Evaluation Activity Configuration
+# Defines how model evaluation is visualized in the 3D lab
+
+id: evaluation
+name: Model Evaluation
+description: Evaluating model performance on prosody and emotion metrics
+icon: ChartBar
+tags:
+  - evaluation
+  - metrics
+  - testing
+priority: 4
+
+visualization:
+  prop: emotion-verify
+  animation: thinking
+  particles: sparks
+  color: 0x3b82f6  # Blue for evaluation
+  workLocation: center
+  showProgress: true
+  highlightProp: true
+
+agentBehavior:
+  defaultStatus: thinking
+  typingSpeed: 0.6
+  faceProp: false
+
+progressDetection:
+  patterns:
+    - "Evaluating\\s+(\\d+)/(\\d+)"
+    - "Computing\\s+(\\w+)\\s+metric"
+    - "MOS:\\s+([\\d.]+)"
+    - "F0_RMSE:\\s+([\\d.]+)"
+  completionPattern: "Evaluation complete|Results saved|Metrics computed"
+  completionMessage: "Evaluation completed"

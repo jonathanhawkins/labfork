@@ -42,7 +42,7 @@ const footerSections: FooterSection[] = [
     title: "Community",
     links: [
       { label: "Discord", href: "https://discord.gg/labfork" },
-      { label: "GitHub", href: "https://github.com/labfork" },
+      { label: "GitHub", href: "https://github.com/jonathanhawkins/labfork" },
       { label: "Twitter", href: "https://twitter.com/labfork" },
       { label: "Newsletter", href: "/newsletter" },
     ],
@@ -137,7 +137,7 @@ export function LandingFooter() {
               </p>
               <div className="flex items-center gap-3">
                 <a
-                  href="https://github.com/labfork"
+                  href="https://github.com/jonathanhawkins/labfork"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 rounded-lg bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
@@ -201,7 +201,7 @@ export function LandingFooter() {
             <span>Built with Next.js, Three.js, Claude</span>
             <span className="hidden md:inline">|</span>
             <a
-              href="https://github.com/labfork"
+              href="https://github.com/jonathanhawkins/labfork"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:text-white transition-colors"

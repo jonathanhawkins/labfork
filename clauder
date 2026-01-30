@@ -1,0 +1,6 @@
+#!/bin/bash
+# Voice Clone Pipeline - Claude Code launcher with shared task list
+# All agents spawned with this script share the same task list for coordination
+
+export CLAUDE_CODE_TASK_LIST_ID="voice-clone-pipeline"
+claude --dangerously-skip-permissions "$@"

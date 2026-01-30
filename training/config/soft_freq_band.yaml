@@ -1,0 +1,83 @@
+# Configuration for Soft Frequency-Band Disentanglement Codec
+# Based on arXiv:2510.03735 (EUSIPCO 2025)
+
+# Audio settings
+sample_rate: 32000  # Full-band audio (0-16kHz)
+hop_length: 320  # ~10ms at 32kHz
+win_length: 1280  # ~40ms at 32kHz
+n_fft: 2048  # FFT size for spectral analysis
+
+# Frequency band configuration
+# Default: 2 bands (0-8kHz, 8-16kHz for 32kHz audio)
+num_bands: 2
+band_cutoffs: [8000]  # Cutoff frequencies in Hz
+
+# Alternative configurations:
+# 3 bands: band_cutoffs: [4000, 8000]  # 0-4kHz, 4-8kHz, 8-16kHz
+# 4 bands: band_cutoffs: [2000, 4000, 8000]  # 0-2kHz, 2-4kHz, 4-8kHz, 8-16kHz
+
+# Encoder settings (per band)
+encoder_hidden_dim: 512
+encoder_num_layers: 4
+encoder_kernel_sizes: [7, 5, 5, 3]
+encoder_strides: [2, 2, 2, 2]  # 16x downsampling
+
+# VQ settings (per band)
+codebook_size: 1024
+code_dim: 128
+num_quantizers: 2  # RVQ depth per band
+commitment_cost: 0.25
+ema_decay: 0.99
+
+# Decoder settings (per band)
+decoder_hidden_dim: 512
+decoder_num_layers: 4
+
+# Cascade connection settings
+use_cascade: true  # Higher bands see lower band outputs
+cascade_hidden_dim: 256
+cascade_num_layers: 2
+
+# Soft disentanglement settings
+cross_band_weight: 0.1  # Weight for cross-band reconstruction loss
+band_consistency_weight: 0.05  # Encourages band specialization
+enable_soft_masks: true  # Learnable soft frequency masks
+
+# Training settings
+dropout: 0.1
+
+# Mel spectrogram settings (for CSM integration)
+mel_dim: 80
+mel_fmin: 0.0
+mel_fmax: 8000.0  # Focus on lower frequencies for prosody
+
+# Output for CSM integration
+output_dim: 2048
+num_prefix_tokens: 4
+
+# Training hyperparameters
+# Note: These are read by train_soft_freq_band.py
+training:
+  batch_size: 16
+  learning_rate: 0.0001
+  warmup_steps: 1000
+  num_epochs: 100
+  gradient_clip: 1.0
+
+  # Loss weights
+  loss_weights:
+    band_reconstruction: 1.0
+    full_reconstruction: 1.0
+    commitment: 0.25
+    spectral: 0.5
+    cross_band: 0.1
+    band_consistency: 0.05
+
+  # Data augmentation
+  augmentation:
+    random_gain_min: 0.8
+    random_gain_max: 1.2
+    noise_level: 0.01
+
+  # Segment length for training
+  segment_seconds: 2.0

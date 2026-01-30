@@ -1,0 +1,101 @@
+# SoCodec: Semantic-Ordered Speech Codec Configuration
+#
+# Based on "SoCodec: A Semantic-Ordered Multi-Stream Speech Codec for Efficient
+# Language Model Based Text-to-Speech Synthesis" (ICASSP 2025)
+# arXiv:2409.00933
+#
+# Key Innovation: Ordered Product Quantization (OPQ)
+# - Each stream conditioned on previous streams
+# - Creates semantic ordering: coarse → fine
+# - Enables better LM prediction efficiency
+#
+# Target: ~0.47 kbps at 120ms frameshift
+
+model:
+  # Audio settings
+  sample_rate: 16000
+  hop_length: 320  # 20ms at 16kHz (50Hz frame rate)
+  mel_dim: 80
+
+  # Semantic Encoder (processes HuBERT/WavLM features)
+  semantic_input_dim: 768  # HuBERT/WavLM feature dimension
+  semantic_hidden_dim: 512
+  semantic_output_dim: 256
+  semantic_num_layers: 4
+  semantic_num_heads: 8
+
+  # Temporal Downsampling
+  # 120ms frameshift = 6x downsampling from 20ms (50Hz → ~8Hz)
+  temporal_downsample_factor: 6
+  use_strided_conv: true
+
+  # Ordered Product Quantization (OPQ)
+  num_streams: 4  # Number of ordered streams
+  codebook_size: 1024  # Codes per stream
+  code_dim: 64  # Dimension per code
+  commitment_cost: 0.25
+  ema_decay: 0.99
+  use_cosine_similarity: true  # Use cosine sim for quantization
+
+  # OPQ Conditioning Type
+  # - concat: Concatenate previous outputs, project back
+  # - add: Add projected conditioning
+  # - cross_attention: Cross-attention to previous outputs
+  conditioning_type: concat
+  conditioning_hidden_dim: 128
+
+  # Acoustic Encoder (ECAPA-TDNN style)
+  acoustic_dim: 256  # Global acoustic embedding
+  acoustic_hidden_dim: 512
+  acoustic_num_layers: 3
+  use_se_block: true  # Squeeze-Excitation blocks
+
+  # Decoder
+  decoder_hidden_dim: 512
+  decoder_num_layers: 6
+  decoder_num_heads: 8
+  decoder_ffn_dim: 2048
+
+  # Multi-Stream Delayed LM (training strategy)
+  use_delayed_lm: true
+  max_delay: 3  # Maximum delay for streams
+
+  # General
+  dropout: 0.1
+
+  # CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+training:
+  epochs: 100
+  batch_size: 16
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_epochs: 5
+  grad_clip: 1.0
+
+  # Loss weights
+  reconstruction_weight: 1.0
+  commitment_weight: 0.25
+  lm_weight: 0.1
+
+  # Logging
+  log_interval: 50
+  save_interval: 5
+  val_interval: 1
+
+data:
+  train_manifest: ../data/train_manifest.json
+  val_manifest: ../data/val_manifest.json
+  mel_dir: null  # Directory with pre-extracted mel spectrograms
+  semantic_dir: null  # Directory with pre-extracted HuBERT features
+  num_workers: 4
+  pin_memory: true
+  max_length: 500  # Maximum frames
+  min_length: 50  # Minimum frames
+
+checkpoint:
+  dir: ../checkpoints/socodec
+  save_best: true
+  save_last: true

@@ -1,0 +1,25 @@
+# Idle Activity Template
+# Used when agents have no active tasks
+
+id: idle
+name: Idle
+description: Waiting for new tasks
+icon: Pause
+
+visualization:
+  animation: idle
+  particles: none
+  color: 0x6b7280
+  workLocation: center
+  showProgress: false
+  highlightProp: false
+
+agentBehavior:
+  defaultStatus: idle
+  typingSpeed: 0.5
+  faceProp: false
+
+progressDetection:
+  patterns: []
+  completionPattern: null
+  completionMessage: null

@@ -1,0 +1,170 @@
+# Computer Vision Research Lab
+# Research image understanding, object detection, and visual reasoning
+
+name: "Computer Vision Lab"
+slug: "computer-vision"
+description: "Research image understanding, object detection, segmentation, and visual reasoning"
+longDescription: |
+  A research lab dedicated to advancing computer vision. Focus areas include object detection,
+  semantic segmentation, vision transformers, 3D understanding, video analysis, and
+  vision-language models. Build systems that see and understand the visual world.
+difficulty: intermediate
+
+branding:
+  primaryColor: "#ef4444"    # Red (attention/detection)
+  accentColor: "#3b82f6"     # Blue (segmentation)
+  backgroundStyle: "grid"
+  backgroundColor: "#0a0a0f"
+
+scene:
+  props:
+    - id: image-grid
+      type: chart-wall
+      position: [0, 2, -6]
+      scale: 2.0
+      accentColor: 0xef4444
+
+    - id: feature-map-display
+      type: waveform
+      position: [-5, 1.5, -3]
+      scale: 1.5
+      accentColor: 0x3b82f6
+
+    - id: detection-viewer
+      type: terminal
+      position: [5, 1, -3]
+      scale: 1.4
+      accentColor: 0x22c55e
+
+    - id: training-gpu
+      type: supercomputer
+      position: [-5, 0, 5]
+      scale: 1.4
+      accentColor: 0x8b5cf6
+
+    - id: dataset-server
+      type: server
+      position: [5, 0, 5]
+      scale: 1.3
+      accentColor: 0xf59e0b
+
+    - id: camera-sensor
+      type: camera
+      position: [0, 3, 0]
+      scale: 1.0
+      accentColor: 0xef4444
+
+  decorations:
+    plants: false
+    floatingCubes: true
+    particles: true
+
+  lighting:
+    ambientIntensity: 0.4
+    mainLightIntensity: 0.7
+    mainLightColor: "#fff5f5"
+
+  fog:
+    enabled: true
+    near: 12
+    far: 35
+
+research:
+  arxivCategories:
+    - cs.CV       # Computer Vision
+    - cs.LG       # Machine Learning
+    - cs.AI       # Artificial Intelligence
+    - cs.RO       # Robotics (for embodied vision)
+
+  keywords:
+    - object detection deep learning
+    - semantic segmentation neural
+    - vision transformer ViT
+    - image classification CNN
+    - 3D reconstruction neural
+    - video understanding transformer
+    - vision language models
+    - instance segmentation
+    - diffusion models images
+    - self-supervised visual learning
+
+  additionalSources:
+    - semantic-scholar
+    - github
+    - papers-with-code
+
+  maxPapersPerSession: 8
+
+evaluation:
+  primaryMetric: map
+  baselineComparison: true
+  metrics:
+    - id: map
+      name: mAP
+      description: Mean Average Precision for detection
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: iou
+      name: IoU
+      description: Intersection over Union for segmentation
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: accuracy
+      name: Top-1 Accuracy
+      description: Classification accuracy
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: fps
+      name: FPS
+      description: Frames processed per second
+      range: [0, 1000]
+      higherIsBetter: true
+
+    - id: flops
+      name: FLOPs
+      description: Computational complexity
+      range: [0, 1000]
+      higherIsBetter: false
+      unit: "GFLOPs"
+
+    - id: params
+      name: Parameters
+      description: Model size in millions of parameters
+      range: [0, 10000]
+      higherIsBetter: false
+      unit: "M"
+
+hardware:
+  gpuRequired: true
+  minGpuVram: 8
+  recommendedGpuVram: 24
+  minRam: 32
+  platforms:
+    - darwin
+    - linux
+    - win32
+
+prompts:
+  research: prompts/research.md
+  implementation: prompts/implementation.md
+  evaluation: prompts/evaluation.md
+  preamble: |
+    You are working on a Computer Vision Research Lab focused on advancing visual
+    understanding. Prioritize accuracy, efficiency, and real-world applicability.
+    Consider edge deployment and real-time performance.
+
+tags:
+  - computer-vision
+  - object-detection
+  - segmentation
+  - vision-transformers
+  - image-classification
+  - video-analysis
+
+version: "1.0"

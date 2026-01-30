@@ -1244,7 +1244,7 @@ export default function LabPage() {
               <div className="flex items-center gap-2">
                 <ListTodo className="w-4 h-4 text-muted-foreground" />
                 <h2 className="text-sm text-foreground-bright">Shared Task List</h2>
-                <span className="text-xs text-muted-foreground">voice-clone-pipeline</span>
+                <span className="text-xs text-muted-foreground">labfork</span>
               </div>
               <button
                 onClick={() => setShowTaskForm(!showTaskForm)}

@@ -119,7 +119,7 @@ export default function WatchPage() {
 
               {/* GitHub link */}
               <a
-                href="https://github.com/your-org/voice-clone-pipeline"
+                href="https://github.com/your-org/labfork"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground-muted transition-colors"
@@ -216,7 +216,7 @@ export default function WatchPage() {
                 Full Lab (Admin)
               </a>
               <a
-                href="https://github.com/labfork"
+                href="https://github.com/jonathanhawkins/labfork"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-foreground transition-colors"

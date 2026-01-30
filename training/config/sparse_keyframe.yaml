@@ -1,0 +1,107 @@
+# STCTS Sparse Keyframe Prosody Configuration
+# Based on arXiv:2512.00451 "Towards Ultra-Low Bitrate Speech Coding"
+#
+# Key insight: Prosody can be transmitted as sparse keyframes (<14 bps at 0.1-1 Hz)
+# rather than dense frame-by-frame, achieving 75x compression vs Opus.
+
+# Keyframe extraction settings
+keyframe_rate_hz: 0.5          # Keyframes per second (0.1-1 Hz typical)
+min_keyframes: 2               # Minimum keyframes per utterance
+max_keyframes: 16              # Maximum keyframes
+
+# Extraction strategy
+# - "uniform": Evenly spaced keyframes
+# - "salient": Detect peaks, valleys, inflection points (recommended)
+# - "adaptive": Learned optimal positions
+extraction_method: "salient"
+salience_threshold: 0.3        # Threshold for salient point detection
+
+# Prosody dimensions (per keyframe)
+pitch_dim: 1                   # Scalar pitch value
+energy_dim: 1                  # Scalar energy value
+duration_dim: 1                # Duration hint
+emotion_dim: 8                 # Emotion vector per keyframe (matches VAD emotions)
+
+# Interpolation method
+# - "linear": Simple linear (fast, baseline)
+# - "cubic": Catmull-Rom spline (smooth, recommended)
+# - "spherical": SLERP for emotion vectors (best for blending)
+interpolation_method: "cubic"
+interpolation_smoothing: 0.1   # Smoothing factor
+
+# Encoder architecture
+hidden_dim: 256
+num_transformer_layers: 2
+num_heads: 4
+dropout: 0.1
+
+# Output (matches CSM prosody pipeline)
+output_dim: 2048               # CSM hidden size
+num_output_tokens: 4           # Prosody prefix tokens
+
+# Compression target
+target_bitrate_bps: 14.0       # Target prosody bitrate (<14 bps per STCTS)
+
+# Training settings
+training:
+  batch_size: 16
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 1000
+  max_steps: 50000
+
+  # Loss weights
+  reconstruction_weight: 1.0   # Keyframe reconstruction loss
+  smoothness_weight: 0.1       # Encourage smooth interpolation
+  sparsity_weight: 0.01        # Encourage fewer keyframes
+
+  # Logging
+  log_every_n_steps: 100
+  save_every_n_steps: 1000
+  eval_every_n_steps: 500
+
+# Data settings
+data:
+  manifest_path: "../data/manifest.json"
+  prosody_cache_dir: "../data/prosody_features"
+  max_duration_seconds: 10.0
+  min_duration_seconds: 0.5
+
+# Evaluation
+evaluation:
+  metrics:
+    - "pitch_mse"           # Pitch reconstruction error
+    - "energy_mse"          # Energy reconstruction error
+    - "keyframe_count"      # Average keyframes per utterance
+    - "bitrate"             # Achieved bitrate in bps
+    - "compression_ratio"   # vs dense encoding
+
+  # Quality thresholds
+  max_pitch_mse: 0.05
+  max_energy_mse: 0.05
+  max_bitrate_bps: 20.0
+
+# Hardware
+hardware:
+  # M4 Pro Mac (64GB)
+  mac:
+    precision: "fp32"
+    batch_size: 16
+    compile: true
+
+  # RTX 4090 (24GB)
+  cuda:
+    precision: "bf16"
+    batch_size: 32
+    compile: true
+    gradient_checkpointing: false
+
+# Integration with DrawSpeech
+drawspeech:
+  # Convert DrawSpeech sketches to sparse keyframes
+  sketch_to_keyframes: true
+  sketch_length: 100           # Input sketch resolution
+
+  # Keyframe editing in UI
+  enable_keyframe_ui: true
+  show_salience_overlay: true  # Show salient points for editing guidance

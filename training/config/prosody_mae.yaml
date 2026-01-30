@@ -1,0 +1,109 @@
+# Prosody-MAE Configuration
+# Based on Prosody-MAE (ACL Findings 2023)
+# Self-supervised prosody pre-training via masked autoencoding
+
+# Model Architecture
+model:
+  # Audio processing
+  sample_rate: 16000
+  hop_length: 160  # 10ms frames
+  n_mels: 80
+  n_fft: 1024
+
+  # Prosody feature dimensions
+  prosody_dim: 128
+  pitch_dim: 32
+  energy_dim: 32
+  duration_dim: 32
+  spectral_dim: 32
+
+  # Patch embedding
+  patch_size: 8  # ~80ms per patch at 10ms hop
+  embed_dim: 384
+
+  # Masking (key insight: 70% optimal for audio)
+  mask_ratio: 0.70
+  mask_patch_only: true
+
+  # Encoder (deep, processes only visible patches)
+  encoder_num_layers: 8
+  encoder_num_heads: 6
+  encoder_ffn_dim: 1536
+  encoder_dropout: 0.1
+
+  # Decoder (shallow, reconstructs full sequence)
+  decoder_embed_dim: 192
+  decoder_num_layers: 4
+  decoder_num_heads: 4
+  decoder_ffn_dim: 768
+  decoder_dropout: 0.1
+
+  # Reconstruction targets
+  reconstruct_mel: true
+  reconstruct_pitch: true
+  reconstruct_energy: true
+
+  # Loss weights
+  mel_loss_weight: 1.0
+  pitch_loss_weight: 0.5
+  energy_loss_weight: 0.5
+
+  # Training
+  warmup_epochs: 10
+  min_mask_ratio: 0.5  # Start with lower ratio during warmup
+
+  # Output for CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+  max_seq_len: 1024
+
+# Training Configuration
+training:
+  # Data
+  audio_dir: "../data/unlabeled_audio"  # Directory of audio files
+  manifest: null  # Optional manifest JSON
+
+  # Duration filtering
+  max_duration: 10.0  # seconds
+  min_duration: 1.0   # seconds
+
+  # Training params
+  epochs: 100
+  batch_size: 32
+  learning_rate: 1.5e-4
+  weight_decay: 0.05
+  warmup_epochs: 10
+
+  # Data loading
+  num_workers: 4
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/prosody_mae"
+  save_every: 10  # Save checkpoint every N epochs
+
+# Hardware (M4 Pro optimized)
+hardware:
+  device: "mps"  # Use Metal on Mac
+  mixed_precision: false
+  compile: false  # torch.compile not stable on MPS yet
+
+# Logging
+logging:
+  log_every: 100  # Log every N steps
+  use_wandb: false
+  wandb_project: "prosody-mae"
+
+# Data Augmentation (for robustness)
+augmentation:
+  time_stretch: false  # Disable for prosody preservation
+  pitch_shift: false   # Disable for prosody preservation
+  add_noise: true
+  noise_snr_db: 20.0
+
+# Pre-training Data Sources
+# Recommended datasets for pre-training:
+# - LibriSpeech (960h): Large-scale English speech
+# - VCTK: Multi-speaker with varied prosody
+# - LJSpeech: High-quality single speaker
+# - Common Voice: Diverse speakers and accents
+# - Emotion datasets (RAVDESS, IEMOCAP): Rich prosodic variation

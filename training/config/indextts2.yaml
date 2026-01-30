@@ -1,0 +1,228 @@
+# IndexTTS2: 8-Dimensional Emotion Vector Control Configuration
+# Based on arXiv:2506.21619 - "IndexTTS 2: Controllable Emotional Text-to-Speech"
+# https://github.com/index-tts/index-tts
+#
+# Key innovations:
+# - 8-dimensional emotion vector (happy, angry, sad, afraid, disgusted, melancholic, surprised, calm)
+# - Duration control for video dubbing
+# - Three-stage training curriculum
+# - Emotion-timbre disentanglement
+# - Soft instruction via Qwen
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+model:
+  # 8-dim emotion labels (fixed)
+  emotion_labels:
+    - happy
+    - angry
+    - sad
+    - afraid
+    - disgusted
+    - melancholic
+    - surprised
+    - calm
+  num_emotions: 8
+
+  # Embedding dimensions
+  input_dim: 768              # wav2vec2/HuBERT feature dim
+  emotion_dim: 256            # Emotion embedding dimension
+  timbre_dim: 256             # Timbre/speaker embedding dimension
+  hidden_dim: 512             # Hidden layer dimension
+  output_dim: 2048            # Output to match CSM prosody encoder
+
+  # GPT decoder settings
+  gpt_hidden_dim: 1024        # GPT latent dimension
+  gpt_num_layers: 12          # GPT transformer layers
+  gpt_num_heads: 16           # Attention heads
+  gpt_max_tokens: 2048        # Maximum output tokens
+
+  # Duration control
+  enable_duration_control: true
+  duration_predictor_hidden: 256
+  min_output_tokens: 10
+  max_output_tokens: 1500
+
+  # Soft instruction (text-to-emotion)
+  soft_instruction_model: "Qwen/Qwen2.5-0.5B"  # or Qwen3
+  soft_instruction_dim: 896   # Qwen hidden dim
+  use_soft_instruction: true
+
+  # Disentanglement
+  use_adversarial_disentanglement: true
+  adversarial_weight: 0.1
+  emotion_classification_weight: 1.0
+
+  # General settings
+  dropout: 0.1
+  use_layer_norm: true
+  num_prosody_tokens: 4       # Prefix tokens for CSM
+
+# =============================================================================
+# Three-Stage Training Configuration
+# =============================================================================
+
+training:
+  # Stage 1: Pre-training on neutral TTS
+  stage1:
+    epochs: 50
+    description: "Neutral TTS pre-training"
+    learning_rate: 1.0e-4
+    freeze_emotion: true
+    freeze_disentanglement: true
+
+  # Stage 2: Emotion classification training
+  stage2:
+    epochs: 30
+    description: "Emotion classification training"
+    learning_rate: 5.0e-5
+    freeze_emotion: false
+    freeze_generation: true
+
+  # Stage 3: Full emotional TTS training
+  stage3:
+    epochs: 100
+    description: "Full emotional TTS with disentanglement"
+    learning_rate: 1.0e-5
+    freeze_emotion: false
+    freeze_generation: false
+    grl_warmup_epochs: 10     # GRL scale warmup
+
+  # Dataset
+  manifest_path: ../data/emotion_manifest.json
+  neutral_manifest_path: ../data/neutral_manifest.json  # For stage 1
+
+  # Optimization
+  batch_size: 16              # Per-GPU batch size
+  gradient_accumulation: 2    # Effective batch = 32
+  weight_decay: 0.01
+  warmup_steps: 2000
+
+  # LR schedule
+  lr_scheduler: cosine_with_restarts
+  num_cycles: 3               # Cosine restarts
+  min_lr: 1.0e-6
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Mixed precision
+  use_amp: true
+  amp_dtype: bfloat16
+
+  # Checkpoint
+  checkpoint_dir: ../checkpoints/indextts2
+  save_every_steps: 5000
+  eval_every_steps: 1000
+  log_every_steps: 100
+
+# =============================================================================
+# Feature Extraction
+# =============================================================================
+
+features:
+  # Audio settings
+  sample_rate: 16000
+  max_duration: 15.0          # Seconds
+  min_duration: 0.5
+
+  # Feature extractor
+  feature_extractor: wav2vec2
+  feature_model: facebook/wav2vec2-base-960h
+  freeze_feature_extractor: true
+  freeze_layers: 8
+
+  # Mel spectrogram (for timbre encoder)
+  n_mels: 80
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+
+# =============================================================================
+# Loss Configuration
+# =============================================================================
+
+loss:
+  # Stage weights (adjusted per stage)
+  tts_weight: 1.0             # Audio token prediction
+  emotion_class_weight: 0.5   # 8-dim emotion classification
+  disentangle_weight: 0.1     # Adversarial disentanglement
+  duration_weight: 0.3        # Duration prediction
+
+  # Adversarial training
+  grl_max_scale: 0.5          # Maximum GRL reversal scale
+  grl_schedule: linear        # linear, cosine, or step
+
+  # Label smoothing
+  label_smoothing: 0.1
+
+# =============================================================================
+# Evaluation
+# =============================================================================
+
+evaluation:
+  # Metrics
+  metrics:
+    - emotion_accuracy        # 8-class accuracy
+    - emotion_vector_mse      # MSE between predicted and target vectors
+    - speaker_disentanglement # Speaker classification (should be low)
+    - duration_accuracy       # Duration prediction RMSE
+    - perplexity             # Token prediction perplexity
+
+  # Visualization
+  visualize_embeddings: true
+  tsne_perplexity: 30
+
+  # Evaluation emotions
+  eval_profiles:
+    - happy
+    - angry
+    - sad
+    - calm
+    - surprised
+    - afraid
+
+# =============================================================================
+# Hardware
+# =============================================================================
+
+hardware:
+  # M4 Pro Mac (64GB)
+  num_workers: 4
+  pin_memory: true
+  device: mps
+
+  # For RTX 4090 (24GB)
+  # num_workers: 8
+  # device: cuda
+  # compile_model: true
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+logging:
+  project: labfork
+  name: indextts2-training
+  log_dir: ../logs/indextts2
+  use_wandb: false
+  wandb_project: voice-clone-prosody
+
+# =============================================================================
+# Inference
+# =============================================================================
+
+inference:
+  # Generation settings
+  temperature: 0.8
+  top_p: 0.9
+  max_tokens: 500
+
+  # Duration control
+  use_duration_control: true
+  duration_scale: 1.0         # Multiply predicted duration
+
+  # Emotion intensity
+  default_intensity: 0.8

@@ -1,0 +1,107 @@
+# Configuration for SD-Codec: Source Disentanglement via Joint Coding and Separation
+# Based on "Learning Source Disentanglement in Neural Audio Codec" (2025)
+
+# Source domain configuration
+num_sources: 3
+source_names:
+  - prosody   # Pitch, rhythm, stress patterns
+  - content   # Linguistic/phonetic information
+  - timbre    # Speaker identity characteristics
+
+# Input dimensions
+mel_dim: 80
+sample_rate: 16000
+hop_length: 256  # ~16ms at 16kHz
+
+# Source-aware encoder
+encoder_hidden_dim: 512
+encoder_num_layers: 6
+encoder_num_heads: 8
+encoder_ffn_dim: 2048
+
+# Source router
+router_hidden_dim: 256
+router_temperature: 0.5
+use_gumbel_softmax: true
+min_source_usage: 0.1
+
+# Per-source encoders
+source_encoder_hidden_dim: 256
+source_encoder_num_layers: 3
+
+# Codebook settings (per source, defaults if not specified)
+# Can override per-source with source_codebook_sizes and source_code_dims
+default_codebook_size: 512
+default_code_dim: 64
+commitment_cost: 0.25
+ema_decay: 0.99
+
+# Joint decoder
+decoder_hidden_dim: 512
+decoder_num_layers: 6
+decoder_num_heads: 8
+decoder_ffn_dim: 2048
+
+# Separation head
+use_separation_head: true
+separation_hidden_dim: 256
+
+# Training settings
+dropout: 0.1
+
+# Loss weights
+reconstruction_weight: 1.0
+separation_weight: 0.5
+commitment_weight: 0.25
+routing_entropy_weight: 0.1
+orthogonality_weight: 0.05
+
+# Output for CSM integration
+output_dim: 2048
+num_prefix_tokens: 4
+
+# Data paths (update for your dataset)
+train_manifest: ../data/train_manifest.json
+val_manifest: ../data/val_manifest.json
+mel_dir: ../data/mels
+
+# Checkpoint directory
+checkpoint_dir: ../checkpoints/sd_codec
+
+# Training hyperparameters
+training:
+  batch_size: 16
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  num_epochs: 100
+  warmup_steps: 1000
+  gradient_clip: 1.0
+
+  # Segment length for training
+  segment_frames: 200  # ~3.2 seconds at 16ms hop
+
+  # Logging and saving
+  log_interval: 50
+  save_interval: 10
+  analyze_interval: 10
+
+  # Data loading
+  num_workers: 4
+
+# Alternative: 4-source configuration for more granular separation
+# num_sources: 4
+# source_names:
+#   - prosody    # Pitch, rhythm, stress
+#   - content    # Linguistic information
+#   - timbre     # Speaker identity
+#   - acoustic   # Fine-grained spectral details
+
+# Per-source codebook overrides (optional)
+# source_codebook_sizes:
+#   - 512   # prosody
+#   - 1024  # content (larger for linguistic variety)
+#   - 256   # timbre
+# source_code_dims:
+#   - 64    # prosody
+#   - 128   # content
+#   - 64    # timbre

@@ -1,0 +1,150 @@
+# AnCoGen: Attribute-Controllable Neural Codec Generation
+# Configuration for training and analysis
+#
+# Based on "Bringing Interpretability to Neural Audio Codecs" (Interspeech 2025)
+# arXiv:2506.04492
+#
+# Usage:
+#   python train_ancogen.py --config config/ancogen.yaml
+#   python analyze_rvq.py --config config/ancogen.yaml --checkpoint ../checkpoints/ancogen/best.pt
+
+# =============================================================================
+# RVQ Structure (match your codec)
+# =============================================================================
+num_rvq_layers: 8                  # Number of RVQ quantizer layers
+codebook_size: 1024                # Size of each codebook (EnCodec uses 1024)
+embedding_dim: 256                 # Dimension of code embeddings
+
+# =============================================================================
+# Attribute Dimensions
+# =============================================================================
+# These are the learned embedding dimensions for each extracted attribute
+speaker_dim: 256                   # Speaker identity embedding
+pitch_dim: 64                      # Pitch (F0) embedding
+content_dim: 256                   # Phonetic content embedding
+emotion_dim: 64                    # Emotion embedding
+energy_dim: 32                     # Energy/loudness embedding
+
+# =============================================================================
+# Layer Assignments (based on AnCoGen findings)
+# =============================================================================
+# Which RVQ layers to use for extracting/injecting each attribute
+# Key findings from paper:
+#   - Content dominates early scales (layers 0-1)
+#   - Speaker emerges in later stages (layers 3-7)
+#   - Pitch poorly disentangled but correlates with layers 2-4
+
+content_layers: [0, 1]             # Phonetic content
+speaker_layers: [3, 4, 5, 6, 7]    # Speaker identity
+pitch_layers: [2, 3, 4]            # Pitch/F0
+energy_layers: [1, 2]              # Energy/loudness
+emotion_layers: [2, 3, 4, 5]       # Emotion
+
+# =============================================================================
+# Network Architecture
+# =============================================================================
+extractor_hidden_dim: 512          # Hidden dimension for extractors
+extractor_num_layers: 2            # Number of hidden layers in extractor
+injector_hidden_dim: 512           # Hidden dimension for injectors
+injector_num_layers: 2             # Number of hidden layers in injector
+
+dropout: 0.1
+use_residual_injection: true       # Use gated residual for injection
+use_layer_norm: true
+
+# =============================================================================
+# Editing Parameters
+# =============================================================================
+edit_strength: 1.0                 # Default edit strength (0-1)
+blend_mode: "residual"             # residual, replace, or interpolate
+
+# =============================================================================
+# Training Settings
+# =============================================================================
+batch_size: 32
+learning_rate: 1e-4
+weight_decay: 0.01
+num_epochs: 50
+warmup_steps: 1000
+
+# Gradient clipping
+max_grad_norm: 1.0
+
+# Loss weights
+reconstruction_weight: 1.0         # Extract + inject should recover original
+prediction_weight: 1.0             # Supervised attribute prediction
+orthogonality_weight: 0.1          # Different attributes should be independent
+
+# =============================================================================
+# Data Settings
+# =============================================================================
+# Path to data manifest (JSON with audio paths and labels)
+manifest_path: "../data/manifest.json"
+
+# Codec to use for encoding audio (encodec, facodec, or custom)
+codec_type: "encodec"
+
+# Number of workers for data loading
+num_workers: 4
+
+# Augmentation
+use_augmentation: false
+
+# =============================================================================
+# Checkpointing
+# =============================================================================
+checkpoint_dir: "../checkpoints/ancogen"
+save_every_n_epochs: 5
+keep_last_n_checkpoints: 3
+
+# =============================================================================
+# Logging
+# =============================================================================
+log_interval: 10                   # Log every N batches
+use_wandb: false                   # Use Weights & Biases
+wandb_project: "ancogen-training"
+wandb_entity: null
+
+# =============================================================================
+# Analysis Settings (for evaluate_rvq.py)
+# =============================================================================
+analysis:
+  # t-SNE settings
+  tsne_perplexity: 30.0
+  tsne_n_iter: 1000
+  tsne_learning_rate: 200.0
+  max_samples_for_tsne: 5000
+
+  # CLUB MI estimation
+  club_hidden_dim: 512
+  club_num_layers: 2
+  club_variance_type: "learned"
+
+  # Clustering analysis
+  num_clusters: 10
+
+  # Correlation method (pearson, spearman, kendall)
+  correlation_method: "pearson"
+
+  # Output settings
+  output_dir: "../rvq_analysis"
+  save_visualizations: true
+  figure_dpi: 150
+
+# =============================================================================
+# Codec-Specific Settings
+# =============================================================================
+encodec:
+  model_name: "encodec_24khz"
+  bandwidth: 6.0                   # 6 kbps for 8 RVQ layers
+
+facodec:
+  hf_repo: "amphion/naturalspeech3_facodec"
+  use_official: true               # Use official implementation if available
+
+# =============================================================================
+# Hardware Settings
+# =============================================================================
+device: "auto"                     # auto, cuda, cpu, or mps
+mixed_precision: true              # Use AMP for faster training
+compile_model: false               # Use torch.compile (PyTorch 2.0+)

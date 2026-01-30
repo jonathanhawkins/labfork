@@ -1,0 +1,166 @@
+# EMORL-TTS: VAD-space Intensity with Local Emphasis Regulation
+# Based on EMORL-TTS (arXiv:2510.05758)
+#
+# Unifies:
+# - Global emotion intensity control in VAD (Valence-Arousal-Dominance) space
+# - Local word-level emphasis regulation with RL
+#
+# Key Innovation: Dual reward system enables both sentence-level emotion
+# strength AND word-level emphasis peaks independently.
+#
+# Usage:
+#   python train_emorl_tts.py --config config/emorl_tts.yaml \
+#     --checkpoint ../checkpoints/prosody_v7/best.pt \
+#     --manifest ../data/emotion_manifest.json
+
+# =============================================================================
+# GRPO Settings (inherited from multi_reward_rl.yaml)
+# =============================================================================
+
+group_size: 4
+temperature: 1.0
+top_k: 50
+top_p: 0.95
+
+# =============================================================================
+# Global VAD Emotion Control
+# =============================================================================
+
+# Enable VAD-based global emotion control
+use_vad_control: true
+
+# VAD prediction network settings
+vad_hidden_size: 256
+vad_num_layers: 2
+
+# VAD prototype smoothing (0 = hard boundaries, higher = softer)
+# Allows emotion blending at boundaries
+vad_prototype_smoothing: 0.1
+
+# Global VAD matching reward weight
+global_vad_reward_weight: 1.0
+
+# Intensity matching reward weight
+intensity_reward_weight: 0.5
+
+# =============================================================================
+# Local Word-Level Emphasis Control
+# =============================================================================
+
+# Enable local emphasis regulation (key EMORL-TTS feature)
+use_local_emphasis: true
+
+# Maximum emphasized words per utterance
+# Too many = loss of emphasis contrast
+max_emphasis_words: 4
+
+# Position tolerance (in word positions)
+# 0.5 = half a word position tolerance for peak alignment
+emphasis_position_tolerance: 0.5
+
+# Emphasis strength levels: 0=none, 1=light, 2=medium, 3=strong, 4=very_strong
+num_emphasis_levels: 5
+
+# Emphasis feature dimension
+emphasis_feature_dim: 64
+
+# Temporal resolution (frames per word for emphasis extraction)
+emphasis_temporal_resolution: 8
+
+# Local emphasis clarity reward weight
+local_emphasis_reward_weight: 0.8
+
+# Bonus for accurate emphasis position
+emphasis_position_bonus: 0.3
+
+# Bonus for accurate emphasis strength
+emphasis_strength_bonus: 0.2
+
+# Penalty for over-emphasizing (naturalness preservation)
+over_emphasis_penalty: 0.1
+
+# =============================================================================
+# Dual Reward System Balancing
+# =============================================================================
+
+# Base rewards (from multi_reward_rl)
+cer_weight: 1.0
+sim_weight: 1.0
+emotion_weight: 1.0
+naturalness_weight: 0.5
+
+# EMORL-TTS specific weights are above:
+# - global_vad_reward_weight
+# - local_emphasis_reward_weight
+
+# =============================================================================
+# Emphasis Curriculum Learning
+# =============================================================================
+
+# Use emphasis curriculum (gradually introduce emphasis)
+# Helps model learn base prosody first, then emphasis
+use_emphasis_curriculum: true
+
+# Number of epochs for curriculum (after this, full emphasis weight)
+emphasis_curriculum_epochs: 3
+
+# Emphasis data augmentation probability
+# Random emphasis target modification during training
+emphasis_augmentation_prob: 0.2
+
+# =============================================================================
+# Policy Optimization
+# =============================================================================
+
+kl_coef: 0.1
+clip_ratio: 0.2
+entropy_coef: 0.01
+advantage_normalization: true
+
+# =============================================================================
+# Training Settings
+# =============================================================================
+
+learning_rate: 5.0e-6
+batch_size: 4
+num_epochs: 8  # Slightly more epochs for emphasis learning
+warmup_steps: 200
+gradient_accumulation: 4
+max_grad_norm: 0.5
+
+# =============================================================================
+# Model Settings
+# =============================================================================
+
+hidden_size: 2048
+num_prosody_tokens: 4
+
+# =============================================================================
+# Reference Model
+# =============================================================================
+
+use_reference_model: true
+reference_model_update_freq: 0
+
+# =============================================================================
+# SFT Regularization
+# =============================================================================
+
+sft_weight: 0.5
+sft_decay: 0.95
+
+# =============================================================================
+# External Models (optional)
+# =============================================================================
+
+use_external_asr: false
+use_external_spk: false
+use_external_emo: false
+
+# =============================================================================
+# Output & Logging
+# =============================================================================
+
+output_dir: ../checkpoints/emorl_tts
+log_every: 10
+save_every_epochs: 1

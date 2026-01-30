@@ -1,0 +1,34 @@
+# Research Activity Configuration
+# Defines how web research is visualized in the 3D lab
+
+id: research
+name: Web Research
+description: Searching for papers and techniques on prosody/emotion TTS
+icon: Search
+tags:
+  - research
+  - web
+  - discovery
+priority: 5
+
+visualization:
+  prop: null
+  animation: typing
+  particles: code-rain
+  color: 0xa855f7  # Purple for research
+  workLocation: desk
+  showProgress: false
+  highlightProp: false
+
+agentBehavior:
+  defaultStatus: thinking
+  typingSpeed: 0.8
+  faceProp: false
+
+progressDetection:
+  patterns:
+    - "Searching.*?(\\d+)\\s+results"
+    - "Found\\s+(\\d+)\\s+papers"
+    - "Analyzing.*?paper"
+  completionPattern: "Research complete|Created.*?tasks"
+  completionMessage: "Research session completed"

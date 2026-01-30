@@ -1,0 +1,25 @@
+# Idle Activity Configuration
+# Defines how idle agents are visualized in the 3D lab
+
+id: idle
+name: Idle
+description: Agent is waiting for tasks
+icon: Pause
+tags:
+  - idle
+  - waiting
+priority: 99
+
+visualization:
+  prop: null
+  animation: idle
+  particles: none
+  color: 0x94a3b8  # Gray for idle
+  workLocation: center
+  showProgress: false
+  highlightProp: false
+
+agentBehavior:
+  defaultStatus: idle
+  typingSpeed: 0
+  faceProp: false

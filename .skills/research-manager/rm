@@ -1,0 +1,188 @@
+#!/bin/bash
+# Research Manager convenience wrapper
+# Usage: ./rm spawn --type ollama --name "test" --task "Hello"
+#        ./rm orchestrator start|stop|status|logs
+#        ./rm lab list|create|switch|status
+#        ./rm --lab <lab-id> <command>  # Override active lab
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LABS_DIR="$SCRIPT_DIR/labs"
+GLOBAL_STATE_DIR="$SCRIPT_DIR/state"
+ACTIVE_LAB_FILE="$GLOBAL_STATE_DIR/active-lab.json"
+
+# Get current lab ID
+get_current_lab() {
+    # Check for --lab flag (first arg)
+    if [ "$1" = "--lab" ] || [ "$1" = "-L" ]; then
+        echo "$2"
+        return
+    fi
+
+    # Check environment variable
+    if [ -n "$CLAUDE_CODE_LAB_ID" ]; then
+        echo "$CLAUDE_CODE_LAB_ID"
+        return
+    fi
+
+    # Read from active lab file
+    if [ -f "$ACTIVE_LAB_FILE" ]; then
+        LAB=$(python3 -c "import json; print(json.load(open('$ACTIVE_LAB_FILE')).get('active_lab_id', ''))" 2>/dev/null)
+        if [ -n "$LAB" ]; then
+            echo "$LAB"
+            return
+        fi
+    fi
+
+    # Default
+    echo "voice-clone"
+}
+
+# Get state directory for current lab
+get_state_dir() {
+    local LAB_ID=$(get_current_lab "$@")
+    local LAB_STATE="$LABS_DIR/$LAB_ID/state"
+
+    if [ -d "$LAB_STATE" ]; then
+        echo "$LAB_STATE"
+    else
+        echo "$GLOBAL_STATE_DIR"
+    fi
+}
+
+# Handle --lab flag extraction for orchestrator commands
+LAB_FLAG=""
+if [ "$1" = "--lab" ] || [ "$1" = "-L" ]; then
+    LAB_FLAG="--lab $2"
+    shift 2
+fi
+
+# Set state paths based on current lab
+CURRENT_LAB=$(get_current_lab $LAB_FLAG)
+STATE_DIR=$(get_state_dir $LAB_FLAG)
+ORCHESTRATOR_PID_FILE="$STATE_DIR/orchestrator.pid"
+ORCHESTRATOR_LOG="$STATE_DIR/orchestrator.log"
+
+# Handle orchestrator commands
+if [ "$1" = "orchestrator" ] || [ "$1" = "orch" ]; then
+    case "$2" in
+        start)
+            if [ -f "$ORCHESTRATOR_PID_FILE" ] && kill -0 $(cat "$ORCHESTRATOR_PID_FILE") 2>/dev/null; then
+                echo "Orchestrator already running (PID: $(cat $ORCHESTRATOR_PID_FILE))"
+                exit 1
+            fi
+            echo "Starting orchestrator daemon for lab: $CURRENT_LAB"
+            mkdir -p "$STATE_DIR"
+            # Pass lab context to orchestrator
+            CLAUDE_CODE_LAB_ID="$CURRENT_LAB" nohup node "$SCRIPT_DIR/orchestrator.js" $LAB_FLAG >> "$ORCHESTRATOR_LOG" 2>&1 &
+            echo $! > "$ORCHESTRATOR_PID_FILE"
+            sleep 1
+            if kill -0 $(cat "$ORCHESTRATOR_PID_FILE") 2>/dev/null; then
+                echo "Orchestrator started (PID: $(cat $ORCHESTRATOR_PID_FILE))"
+                echo "Lab: $CURRENT_LAB"
+                echo "Logs: $ORCHESTRATOR_LOG"
+            else
+                echo "Failed to start orchestrator"
+                rm -f "$ORCHESTRATOR_PID_FILE"
+                exit 1
+            fi
+            ;;
+        stop)
+            if [ -f "$ORCHESTRATOR_PID_FILE" ]; then
+                PID=$(cat "$ORCHESTRATOR_PID_FILE")
+                if kill -0 $PID 2>/dev/null; then
+                    echo "Stopping orchestrator for lab: $CURRENT_LAB (PID: $PID)..."
+                    kill $PID
+                    sleep 1
+                    if kill -0 $PID 2>/dev/null; then
+                        kill -9 $PID
+                    fi
+                    echo "Orchestrator stopped"
+                else
+                    echo "Orchestrator not running (stale PID file)"
+                fi
+                rm -f "$ORCHESTRATOR_PID_FILE"
+            else
+                echo "Orchestrator not running"
+            fi
+            ;;
+        restart)
+            "$0" $LAB_FLAG orchestrator stop
+            sleep 1
+            "$0" $LAB_FLAG orchestrator start
+            ;;
+        status)
+            echo "Lab: $CURRENT_LAB"
+            if [ -f "$ORCHESTRATOR_PID_FILE" ] && kill -0 $(cat "$ORCHESTRATOR_PID_FILE") 2>/dev/null; then
+                echo "Orchestrator: RUNNING (PID: $(cat $ORCHESTRATOR_PID_FILE))"
+                # Show recent stats
+                if [ -f "$ORCHESTRATOR_LOG" ]; then
+                    echo ""
+                    echo "Recent activity:"
+                    tail -10 "$ORCHESTRATOR_LOG" | grep -E "(Status|Spawned|Killed|Cleaned|lab)" | tail -5
+                fi
+            else
+                echo "Orchestrator: STOPPED"
+                rm -f "$ORCHESTRATOR_PID_FILE" 2>/dev/null
+            fi
+            ;;
+        logs)
+            echo "Lab: $CURRENT_LAB"
+            if [ -f "$ORCHESTRATOR_LOG" ]; then
+                tail -${3:-50} "$ORCHESTRATOR_LOG"
+            else
+                echo "No logs found at: $ORCHESTRATOR_LOG"
+            fi
+            ;;
+        logs-follow|tail)
+            echo "Lab: $CURRENT_LAB"
+            if [ -f "$ORCHESTRATOR_LOG" ]; then
+                tail -f "$ORCHESTRATOR_LOG"
+            else
+                echo "No logs found at: $ORCHESTRATOR_LOG"
+            fi
+            ;;
+        priorities|priority|prio)
+            # Show task priorities
+            CLAUDE_CODE_LAB_ID="$CURRENT_LAB" node "$SCRIPT_DIR/show-priorities.js"
+            ;;
+        reset-retries)
+            # Reset retry count for a task
+            if [ -z "$3" ]; then
+                echo "Usage: rm orchestrator reset-retries <task-id>"
+                exit 1
+            fi
+            CLAUDE_CODE_LAB_ID="$CURRENT_LAB" node "$SCRIPT_DIR/reset-retries.js" "$3"
+            ;;
+        dedup|dedup-tasks)
+            # Deduplicate tasks
+            shift 2  # Remove 'orchestrator' and 'dedup'
+            CLAUDE_CODE_LAB_ID="$CURRENT_LAB" node "$SCRIPT_DIR/dedup-tasks.js" "$@"
+            ;;
+        *)
+            echo "Usage: rm [--lab <id>] orchestrator <command>"
+            echo ""
+            echo "Commands:"
+            echo "  start             - Start the orchestrator daemon"
+            echo "  stop              - Stop the orchestrator daemon"
+            echo "  restart           - Restart the orchestrator daemon"
+            echo "  status            - Check if orchestrator is running"
+            echo "  logs [N]          - Show last N lines of logs (default: 50)"
+            echo "  logs-follow       - Follow logs in real-time"
+            echo "  priorities        - Show task priorities (smart ordering)"
+            echo "  reset-retries ID  - Reset retry count for task ID"
+            echo "  dedup [--dry-run] - Remove duplicate tasks (use --auto to skip prompts)"
+            echo ""
+            echo "Current lab: $CURRENT_LAB"
+            echo "Use --lab <id> to specify a different lab"
+            exit 1
+            ;;
+    esac
+    exit 0
+fi
+
+# All other commands go to Python manager (including lab commands)
+if [ -n "$LAB_FLAG" ]; then
+    python3 "$SCRIPT_DIR/manager.py" $LAB_FLAG "$@"
+else
+    python3 "$SCRIPT_DIR/manager.py" "$@"
+fi

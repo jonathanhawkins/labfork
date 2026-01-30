@@ -1,0 +1,127 @@
+# SAVC: Adversarial Style Augmentation for Speaker-Invariant Prosody
+# Based on arXiv:2405.00603
+
+# =============================================================================
+# SAVC Configuration
+# =============================================================================
+
+savc:
+  # Feature dimensions
+  input_dim: 768              # HuBERT/wav2vec2 feature dimension
+  hidden_dim: 512             # Hidden layer dimension
+  prosody_dim: 256            # Prosody embedding dimension
+  output_dim: 2048            # Output for CSM integration
+
+  # Statistic perturbation parameters
+  mean_perturbation_range: [-0.3, 0.3]   # ±30% mean shift
+  var_perturbation_range: [0.7, 1.3]     # 70%-130% variance scale
+  perturbation_probability: 0.8          # Apply perturbation 80% of time
+
+  # Instance normalization
+  use_instance_norm: true
+  eps: 1.0e-6
+
+  # Spectral perturbation (frequency-domain augmentation)
+  use_spectral_perturbation: true
+  spectral_band_size: 16            # Size of frequency bands
+  spectral_perturbation_strength: 0.2
+
+  # Content preservation
+  content_preservation_weight: 0.5
+  use_contrastive_content: true
+
+  # Style consistency loss
+  consistency_temperature: 0.1
+  use_cosine_similarity: true
+  margin: 0.5
+
+  # Training settings
+  warmup_steps: 1000
+  augment_both_views: true
+
+  # Loss weights
+  consistency_weight: 1.0
+  adversarial_weight: 0.5
+  reconstruction_weight: 0.3
+
+  # Number of augmented views
+  num_augmentations: 2
+
+  # Integration
+  num_prefix_tokens: 4
+
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+
+training:
+  # Basic settings
+  epochs: 100
+  batch_size: 16
+  learning_rate: 1.0e-4
+  weight_decay: 1.0e-5
+  grad_clip: 1.0
+
+  # Scheduler
+  scheduler: cosine
+  warmup_epochs: 5
+
+  # Checkpoint
+  checkpoint_dir: ../checkpoints/savc
+  save_every: 5
+  log_interval: 50
+
+  # Validation
+  val_split: 0.1
+  val_every: 1
+
+
+# =============================================================================
+# Optional Disentanglement Integration
+# =============================================================================
+
+disentanglement:
+  enabled: false              # Enable GRL/MINE disentanglement
+  use_grl: true
+  use_scheduled_grl: true     # Diffsody sigmoid schedule
+  grl_schedule_type: sigmoid
+  grl_gamma: 10.0
+  grl_warmup_epochs: 5
+
+  use_mine: false             # MINE-based MI minimization
+  mine_weight: 0.5
+
+  num_speakers: 100
+
+
+# =============================================================================
+# Data Configuration
+# =============================================================================
+
+data:
+  manifest_path: ../data/manifest.json
+  feature_dir: ../data/features
+  max_seq_len: 500
+  num_workers: 4
+
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+
+hardware:
+  # For M4 Pro (64GB)
+  m4_pro:
+    batch_size: 16
+    num_workers: 4
+    precision: fp32
+    compile: false
+
+  # For RTX 4090 (24GB)
+  rtx_4090:
+    batch_size: 32
+    num_workers: 8
+    precision: fp16
+    compile: true
+    gradient_checkpointing: true

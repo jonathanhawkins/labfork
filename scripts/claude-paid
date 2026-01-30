@@ -1,0 +1,15 @@
+#!/bin/bash
+# Wrapper to run Claude Code with PAID Anthropic API
+
+# Clear Ollama environment variables
+unset ANTHROPIC_BASE_URL
+unset ANTHROPIC_AUTH_TOKEN
+
+# Run Claude Code with default (paid) API
+echo "💳 Starting Claude Code with PAID Anthropic API"
+echo "💰 Cost: ~$20-50/session"
+echo ""
+echo "💡 TIP: Use claude-free for cheaper alternative!"
+echo ""
+
+claude "$@"

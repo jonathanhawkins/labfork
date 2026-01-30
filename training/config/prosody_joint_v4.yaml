@@ -1,0 +1,69 @@
+# Joint Prosody + Audio Training v4 - Improved Energy Differentiation
+# Based on RESULTS.md findings: need better angry/neutral separation
+
+# ============== Model ==============
+model_path: "../models/csm-1b"
+lora_checkpoint: "../models/checkpoints/csm_lora_450/best"
+
+# ============== Prosody Configuration ==============
+prosody:
+  semantic_dim: 16
+  acoustic_dim: 16
+  rhythm_dim: 8
+  contour_dim: 64
+  prefix_tokens: 8
+  dropout: 0.1
+
+# ============== Joint Training ==============
+use_audio_loss: true
+audio_loss_weight: 0.5
+prosody_scale: 0.1
+
+# ============== Prosody Loss Weights (INCREASED) ==============
+# v3 had: prosody=2.0, energy=1.5 -> 50% accuracy
+# v4 target: improve angry/neutral separation
+prosody_loss_weight: 2.5    # Increased from 2.0
+energy_loss_weight: 3.0     # Increased from 1.5 (double!)
+emotion_loss_weight: 1.5    # NEW: Emotion classification auxiliary loss
+
+# ============== Energy Augmentation (NEW) ==============
+# Boost/reduce intensity during training to create more contrast
+energy_augmentation:
+  enabled: true
+  angry_boost_db: 6.0       # Boost angry samples by 6dB
+  sad_reduce_db: -6.0       # Reduce sad samples by 6dB
+  probability: 0.5          # Apply to 50% of samples
+
+# ============== Data ==============
+train_manifest: "../data/training/train_large.json"
+val_manifest: "../data/training/val_large.json"
+prosody_cache_dir: "../data/prosody_cache"
+max_audio_length_ms: 15000
+sample_rate: 24000
+
+# ============== Training ==============
+batch_size: 2
+gradient_accumulation: 8
+num_epochs: 25              # More epochs for better convergence
+learning_rate: 5.0e-5
+weight_decay: 0.1
+warmup_steps: 200
+max_grad_norm: 1.0
+
+# ============== Temporal ==============
+train_temporal: true
+num_temporal_segments: 4
+
+# ============== Evaluation ==============
+eval_every: 100
+save_every: 200
+log_every: 20
+save_every_epochs: 2
+
+# ============== Hardware ==============
+device: "cuda"
+precision: "fp32"
+num_workers: 2
+
+# ============== Output ==============
+output_dir: "../models/checkpoints/prosody_joint_v4"

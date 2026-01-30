@@ -1,0 +1,36 @@
+# Training Activity Configuration
+# Defines how model training is visualized in the 3D lab
+
+id: training
+name: Model Training
+description: Fine-tuning the voice model with prosody conditioning
+icon: Brain
+tags:
+  - training
+  - ml
+  - gpu
+priority: 1
+
+visualization:
+  prop: supercomputer
+  animation: focused
+  particles: data-flow
+  color: 0x4ade80  # Green for training
+  workLocation: supercomputer
+  showProgress: true
+  highlightProp: true
+
+agentBehavior:
+  defaultStatus: working
+  typingSpeed: 1.0
+  faceProp: true
+
+progressDetection:
+  patterns:
+    - "Epoch\\s+(\\d+)/(\\d+)"
+    - "loss:\\s+([\\d.]+)"
+    - "step\\s+(\\d+)/(\\d+)"
+    - "training.*?(\\d+)%"
+  completionPattern: "Training complete|Saved checkpoint|Best model saved"
+  completionMessage: "Training completed successfully"
+  progressExtractor: "($1 / $2) * 100"

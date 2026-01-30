@@ -1,0 +1,162 @@
+# NLP Research Lab
+# Research natural language processing, language models, and text understanding
+
+name: "NLP Research Lab"
+slug: "nlp-research"
+description: "Research language models, text generation, and natural language understanding"
+longDescription: |
+  A research lab at the forefront of natural language processing. Focus areas include large
+  language models, instruction tuning, retrieval-augmented generation, multilingual NLP,
+  reasoning capabilities, and efficient inference. Build systems that truly understand language.
+difficulty: intermediate
+
+branding:
+  primaryColor: "#6366f1"    # Indigo (language/intelligence)
+  accentColor: "#f59e0b"     # Amber (knowledge/text)
+  backgroundStyle: "minimal"
+  backgroundColor: "#fafafa"
+
+scene:
+  props:
+    - id: text-corpus
+      type: terminal
+      position: [0, 1, -6]
+      scale: 2.0
+      accentColor: 0x6366f1
+
+    - id: embedding-display
+      type: waveform
+      position: [-5, 1.5, -3]
+      scale: 1.5
+      accentColor: 0xf59e0b
+
+    - id: attention-visualizer
+      type: chart-wall
+      position: [5, 1.5, -3]
+      scale: 1.3
+      accentColor: 0x22c55e
+
+    - id: model-server
+      type: supercomputer
+      position: [-5, 0, 5]
+      scale: 1.4
+      accentColor: 0x3b82f6
+
+    - id: tokenizer-station
+      type: server
+      position: [5, 0, 5]
+      scale: 1.2
+      accentColor: 0x8b5cf6
+
+  decorations:
+    plants: true
+    floatingCubes: true
+    particles: false
+
+  lighting:
+    ambientIntensity: 0.7
+    mainLightIntensity: 0.8
+    mainLightColor: "#ffffff"
+
+  fog:
+    enabled: false
+
+research:
+  arxivCategories:
+    - cs.CL       # Computational Linguistics
+    - cs.LG       # Machine Learning
+    - cs.AI       # Artificial Intelligence
+    - cs.IR       # Information Retrieval
+
+  keywords:
+    - large language models
+    - instruction tuning LLM
+    - retrieval augmented generation
+    - transformer language models
+    - chain of thought reasoning
+    - multilingual NLP
+    - text generation neural
+    - efficient inference LLM
+    - RLHF language models
+    - question answering transformers
+
+  additionalSources:
+    - semantic-scholar
+    - github
+    - papers-with-code
+
+  maxPapersPerSession: 10
+
+evaluation:
+  primaryMetric: bleu
+  baselineComparison: true
+  metrics:
+    - id: bleu
+      name: BLEU Score
+      description: Bilingual Evaluation Understudy
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: perplexity
+      name: Perplexity
+      description: Model uncertainty on held-out data
+      range: [1, 1000]
+      higherIsBetter: false
+
+    - id: f1_score
+      name: F1 Score
+      description: Harmonic mean of precision and recall
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: accuracy
+      name: Accuracy
+      description: Exact match accuracy
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: rouge_l
+      name: ROUGE-L
+      description: Longest common subsequence metric
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: inference_speed
+      name: Inference Speed
+      description: Tokens generated per second
+      range: [0, 10000]
+      higherIsBetter: true
+      unit: "tok/s"
+
+hardware:
+  gpuRequired: true
+  minGpuVram: 16
+  recommendedGpuVram: 48
+  minRam: 64
+  platforms:
+    - darwin
+    - linux
+    - win32
+
+prompts:
+  research: prompts/research.md
+  implementation: prompts/implementation.md
+  evaluation: prompts/evaluation.md
+  preamble: |
+    You are working on an NLP Research Lab focused on advancing language understanding
+    and generation. Prioritize reasoning capabilities, factual accuracy, and efficient inference.
+    Consider multilingual applications and safety.
+
+tags:
+  - nlp
+  - language-models
+  - transformers
+  - text-generation
+  - retrieval-augmented
+  - instruction-tuning
+
+version: "1.0"

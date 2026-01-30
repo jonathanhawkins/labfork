@@ -1,0 +1,149 @@
+# Prosody V6 Training Configuration with Hierarchical Emotion Distribution (HED)
+# Based on ICASSP 2024 "Hierarchical Emotion Prediction and Control in TTS"
+#
+# Key Innovation: Model emotion at 3 granularity levels:
+#   - Phoneme-level: Fine-grained emotion per phoneme
+#   - Word-level: Emotion aggregated at word boundaries
+#   - Utterance-level: Global emotion representation
+
+# Model paths
+model_path: ../models/csm-1b
+
+# Data
+train_manifest: ../data/splits/train.json
+val_manifest: ../data/splits/val.json
+prosody_cache_dir: ../data/prosody_cache
+
+# Output
+output_dir: ../models/checkpoints/prosody_v6_hed
+
+# Training settings
+num_epochs: 30
+batch_size: 4
+learning_rate: 5e-5
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# LoRA settings
+use_lora: true
+lora_r: 8
+lora_alpha: 16
+lora_target_modules:
+  - q_proj
+  - v_proj
+lora_dropout: 0.1
+
+# Prosody encoder settings
+hidden_size: 2048
+num_prosody_tokens: 4
+dropout: 0.1
+
+# Temporal encoder (for keyframe support)
+train_temporal: true
+num_temporal_segments: 4
+
+# =============================================================================
+# V6 HED SETTINGS (NEW)
+# =============================================================================
+
+use_hed: true  # Enable Hierarchical Emotion Distribution
+
+# HED Configuration
+hed:
+  # Feature dimensions
+  opensmile_dim: 88          # eGeMAPS features
+  phoneme_hidden: 128        # Phoneme-level hidden size
+  word_hidden: 256           # Word-level hidden size
+  utterance_hidden: 512      # Utterance-level hidden size
+  output_hidden: 2048        # Output to match prosody encoder
+
+  # Hierarchy settings
+  phoneme_pooling: attention  # attention, mean, max
+  word_pooling: attention     # attention, mean, max
+
+  # Alignment method
+  alignment_method: g2p       # g2p (lightweight) or mfa (Montreal Forced Aligner)
+
+  # OpenSMILE config
+  opensmile_config: eGeMAPSv02
+
+  # SVM ranking for intensity
+  use_svm_ranking: false      # Disable for initial training, enable for fine-tuning
+
+# HED Loss weights
+hed_loss:
+  phoneme_weight: 0.3        # Phoneme-level emotion classification
+  word_weight: 0.5           # Word-level emotion classification
+  utterance_weight: 1.0      # Utterance-level (primary)
+  intensity_weight: 0.5      # Word intensity prediction
+  consistency_weight: 0.2    # Cross-level consistency
+
+# Integration mode
+hed_integration: additive    # additive (add to prosody prefix) or concat (concatenate)
+hed_scale: 0.5               # Scale HED contribution relative to prosody encoder
+
+# =============================================================================
+# V5 ANTI-OVERFITTING SETTINGS (RETAINED)
+# =============================================================================
+
+# Emotion loss warmup (V5) - ramp up over epochs
+emotion_warmup_epochs: 10
+
+# Gradient detachment (V5) - prevent emotion from corrupting acoustic features
+detach_emotion_grad: true
+detach_energy_grad: true
+
+# Early stopping (V5)
+early_stopping_patience: 5
+
+# Curriculum learning (V5) - start with easy emotions
+use_curriculum: true
+curriculum_start: 0.4        # Start with neutral/calm/happy
+curriculum_increment: 0.1    # Add harder emotions each epoch
+
+# =============================================================================
+# LOSS WEIGHTS
+# =============================================================================
+
+# Core prosody losses
+prosody_loss_weight: 2.0     # Prosody reconstruction MSE
+temporal_loss_weight: 1.0    # Temporal encoder loss
+
+# Auxiliary losses
+energy_loss_weight: 1.0      # Energy prediction (angry vs sad)
+emotion_loss_weight: 1.0     # Emotion classification
+
+# HED total loss weight
+hed_total_weight: 0.5        # Weight of HED losses in total training loss
+
+# Audio loss (optional end-to-end training)
+use_audio_loss: false
+audio_loss_weight: 0.1
+
+# =============================================================================
+# BALANCED SAMPLING
+# =============================================================================
+
+balance_emotions: true       # Use weighted sampling to balance emotions
+
+# Energy augmentation (boost/reduce based on emotion)
+energy_augmentation:
+  enabled: true
+  angry_boost_db: 6.0
+  sad_reduce_db: -6.0
+  probability: 0.5
+
+# =============================================================================
+# LOGGING AND CHECKPOINTING
+# =============================================================================
+
+log_every: 10                # Log every N steps
+save_every_epochs: 5         # Save checkpoint every N epochs
+validate_every_epochs: 1     # Validate every epoch
+
+# Metrics to track
+track_metrics:
+  - pitch_separation         # Happy vs sad Hz separation
+  - emotion_accuracy         # Emotion classification accuracy
+  - word_intensity_mae       # Word-level intensity prediction error
+  - hed_consistency          # Cross-level consistency loss

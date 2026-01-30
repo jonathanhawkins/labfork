@@ -1,0 +1,110 @@
+# PEPA (Phoneme-Emotion Projection Adapter) Training Configuration
+# Based on "Emotional TTS via MI-Guided Disentanglement" (arXiv:2510.01722)
+
+# Model Architecture
+model:
+  # Input dimensions
+  phoneme_embed_dim: 512
+  phoneme_vocab_size: 256
+
+  # Reference encoder (GST-style)
+  reference_encoder_dim: 256
+  reference_hidden_dim: 512
+  num_gst_tokens: 10
+  gst_head_dim: 256
+  mel_dim: 80
+
+  # PEPA projection layers (two successive 1D convolutions)
+  pepa_hidden_dim: 512
+  pepa_kernel_size: 3
+  pepa_dropout: 0.1
+
+  # Emotion dimensions
+  emotion_dim: 256
+  num_emotions: 8
+  emotion_labels:
+    - "neutral"
+    - "happy"
+    - "sad"
+    - "angry"
+    - "surprised"
+    - "calm"
+    - "fearful"
+    - "disgusted"
+
+  # Output dimensions (CSM integration)
+  output_dim: 2048
+  num_prosody_tokens: 4
+
+  # Disentanglement
+  use_mine: true
+  num_speakers: 1000
+  speaker_embed_dim: 256
+
+# Loss weights
+loss:
+  reconstruction_weight: 1.0       # PEPA should match reference encoder
+  emotion_cls_weight: 0.5          # Emotion classification (both PEPA and ref)
+  mine_weight: 0.3                 # MINE disentanglement
+  smoothness_weight: 0.1           # Phoneme-level emotion smoothness
+
+# Training settings
+training:
+  # Dataset
+  manifest_path: "../data/emotion_manifest.json"
+  batch_size: 16
+  num_workers: 4
+  pin_memory: true
+
+  # Optimizer
+  optimizer: "adamw"
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+
+  # Scheduler
+  scheduler: "cosine"
+  warmup_epochs: 3
+  min_lr: 0.00001
+
+  # Training loop
+  epochs: 100
+  gradient_clip: 1.0
+  accumulation_steps: 1
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/pepa"
+  save_every_n_epochs: 5
+  keep_last_n_checkpoints: 3
+
+  # Logging
+  log_every_n_steps: 50
+  eval_every_n_epochs: 1
+
+  # Mixed precision
+  use_amp: true
+  amp_dtype: "bfloat16"  # bfloat16 for M4 Pro, float16 for RTX 4090
+
+# Data augmentation
+augmentation:
+  # Audio augmentation
+  time_stretch: true
+  time_stretch_range: [0.9, 1.1]
+  pitch_shift: true
+  pitch_shift_range: [-2, 2]  # semitones
+  add_noise: true
+  noise_snr_range: [15, 30]   # dB
+
+  # Phoneme augmentation
+  phoneme_dropout: 0.1
+
+# Inference settings
+inference:
+  blend_weight: 0.7            # For emotion transfer (1.0 = pure reference)
+  default_emotion: "neutral"
+  default_intensity: 0.7
+
+# Hardware settings (M4 Pro)
+hardware:
+  device: "mps"  # "cuda" for NVIDIA, "mps" for Apple Silicon
+  compile_model: false  # torch.compile (only for CUDA)

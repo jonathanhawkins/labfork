@@ -1,0 +1,94 @@
+# Baseline Configuration - NO Prosody Conditioning
+# This is the CONTROL for our A/B experiment
+#
+# IMPORTANT: This config is identical to rtx_4090_lora.yaml
+# except it explicitly disables all prosody features.
+# Use this to train a baseline model for comparison.
+#
+# Experiment: Does prosody conditioning improve voice cloning?
+# - Baseline (this): Standard LoRA fine-tuning
+# - Treatment: LoRA + Prosody conditioning (prosody_joint_training.yaml)
+
+# ============== Model ==============
+model_path: "sesame/csm-1b"
+
+# ============== LoRA Configuration ==============
+use_lora: true
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.15
+lora_target_modules:
+  - "q_proj"
+  - "v_proj"
+
+# ============== PROSODY DISABLED ==============
+# These flags explicitly disable prosody conditioning
+# to serve as baseline for A/B comparison
+
+use_prosody_conditioning: false
+prosody:
+  enabled: false
+
+# ============== Data Augmentation ==============
+augmentation:
+  enabled: true
+  augment_probability: 0.5
+  speed_perturb_enabled: true
+  speed_perturb: [0.9, 1.1]
+  pitch_shift_enabled: true
+  pitch_shift_semitones: [-2, 2]
+  time_mask_enabled: true
+  time_mask_ratio: 0.1
+  noise_enabled: true
+  noise_snr_db: [25, 40]
+  volume_enabled: true
+  volume_range: [0.85, 1.15]
+
+# ============== Training Configuration ==============
+learning_rate: 1.0e-4
+weight_decay: 0.2
+max_grad_norm: 0.5
+batch_size: 4
+gradient_accumulation: 8
+num_epochs: 30
+
+# ============== DeepSeek LR Schedule ==============
+warmup_steps: 100
+stable_steps: 200
+min_lr_ratio: 0.01
+
+# ============== Multi-Token Prediction ==============
+use_mtp: true
+mtp_tokens: 2
+mtp_weight: 0.1
+
+# ============== Label Smoothing ==============
+label_smoothing: 0.1
+
+# ============== Early Stopping ==============
+early_stopping_patience: 5
+early_stopping_min_delta: 0.01
+
+# ============== Evaluation & Checkpointing ==============
+eval_every: 50
+save_every: 100
+
+# ============== Hardware Configuration ==============
+device: "cuda"
+precision: "fp16"
+gradient_checkpointing: true
+num_workers: 2
+
+# ============== Data Paths ==============
+data_dir: "../data/training"
+max_audio_length_ms: 30000
+
+# ============== Output ==============
+output_dir: "../models/checkpoints/baseline_no_prosody"
+
+# ============== Experiment Metadata ==============
+experiment:
+  name: "baseline_no_prosody"
+  description: "Control condition - standard LoRA without prosody conditioning"
+  hypothesis: "Baseline for comparison with prosody-conditioned model"
+  comparison_config: "prosody_joint_training.yaml"

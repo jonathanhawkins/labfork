@@ -304,7 +304,7 @@ The wizard includes pre-configured quick-connect for known hosts:
 
 | Name | Host | User | Description |
 |------|------|------|-------------|
-| RTX 4090 (Tailscale) | 100.83.78.111 | doc | 24GB VRAM - Fast training |
+| RTX 4090 (Tailscale) | $REMOTE_GPU_HOST | doc | 24GB VRAM - Fast training |
 
 ## Domain Templates
 

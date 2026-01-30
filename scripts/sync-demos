@@ -1,0 +1,11 @@
+#!/bin/bash
+# Sync demo pages - creates missing demos for all inference scripts
+#
+# Usage:
+#   ./scripts/sync-demos         # Dry run
+#   ./scripts/sync-demos --execute  # Create missing pages
+#   ./scripts/sync-demos --status   # Show sync history
+
+cd "$(dirname "$0")/.."
+
+node .skills/frontend-designer/sync-demos.js "$@"

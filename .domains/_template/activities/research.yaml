@@ -1,0 +1,27 @@
+# Research Activity Template
+# Customize for your domain's research activities
+
+id: research
+name: Research
+description: Searching for relevant papers and techniques
+icon: Search
+
+visualization:
+  animation: thinking
+  particles: none
+  color: 0x3b82f6
+  workLocation: center
+  showProgress: false
+  highlightProp: false
+
+agentBehavior:
+  defaultStatus: thinking
+  typingSpeed: 1.0
+  faceProp: false
+
+progressDetection:
+  patterns:
+    - "Found\\s+(\\d+)\\s+papers"
+    - "Evaluating\\s+paper"
+  completionPattern: "Research complete"
+  completionMessage: "Found relevant papers"

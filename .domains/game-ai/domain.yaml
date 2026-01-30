@@ -1,0 +1,164 @@
+# Game AI Research Lab
+# Research reinforcement learning and AI for game playing agents
+
+name: "Game AI Lab"
+slug: "game-ai"
+description: "Research game-playing AI agents, reinforcement learning, and procedural content generation"
+longDescription: |
+  A research lab dedicated to advancing AI for games. Focus areas include deep reinforcement learning
+  for game playing (Atari, StarCraft, Go), multi-agent systems, procedural content generation,
+  player modeling, and game balance optimization. Build agents that learn superhuman strategies.
+difficulty: intermediate
+
+branding:
+  primaryColor: "#ec4899"    # Pink (gaming/entertainment)
+  accentColor: "#8b5cf6"     # Purple (arcade/neon)
+  backgroundStyle: "space"   # Dark arcade aesthetic
+  backgroundColor: "#0a0515"
+
+scene:
+  props:
+    - id: game-screen
+      type: terminal
+      position: [0, 1.5, -6]
+      scale: 2.5
+      accentColor: 0xec4899
+
+    - id: controller-station
+      type: terminal
+      position: [-5, 0, -3]
+      scale: 1.2
+      accentColor: 0x8b5cf6
+
+    - id: replay-viewer
+      type: waveform
+      position: [5, 1, -3]
+      scale: 1.5
+      accentColor: 0x22c55e
+
+    - id: training-server
+      type: supercomputer
+      position: [-5, 0, 5]
+      scale: 1.3
+      accentColor: 0x3b82f6
+
+    - id: scoreboard
+      type: chart-wall
+      position: [5, 0, 5]
+      scale: 1.0
+      accentColor: 0xf59e0b
+
+  decorations:
+    plants: false
+    floatingCubes: true
+    particles: true
+
+  lighting:
+    ambientIntensity: 0.2
+    mainLightIntensity: 0.5
+    mainLightColor: "#ff88cc"
+
+  fog:
+    enabled: true
+    near: 10
+    far: 30
+
+research:
+  arxivCategories:
+    - cs.AI       # Artificial Intelligence
+    - cs.LG       # Machine Learning
+    - cs.GT       # Game Theory
+    - cs.MA       # Multi-Agent Systems
+    - cs.NE       # Neural and Evolutionary Computing
+
+  keywords:
+    - reinforcement learning games
+    - deep Q-network Atari
+    - AlphaZero game playing
+    - multi-agent reinforcement learning
+    - procedural content generation
+    - game AI neural network
+    - StarCraft reinforcement learning
+    - Monte Carlo tree search games
+    - player modeling machine learning
+    - game balance optimization AI
+
+  additionalSources:
+    - semantic-scholar
+    - github
+    - papers-with-code
+
+  maxPapersPerSession: 8
+
+evaluation:
+  primaryMetric: win_rate
+  baselineComparison: true
+  metrics:
+    - id: win_rate
+      name: Win Rate
+      description: Percentage of games won against baseline
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: avg_score
+      name: Average Score
+      description: Mean game score achieved
+      range: [0, 1000000]
+      higherIsBetter: true
+
+    - id: sample_efficiency
+      name: Sample Efficiency
+      description: Episodes needed to reach target performance
+      range: [1, 100000000]
+      higherIsBetter: false
+      unit: "episodes"
+
+    - id: training_time
+      name: Training Time
+      description: Wall-clock time to convergence
+      range: [0, 10000]
+      higherIsBetter: false
+      unit: "hours"
+
+    - id: elo_rating
+      name: Elo Rating
+      description: Competitive rating vs other agents
+      range: [0, 5000]
+      higherIsBetter: true
+
+    - id: generalization
+      name: Generalization
+      description: Performance on unseen levels/opponents
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+hardware:
+  gpuRequired: true
+  minGpuVram: 8
+  recommendedGpuVram: 24
+  minRam: 32
+  platforms:
+    - darwin
+    - linux
+    - win32
+
+prompts:
+  research: prompts/research.md
+  implementation: prompts/implementation.md
+  evaluation: prompts/evaluation.md
+  preamble: |
+    You are working on a Game AI Research Lab focused on developing learning-based
+    agents for game playing. Prioritize sample efficiency, generalization,
+    and interpretable strategies.
+
+tags:
+  - reinforcement-learning
+  - games
+  - multi-agent
+  - deep-learning
+  - procedural-generation
+  - monte-carlo
+
+version: "1.0"

@@ -1,0 +1,133 @@
+# DDGAN-Accelerated Prosody Diffusion Configuration
+#
+# Based on DiffProsody (arXiv:2307.16549) and DiffGAN-TTS (arXiv:2201.11972)
+#
+# Key feature: 16x faster prosody generation using only 2-4 denoising steps
+# instead of 50-100 steps required by standard diffusion models.
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+# Input dimensions
+mel_dim: 80              # Mel-spectrogram channels
+text_dim: 256            # Text encoder output dimension
+speaker_dim: 256         # Speaker embedding dimension
+
+# Prosody VQ-VAE settings
+prosody_latent_dim: 256  # Prosody latent space dimension
+vq_num_embeddings: 512   # Codebook size (discrete prosody patterns)
+vq_commitment_cost: 0.25 # VQ commitment loss weight
+vq_ema_decay: 0.99       # EMA update rate for codebook
+vq_use_ema: true         # Use EMA updates (recommended)
+
+# Prosody encoder settings
+prosody_encoder_hidden: 512
+prosody_encoder_layers: 4
+prosody_encoder_heads: 8
+
+# DDGAN settings (KEY PARAMETERS!)
+num_diffusion_steps: 4     # Only 2-4 steps needed! (vs 50+ for standard diffusion)
+noise_schedule: "cosine"   # cosine, linear, sqrt
+beta_start: 0.0001
+beta_end: 0.02
+
+# Generator settings
+generator_hidden: 512
+generator_layers: 6
+generator_heads: 8
+generator_dropout: 0.1
+
+# Discriminator settings
+discriminator_hidden: 256
+discriminator_layers: 4
+use_spectral_norm: true    # Stabilizes training
+use_multi_scale: true      # Multi-scale discrimination
+num_discriminator_scales: 3
+
+# Output settings (for CSM integration)
+output_dim: 2048           # Match prosody encoder output
+num_prosody_tokens: 4      # Number of prefix tokens
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+
+# Batch size and data loading
+batch_size: 8              # Reduce if OOM
+num_workers: 4
+
+# Training epochs
+stage1_epochs: 50          # VQ-VAE pre-training
+stage2_epochs: 100         # DDGAN adversarial training
+
+# Learning rates
+generator_lr: 0.0002       # AdamW learning rate for generator/VQ-VAE
+discriminator_lr: 0.0001   # Lower LR for discriminator (stable training)
+
+# Loss weights
+reconstruction_weight: 1.0  # VQ-VAE reconstruction
+vq_weight: 0.25            # VQ commitment loss
+adversarial_weight: 1.0    # GAN adversarial loss
+fm_weight: 2.0             # Feature matching loss
+
+# Regularization
+gradient_penalty_weight: 10.0  # R1 gradient penalty (important!)
+dropout: 0.1
+
+# =============================================================================
+# Data Configuration
+# =============================================================================
+
+# Dataset paths (set via command line or here)
+# train_manifest: "../data/train_manifest.json"
+# val_manifest: "../data/val_manifest.json"
+
+# Audio processing
+max_mel_len: 500           # Maximum mel frames
+max_text_len: 100          # Maximum text tokens
+
+# =============================================================================
+# Inference Configuration
+# =============================================================================
+
+# Generation settings
+inference_steps: 4         # Number of DDGAN steps (can use 1-4)
+temperature: 1.0           # Sampling temperature (lower = more deterministic)
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+
+# For M4 Pro (Mac)
+# device: "mps"
+# mixed_precision: false    # MPS doesn't support AMP well
+
+# For RTX 4090
+device: "cuda"
+mixed_precision: true      # Use AMP for faster training
+gradient_checkpointing: false  # Enable if OOM
+
+# =============================================================================
+# Notes
+# =============================================================================
+#
+# Two-Stage Training:
+#   Stage 1: Pre-train VQ-VAE on prosody reconstruction (stage1_epochs)
+#   Stage 2: Train DDGAN with adversarial loss (stage2_epochs)
+#
+# Speed Comparison (prosody generation):
+#   - Standard diffusion: ~500ms (50 steps)
+#   - ProsodyFlow: ~300ms (10-20 ODE steps)
+#   - DDGAN (this): ~30ms (4 steps) - 16x faster!
+#
+# Recommended workflow:
+#   1. Train Stage 1 until reconstruction loss plateaus
+#   2. Train Stage 2 until D_real and D_fake scores stabilize
+#   3. Monitor perplexity (should be high = good codebook usage)
+#   4. Generate samples to check quality
+#
+# Troubleshooting:
+#   - Mode collapse: Increase discriminator_lr or gradient_penalty_weight
+#   - Poor reconstruction: Train Stage 1 longer, increase prosody_latent_dim
+#   - Training unstable: Reduce generator_lr, increase fm_weight

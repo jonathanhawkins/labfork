@@ -1,0 +1,216 @@
+# VoxGenesis: Latent Speaker Manifold Configuration
+# Based on "VoxGenesis: Interpretable Voice Synthesis and Manipulation"
+# arXiv:2403.00529 (March 2024)
+
+# Model Architecture
+model:
+  # Input dimensions
+  input_dim: 768  # HuBERT/WavLM feature dimension
+  semantic_dim: 768  # Semantic token dimension (HuBERT)
+  mel_dim: 80
+  sample_rate: 16000
+  hop_length: 320  # 20ms frames
+
+  # Latent space (key to interpretable control)
+  latent_dim: 512  # Speaker latent z dimension
+  mapping_dim: 512  # Mapping network output w dimension
+  num_mapping_layers: 7  # Style-GAN inspired depth
+
+  # Semantic conditioning
+  semantic_hidden_dim: 512
+  semantic_num_layers: 4
+  semantic_num_heads: 8
+
+  # Transformation network T(M(z), Y)
+  transform_hidden_dim: 512
+  transform_num_layers: 4
+
+  # Deconvolution network f (generator)
+  deconv_hidden_dim: 512
+  deconv_num_layers: 8
+  deconv_upsample_rates: [10, 4, 2, 2]  # 160x total for HuBERT hop
+
+  # Discriminator
+  disc_hidden_dim: 512
+  disc_num_layers: 4
+
+  # Regularization
+  dropout: 0.1
+  use_spectral_norm: true
+
+  # Direction discovery
+  num_directions: 32  # Number of PCA directions to extract
+  direction_regularization: 0.01
+
+  # Output for CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+# Training Settings
+training:
+  # Optimizer (separate for G and D)
+  lr_generator: 1.0e-4
+  lr_discriminator: 1.0e-4
+  weight_decay: 0.01
+  adam_beta1: 0.5  # Lower for GAN training
+  adam_beta2: 0.9
+  adam_epsilon: 1.0e-8
+
+  # Schedule
+  warmup_steps: 1000
+  max_steps: 200000
+  lr_scheduler: "cosine"
+
+  # Batch settings
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+
+  # Epochs (alternative to max_steps)
+  num_epochs: 100
+
+  # GAN loss weights
+  gan_disc_weight: 1.0
+  gan_feature_matching_weight: 10.0
+
+  # KL divergence to Gaussian prior
+  kl_weight: 0.01
+  kl_anneal_steps: 10000
+
+  # Reconstruction loss (auxiliary)
+  recon_weight: 1.0
+
+  # Discriminator update frequency
+  d_updates_per_g: 1  # How many D updates per G update
+
+  # Regularization
+  dropout: 0.1
+
+# Direction Discovery Settings
+direction_discovery:
+  # Number of samples for PCA
+  num_samples: 10000
+
+  # Default direction labels (can be refined after analysis)
+  # Index: label mapping
+  default_labels:
+    0: "gender"
+    1: "speaker_identity"
+    2: "pitch"
+    3: "tone"
+    4: "emotion"
+    5: "speaking_rate"
+    6: "loudness"
+    7: "breathiness"
+
+  # Direction manipulation ranges for inference
+  manipulation_ranges:
+    gender: [-2.0, 2.0]
+    speaker_identity: [-3.0, 3.0]
+    pitch: [-1.5, 1.5]
+    tone: [-1.5, 1.5]
+    emotion: [-2.0, 2.0]
+    speaking_rate: [-1.0, 1.0]
+    loudness: [-1.0, 1.0]
+    breathiness: [-1.0, 1.0]
+
+# Generation Settings
+generation:
+  # For novel speaker generation
+  temperature: 1.0  # Scale of Gaussian sampling
+  truncation_psi: 0.7  # Truncation trick (0 = mean, 1 = full variance)
+
+  # For voice editing
+  default_edit_scale: 0.5  # Default manipulation strength
+
+  # For voice conversion
+  use_semantic_from_source: true  # Always use source content
+
+# Feature Extraction
+features:
+  # HuBERT settings (semantic tokens)
+  hubert_model: "facebook/hubert-large-ls960-ft"
+  feature_layer: 12  # Which layer to extract features from
+
+  # Mel spectrogram
+  n_fft: 1024
+  win_length: 1024
+  hop_length: 320
+  n_mels: 80
+  f_min: 0
+  f_max: 8000
+
+# Data
+data:
+  manifest_path: "../data/manifest.json"
+  audio_dir: "../data/audio"
+  max_audio_length: 15.0  # seconds
+  min_audio_length: 1.0
+  num_workers: 4
+  pin_memory: true
+
+  # Data augmentation
+  use_augmentation: true
+  augmentation:
+    time_stretch_range: [0.9, 1.1]
+    pitch_shift_range: [-2, 2]  # semitones
+    noise_factor: 0.005
+
+# Checkpointing
+checkpointing:
+  save_dir: "../checkpoints/voxgenesis"
+  save_every_n_steps: 5000
+  save_total_limit: 5
+  resume_from: null  # Path to resume training
+
+  # Save discovered directions separately
+  save_directions: true
+  directions_filename: "directions.pt"
+
+# Logging
+logging:
+  log_every_n_steps: 100
+  log_audio_every_n_steps: 1000
+  wandb_project: "voice-clone-voxgenesis"
+  wandb_run_name: null  # Auto-generated if null
+
+  # Log audio samples
+  num_audio_samples: 4
+  log_novel_speakers: true
+  log_voice_edits: true
+  log_direction_sweeps: true
+
+# Hardware
+hardware:
+  # For M4 Pro Mac
+  device: "mps"  # or "cuda" for GPU
+  dtype: "float32"  # float16 for GPU with AMP
+  compile_model: false  # torch.compile
+
+# Evaluation
+evaluation:
+  eval_every_n_steps: 5000
+  num_eval_samples: 100
+
+  # Metrics to compute
+  metrics:
+    - "speaker_similarity"  # Cosine similarity of speaker embeddings
+    - "direction_interpretability"  # Correlation of directions with attributes
+    - "reconstruction_quality"  # Mel reconstruction error
+    - "fid"  # Frechet Inception Distance for audio
+
+  # Direction analysis
+  analyze_directions: true
+  direction_analysis:
+    num_samples_per_direction: 50
+    scales: [-2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0]
+
+# Experiments (uncomment to try different settings)
+# experiments:
+#   - name: "deeper_mapping"
+#     num_mapping_layers: 10
+#   - name: "larger_latent"
+#     latent_dim: 768
+#     mapping_dim: 768
+#   - name: "more_directions"
+#     num_directions: 64

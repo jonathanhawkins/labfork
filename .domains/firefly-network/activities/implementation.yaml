@@ -1,0 +1,29 @@
+# Implementation Activity for Firefly Network
+id: implementation
+name: "Implementation"
+description: "Building firmware, PCB designs, and algorithms for the Firefly units"
+
+animation:
+  type: "pulsing"
+  color: "#FF6B35"
+  particleCount: 20
+
+agentBehavior:
+  movementPattern: "focused"
+  speed: 0.3
+  pauseDuration: [5, 10]
+
+statusMessages:
+  - "Writing MPPT driver code..."
+  - "Implementing Thread mesh stack..."
+  - "Coding consensus algorithm..."
+  - "Designing PCB layout..."
+  - "Building LED driver circuit..."
+  - "Testing battery management..."
+  - "Optimizing power consumption..."
+  - "Debugging mesh routing..."
+
+workstationGlow:
+  color: "#FF6B35"
+  intensity: 1.0
+  pulse: false

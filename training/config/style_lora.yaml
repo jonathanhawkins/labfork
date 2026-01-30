@@ -1,0 +1,121 @@
+# ReStyle-TTS Style LoRA Training Configuration
+# Based on arXiv:2601.03632
+#
+# Usage:
+#   python train_style_lora.py --style happy --config config/style_lora.yaml
+#   python train_style_lora.py --all-styles --config config/style_lora.yaml
+
+# Model settings
+model_path: "../models/csm-1b"
+output_dir: "../checkpoints"
+
+# Data settings
+data_dir: "../data/splits"
+max_audio_length_ms: 30000
+sample_rate: 24000
+
+# LoRA configuration (ReStyle-TTS paper settings)
+lora_rank: 32                      # Paper uses r=32
+lora_alpha: 64                     # Paper uses α=64
+lora_dropout: 0.1
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+
+# Training settings
+num_epochs: 30
+batch_size: 4                      # Adjust based on VRAM
+gradient_accumulation: 1
+learning_rate: 0.00001             # Paper uses 1e-5
+weight_decay: 0.01
+warmup_steps: 100
+max_grad_norm: 1.0
+early_stopping_patience: 5
+
+# Device settings
+device: auto                       # auto, cuda, mps, cpu
+precision: fp32                    # fp32, fp16, bf16
+num_workers: 0
+
+# Classifier-Free Guidance training (masking)
+speech_mask_ratio: 0.3             # Paper: 0.3 for speech input
+text_mask_ratio: 0.2               # Paper: 0.2 for text+speech input
+
+# DCFG inference settings (for reference)
+dcfg_text_scale: 2.0               # λ_t: text guidance strength
+dcfg_audio_scale: 0.5              # λ_a: reference audio guidance
+
+# Orthogonal LoRA Fusion settings
+olora_enabled: true
+olora_regularization: 0.01         # Orthogonality loss weight
+
+# Timbre Consistency Optimization (optional)
+tco_enabled: false                 # Enable TCO during training
+tco_lambda: 0.2                    # Advantage weighting
+tco_beta: 5.0                      # Advantage scaling
+tco_momentum: 0.9                  # EMA baseline momentum
+
+# Data augmentation
+augmentation:
+  enabled: true
+  augment_probability: 0.5
+  speed_perturb: [0.95, 1.05]      # Subtle speed changes
+  pitch_shift_semitones: [-1, 1]  # Subtle pitch shifts
+  noise_snr_db: [30, 50]           # Light noise
+
+# Style scaling at inference
+prosody_lora_scale: 2.0            # Scale for prosody LoRAs
+emotion_lora_scale: 4.0            # Scale for emotion LoRAs
+
+# Styles to train (with --all-styles flag)
+styles_to_train:
+  # Prosody styles
+  - high_pitch
+  - low_pitch
+  - high_energy
+  - low_energy
+  - fast_tempo
+  - slow_tempo
+  # Emotion styles
+  - happy
+  - sad
+  - angry
+  - calm
+  - surprised
+  - fearful
+
+# Prosody filtering thresholds
+prosody_thresholds:
+  high_pitch:
+    feature: pitch_mean
+    operator: ">="
+    value: 200                     # Hz
+  low_pitch:
+    feature: pitch_mean
+    operator: "<"
+    value: 150
+  high_energy:
+    feature: energy
+    operator: ">="
+    value: 0.7                     # Normalized
+  low_energy:
+    feature: energy
+    operator: "<"
+    value: 0.4
+  fast_tempo:
+    feature: speaking_rate
+    operator: ">="
+    value: 5.0                     # Syllables/sec
+  slow_tempo:
+    feature: speaking_rate
+    operator: "<"
+    value: 3.5
+
+# Evaluation settings
+eval_every: 50                     # Steps between validation
+save_every: 100                    # Steps between checkpoints

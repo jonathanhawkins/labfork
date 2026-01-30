@@ -1,0 +1,150 @@
+# Quantitative Trading Research Lab
+# Research algorithmic trading, market prediction, and portfolio optimization
+
+name: "Quant Trading Lab"
+slug: "quant-trading"
+description: "Research algorithmic trading strategies, market prediction models, and portfolio optimization"
+longDescription: |
+  A research lab focused on quantitative finance, including machine learning for market prediction,
+  reinforcement learning for trading strategies, risk management, and portfolio optimization.
+  Explore cutting-edge research in time series forecasting, sentiment analysis, and alternative data.
+difficulty: advanced
+
+branding:
+  primaryColor: "#10b981"    # Emerald green (money/growth)
+  accentColor: "#f59e0b"     # Amber (gold/caution)
+  backgroundStyle: "grid"    # Cyberpunk grid aesthetic
+  backgroundColor: "#0a0a0a"
+
+scene:
+  props:
+    - id: trading-terminal
+      type: terminal
+      position: [-6, 0, -5]
+      scale: 1.5
+      accentColor: 0x10b981
+
+    - id: chart-wall
+      type: chart-wall
+      position: [0, 0, -7]
+      scale: 2.0
+      accentColor: 0xf59e0b
+
+    - id: server-cluster
+      type: server
+      position: [6, 0, -5]
+      scale: 1.3
+      accentColor: 0x3b82f6
+
+    - id: analysis-station
+      type: supercomputer
+      position: [6, 0, 5]
+      scale: 1.2
+      accentColor: 0x10b981
+
+  decorations:
+    plants: false
+    floatingCubes: true
+    particles: true
+
+  lighting:
+    ambientIntensity: 0.4
+    mainLightIntensity: 0.6
+    mainLightColor: "#e0fff0"
+
+  fog:
+    enabled: true
+    near: 15
+    far: 40
+
+research:
+  arxivCategories:
+    - q-fin.TR    # Trading and Market Microstructure
+    - q-fin.PM    # Portfolio Management
+    - q-fin.ST    # Statistical Finance
+    - q-fin.CP    # Computational Finance
+    - cs.LG       # Machine Learning
+    - stat.ML     # Statistics ML
+
+  keywords:
+    - algorithmic trading machine learning
+    - market prediction neural networks
+    - portfolio optimization deep learning
+    - time series forecasting finance
+    - reinforcement learning trading
+    - sentiment analysis stock market
+    - transformer models finance
+    - alternative data trading
+
+  additionalSources:
+    - semantic-scholar
+    - github
+    - papers-with-code
+
+  maxPapersPerSession: 8
+
+evaluation:
+  primaryMetric: sharpe_ratio
+  baselineComparison: true
+  metrics:
+    - id: sharpe_ratio
+      name: Sharpe Ratio
+      description: Risk-adjusted return metric
+      range: [-2, 4]
+      higherIsBetter: true
+
+    - id: max_drawdown
+      name: Max Drawdown
+      description: Maximum peak-to-trough decline
+      range: [0, 100]
+      higherIsBetter: false
+      unit: "%"
+
+    - id: win_rate
+      name: Win Rate
+      description: Percentage of profitable trades
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: prediction_accuracy
+      name: Prediction Accuracy
+      description: Direction prediction accuracy
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: profit_factor
+      name: Profit Factor
+      description: Gross profit / Gross loss
+      range: [0, 10]
+      higherIsBetter: true
+
+hardware:
+  gpuRequired: true
+  minGpuVram: 8
+  recommendedGpuVram: 16
+  minRam: 32
+  platforms:
+    - darwin
+    - linux
+    - win32
+
+prompts:
+  research: prompts/research.md
+  implementation: prompts/implementation.md
+  evaluation: prompts/evaluation.md
+  preamble: |
+    You are working on a Quantitative Trading Research Lab focused on developing
+    machine learning models for market prediction and algorithmic trading strategies.
+    Prioritize reproducibility, risk management, and rigorous backtesting.
+
+tags:
+  - finance
+  - trading
+  - machine-learning
+  - time-series
+  - reinforcement-learning
+  - portfolio-optimization
+
+version: "1.0"

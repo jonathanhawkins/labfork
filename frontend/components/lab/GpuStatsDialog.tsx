@@ -137,7 +137,7 @@ export function GpuStatsDialog({ open, onOpenChange }: GpuStatsDialogProps) {
             RTX 4090 Training Machine
           </DialogTitle>
           <DialogDescription className="font-mono text-xs">
-            100.83.78.111 (Tailscale)
+            {process.env.NEXT_PUBLIC_REMOTE_GPU_HOST || "Not configured"} (Remote)
           </DialogDescription>
         </DialogHeader>
 
@@ -171,7 +171,7 @@ export function GpuStatsDialog({ open, onOpenChange }: GpuStatsDialogProps) {
           {stats && !stats.connected && stats.error && (
             <div className="p-3 bg-background border border-border rounded">
               <div className="text-xs text-muted-foreground font-mono">
-                <span className="text-foreground-bright">$</span> ssh doc@100.83.78.111
+                <span className="text-foreground-bright">$</span> ssh {process.env.NEXT_PUBLIC_REMOTE_GPU_USER || "user"}@{process.env.NEXT_PUBLIC_REMOTE_GPU_HOST || "your-gpu-host"}
               </div>
               <div className="text-xs text-red-400 mt-1">{stats.error}</div>
             </div>

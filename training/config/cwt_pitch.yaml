@@ -1,0 +1,116 @@
+# CWT F0 Spectrogram Prediction Configuration
+# FastSpeech 2 approach for hierarchical pitch modeling
+#
+# Key insight: Instead of direct F0 regression, decompose pitch contour
+# into a spectrogram representation via Continuous Wavelet Transform (CWT).
+# This captures multi-scale prosodic patterns (micro-prosody to intonation).
+
+model:
+  # CWT settings
+  num_scales: 10               # Number of wavelet frequency bands (higher = more detail)
+  min_scale: 1.0               # Minimum scale (captures fast pitch changes)
+  max_scale: 64.0              # Maximum scale (captures slow intonation)
+  wavelet_type: "mexican_hat"  # Options: mexican_hat, morlet, paul
+
+  # F0 settings
+  f0_min: 50.0                 # Minimum F0 in Hz
+  f0_max: 800.0                # Maximum F0 in Hz
+  f0_normalize: true           # Normalize F0 before CWT
+  log_f0: true                 # Use log-scale F0 (recommended)
+
+  # Spectrogram settings
+  spectrogram_normalize: true  # Normalize CWT spectrogram
+
+  # Predictor architecture
+  hidden_dim: 256              # Hidden dimension for predictor
+  predictor_layers: 3          # Number of conv layers
+  predictor_kernel_size: 5     # Kernel size for local pattern modeling
+  dropout: 0.1
+
+  # Output settings (for prosody pipeline integration)
+  output_dim: 2048             # Match prosody token dimension
+  num_prosody_tokens: 4        # Number of prefix tokens to generate
+
+  # Loss weights
+  reconstruction_weight: 1.0   # Weight for F0 reconstruction loss
+  spectrogram_weight: 0.5      # Weight for spectrogram prediction loss
+  variance_weight: 0.1         # Weight for encouraging scale diversity
+
+training:
+  # Data
+  batch_size: 32
+  num_workers: 4
+
+  # Optimization
+  epochs: 100
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+
+  # Scheduler
+  scheduler: "cosine"
+  warmup_epochs: 5
+  min_lr: 0.000001
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/cwt_pitch"
+  save_every: 10
+  log_every: 100
+
+  # Validation
+  val_split: 0.1
+  early_stopping_patience: 20
+
+data:
+  # For real data training
+  # manifest_path: "../data/f0_manifest.json"
+  # Or directory of preprocessed .pt files:
+  # data_dir: "../data/cwt_features"
+
+  # F0 extraction settings (for preprocessing)
+  frame_shift_ms: 10           # Frame shift for F0 extraction
+  frame_length_ms: 25          # Frame length
+  f0_method: "dio"             # F0 extraction method: dio, harvest, parselmouth
+
+  # Preprocessing
+  max_length: 500              # Maximum sequence length (frames)
+  min_voiced_ratio: 0.3        # Minimum voiced ratio to include sample
+
+# Multi-scale pattern interpretation:
+#
+# Scale 1-2:   Micro-prosody (glottal pulses, local F0 perturbations)
+#              ~10-20ms patterns
+#
+# Scale 3-4:   Phoneme-level (syllable pitch movements)
+#              ~50-100ms patterns
+#
+# Scale 5-7:   Word-level (lexical stress, accent patterns)
+#              ~200-500ms patterns
+#
+# Scale 8-10:  Phrase/sentence-level (intonation contours)
+#              ~1-3s patterns
+
+# Wavelet type comparison:
+#
+# mexican_hat (default):
+#   - Real-valued, symmetric
+#   - Good for detecting pitch transitions
+#   - No imaginary part (simpler)
+#
+# morlet:
+#   - Complex wavelet (we use magnitude)
+#   - Better frequency resolution
+#   - Good for periodic pitch patterns
+#
+# paul:
+#   - Asymmetric
+#   - Good onset detection
+#   - Better time localization
+
+# Benefits over direct F0 prediction:
+#
+# 1. Multi-scale capture: Simultaneously models micro and macro prosody
+# 2. Smoother training: Spectrogram coefficients more stable than raw F0
+# 3. Natural reconstruction: iCWT produces smooth, continuous contours
+# 4. Interpretable: Spectrogram shows pitch patterns at different scales
+# 5. Hierarchical: Aligns with human prosody perception

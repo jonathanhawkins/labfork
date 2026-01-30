@@ -38,9 +38,11 @@ TASKS_API = "http://localhost:3003/api/tasks"
 MAX_ITERATIONS = 50
 ITERATION_DELAY = 30  # seconds between supervision cycles
 
-# Remote 4090 configuration
-REMOTE_HOST = "doc@100.83.78.111"
-USE_REMOTE = True  # Set to True to use remote 4090 lab manager
+# Remote 4090 configuration (from environment)
+REMOTE_GPU_HOST = os.environ.get("REMOTE_GPU_HOST", "")
+REMOTE_GPU_USER = os.environ.get("REMOTE_GPU_USER", "doc")
+REMOTE_HOST = f"{REMOTE_GPU_USER}@{REMOTE_GPU_HOST}" if REMOTE_GPU_HOST else ""
+USE_REMOTE = bool(REMOTE_GPU_HOST)  # Auto-enable if host is configured
 
 # Cost tracking
 cost_tracker = {

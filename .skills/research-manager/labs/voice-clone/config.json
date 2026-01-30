@@ -1,0 +1,15 @@
+{
+  "id": "voice-clone",
+  "name": "Voice Clone Research",
+  "description": "Emotional prosody research for voice cloning with CSM-1B fine-tuning",
+  "taskListId": "voice-clone-pipeline",
+  "active": true,
+  "domain": "voice-clone",
+  "settings": {
+    "maxAgents": 3,
+    "autoSpawn": true,
+    "researchInterval": 30
+  },
+  "createdAt": "2026-01-29T21:16:39.466742",
+  "updatedAt": "2026-01-29T21:16:39.466742"
+}

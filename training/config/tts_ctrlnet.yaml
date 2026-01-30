@@ -1,0 +1,167 @@
+# TTS-CtrlNet Configuration
+# ControlNet-style Emotion Control for Flow-Matching TTS
+#
+# Based on TTS-CtrlNet (arXiv:2507.04349)
+# Adds emotion control without degrading base model quality
+#
+# Architecture:
+# - Frozen base model (ProsodyFlow)
+# - Trainable control branch for emotion conditioning
+# - Zero-convolution connections between branches
+# - Time-varying emotion support
+# - Emotion-specific flow step scheduling
+
+# Base Model Configuration (ProsodyFlow)
+base_model:
+  prosody_dim: 2048           # Match existing ProsodyEncoder output
+  text_dim: 768               # Text encoder output dimension
+  use_text_conditioning: true
+
+  # Flow matching settings
+  sigma_min: 0.001            # Near-deterministic at t=1
+
+  # OT-CFM (Optimal Transport)
+  use_ot_coupling: true
+  ot_reg: 0.05
+  ot_normalize_cost: true
+
+  # Variance control
+  variance_scale: 1.0
+  min_variance: 0.1
+  max_variance: 2.0
+
+  # Network architecture
+  hidden_dim: 512
+  num_layers: 4
+  num_heads: 8
+  dropout: 0.1
+  use_sinusoidal_time_emb: true
+  time_emb_dim: 256
+
+  # Output tokens
+  num_prosody_tokens: 4
+
+  # Inference ODE
+  num_ode_steps_inference: 50
+  ode_method: "euler"
+
+# ControlNet Configuration
+ctrlnet:
+  # Emotion representation
+  emotion_dim: 256            # Emotion embedding dimension
+  num_emotions: 8             # neutral, happy, sad, angry, surprised, calm, fearful, disgusted
+  use_vad: true               # Enable VAD (Valence-Arousal-Dominance) control
+  vad_dim: 3
+
+  # Control scale
+  default_control_scale: 1.0  # Default emotion intensity at inference
+  min_control_scale: 0.0      # No emotion control
+  max_control_scale: 2.0      # Strong emotion control
+
+  # Time-varying emotion
+  use_time_varying: true      # Enable emotion changes within utterances
+  time_varying_resolution: 10 # Number of emotion segments
+
+  # Emotion-specific flow steps (more steps = more refined)
+  use_emotion_steps: true
+  emotion_step_mapping:
+    neutral: 50
+    happy: 40                 # High arousal -> fewer steps (faster inference)
+    sad: 60                   # Low arousal -> more steps (refined prosody)
+    angry: 35
+    surprised: 30
+    calm: 70
+    fearful: 40
+    disgusted: 45
+
+  # Zero-convolution
+  zero_conv_init_scale: 0.01  # Small non-zero for gradient flow
+  use_learnable_zero_init: true
+
+  # Training
+  dropout: 0.1
+  freeze_base: true           # IMPORTANT: Freeze base model
+
+  # Output
+  num_prosody_tokens: 4
+
+# Training Configuration
+training:
+  # Model paths
+  base_checkpoint: "../checkpoints/prosody_flow/best.pt"
+  output_dir: "../checkpoints/tts_ctrlnet"
+
+  # Data
+  manifest_path: "../data/emotion_manifest.json"
+  val_split: 0.1
+
+  # Hyperparameters
+  batch_size: 32
+  learning_rate: 1.0e-4       # Only control branch trains
+  weight_decay: 0.01
+  num_epochs: 100
+  warmup_steps: 1000
+  gradient_clip: 1.0
+
+  # Scheduler
+  scheduler_type: "cosine"    # cosine, linear, constant
+
+  # Control scale curriculum (gradually increase control influence)
+  use_control_curriculum: true
+  control_scale_start: 0.1    # Start with weak control
+  control_scale_end: 1.0      # End with full control
+  control_curriculum_epochs: 20
+
+  # Logging
+  log_interval: 100
+  val_interval: 500
+  save_interval: 1000
+  use_wandb: false
+  wandb_project: "tts-ctrlnet"
+
+  # Hardware
+  device: "cuda"
+  num_workers: 4
+  mixed_precision: true
+
+
+# Inference Defaults
+inference:
+  # Default emotion settings
+  default_emotion: "neutral"
+  default_intensity: 0.8
+  default_control_scale: 1.0
+
+  # Sampling
+  temperature: 1.0
+  num_samples: 1
+
+  # Quality vs speed tradeoff
+  quality_mode: "balanced"    # fast, balanced, quality
+  quality_ode_steps: 100      # Steps for quality mode
+  balanced_ode_steps: 50      # Steps for balanced mode
+  fast_ode_steps: 20          # Steps for fast mode
+
+# Example Usage:
+#
+# Training:
+#   python train_tts_ctrlnet.py --config config/tts_ctrlnet.yaml \
+#     --base-checkpoint ../checkpoints/prosody_flow/best.pt
+#
+# Resume:
+#   python train_tts_ctrlnet.py --config config/tts_ctrlnet.yaml \
+#     --resume ../checkpoints/tts_ctrlnet/latest.pt
+#
+# Inference:
+#   # Discrete emotion
+#   tokens = model.sample_tokens(text_cond, emotion="happy", intensity=0.8)
+#
+#   # VAD coordinates (fine-grained control)
+#   tokens = model.sample_tokens(text_cond, vad_coords=torch.tensor([[0.8, 0.6, 0.6]]))
+#
+#   # Control scale (0 = base model, 1 = full emotion, 2 = exaggerated)
+#   tokens = model.sample_tokens(text_cond, emotion="angry", control_scale=1.5)
+#
+#   # Time-varying emotion
+#   trajectory = [("calm", 0.0), ("happy", 0.5), ("excited", 1.0)]
+#   tokens = model.sample_time_varying(text_cond, trajectory)

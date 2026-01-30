@@ -50,8 +50,8 @@ export async function GET() {
           return NextResponse.json({
             tasks: tasksData.tasks || [],
             agents: agentsData.agents || {},
-            sessionId: tasksData.sessionId || "voice-clone-pipeline",
-            taskListId: tasksData.taskListId || "voice-clone-pipeline",
+            sessionId: tasksData.sessionId || "labfork",
+            taskListId: tasksData.taskListId || "labfork",
           });
         }
       } catch (error) {
@@ -81,8 +81,8 @@ export async function GET() {
           return NextResponse.json({
             tasks: tasksData.tasks || [],
             agents: agentsData,
-            sessionId: "voice-clone-pipeline",
-            taskListId: "voice-clone-pipeline",
+            sessionId: "labfork",
+            taskListId: "labfork",
           });
         }
       } catch (error) {
@@ -92,8 +92,8 @@ export async function GET() {
       return NextResponse.json({
         tasks: [],
         agents: {},
-        sessionId: "voice-clone-pipeline",
-        taskListId: "voice-clone-pipeline",
+        sessionId: "labfork",
+        taskListId: "labfork",
       });
     }
 
@@ -166,7 +166,7 @@ export async function GET() {
       tasks: allTasks,
       agents,
       sessionId: latestSession,
-      taskListId: "voice-clone-pipeline",
+      taskListId: "labfork",
     });
   } catch (error) {
     console.error("Error fetching tasks:", error);

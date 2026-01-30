@@ -1,0 +1,59 @@
+# MPO (Multidimensional Preference Optimization) Configuration
+# Based on arXiv:2509.00685 (Aug 2025)
+# Aligns TTS with human preferences across multiple dimensions simultaneously
+
+# Preference dimensions and their weights
+# Optimizes intelligibility, speaker similarity, prosody, AND quality together
+dimension_weights:
+  intelligibility: 1.0     # WER/CER based pronunciation accuracy
+  speaker_similarity: 1.0  # Voice identity preservation
+  prosody_naturalness: 1.0 # Prosodic quality and emotion expressiveness
+  overall_quality: 0.5     # General audio quality (MOS proxy)
+
+# DPO-style loss settings
+beta: 0.1          # KL penalty coefficient (temperature)
+js_alpha: 0.5      # Jensen-Shannon regularization weight
+
+# Stability regularization (key MPO contribution)
+# Prevents typical DPO degradation issues:
+# - Reward hacking
+# - Catastrophic forgetting
+# - Mode collapse
+use_stability_regularization: true
+stability_lambda: 0.1           # Weight for stability regularization
+anchor_weight: 0.3              # Weight to stay close to reference
+gradient_penalty_weight: 0.01   # Penalty for large gradients
+
+# Dimension-specific regularization
+dimension_correlation_penalty: 0.05  # Prevent dimension collapse
+min_dimension_weight: 0.1           # Minimum weight per dimension
+
+# Preference set construction
+preference_set_size: 4      # Number of samples per preference set
+stratified_sampling: true   # Sample diverse preference pairs
+difficulty_curriculum: true # Start with easy pairs, progress to hard
+
+# Training settings
+learning_rate: 1e-5         # Lower LR for preference optimization
+batch_size: 8
+num_epochs: 5
+warmup_steps: 200
+gradient_accumulation: 2
+max_grad_norm: 1.0
+
+# Reference model settings
+use_reference_model: true
+reference_model_update_freq: 0  # 0 = frozen (standard for DPO)
+
+# Model dimensions
+hidden_size: 2048
+num_prosody_tokens: 4
+
+# SFT regularization (prevent catastrophic forgetting)
+sft_weight: 0.3       # Initial weight for reconstruction loss
+sft_decay: 0.95       # Decay SFT weight per epoch (shift to preference)
+
+# Output settings
+output_dir: "../checkpoints/mpo"
+log_every: 10
+save_every_epochs: 1

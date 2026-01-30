@@ -1,0 +1,29 @@
+# Research Activity for Firefly Network
+id: research
+name: "Research"
+description: "Discovering new techniques for solar optimization, mesh networking, and swarm intelligence"
+
+animation:
+  type: "floating"
+  color: "#FFB84D"
+  particleCount: 30
+
+agentBehavior:
+  movementPattern: "wander"
+  speed: 0.5
+  pauseDuration: [2, 5]
+
+statusMessages:
+  - "Reading mesh networking papers..."
+  - "Analyzing MPPT algorithms..."
+  - "Studying swarm coordination..."
+  - "Reviewing energy harvesting research..."
+  - "Examining Thread protocol specs..."
+  - "Exploring distributed consensus..."
+  - "Investigating solar cell efficiency..."
+  - "Learning from firefly biology..."
+
+workstationGlow:
+  color: "#FFB84D"
+  intensity: 0.8
+  pulse: true

@@ -1,0 +1,54 @@
+# AI Research Lab - GPU Support Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# Requires: nvidia-docker2 or NVIDIA Container Toolkit
+
+version: "3.8"
+
+services:
+  # Ollama with GPU support
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_HOST=0.0.0.0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+  # Backend with GPU support for inference
+  backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - PORT=8003
+      - USE_GPU=true
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - DATABASE_URL=postgresql://lab:${DB_PASSWORD:-labpassword}@postgres:5432/researchlab
+      - OLLAMA_URL=http://ollama:11434
+
+  # Orchestrator with GPU support for training
+  orchestrator:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - USE_GPU=true
+      - CUDA_VISIBLE_DEVICES=0
+      - DATABASE_URL=postgresql://lab:${DB_PASSWORD:-labpassword}@postgres:5432/researchlab
+      - OLLAMA_URL=http://ollama:11434
+      - BACKEND_URL=http://backend:8003

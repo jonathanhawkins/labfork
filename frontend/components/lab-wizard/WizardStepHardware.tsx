@@ -500,12 +500,19 @@ export function WizardStepHardware({
             <p className="text-xs text-foreground-muted mb-2">Quick Connect</p>
             <button
               onClick={() => {
+                // Use environment variable or prompt user to configure
+                const gpuHost = process.env.NEXT_PUBLIC_REMOTE_GPU_HOST || "";
+                const gpuUser = process.env.NEXT_PUBLIC_REMOTE_GPU_USER || "doc";
+                if (!gpuHost) {
+                  alert("Set REMOTE_GPU_HOST in .env to enable quick connect");
+                  return;
+                }
                 onConfigChange({
                   ...config,
                   ssh: {
-                    host: "100.83.78.111",
+                    host: gpuHost,
                     port: 22,
-                    user: "doc",
+                    user: gpuUser,
                     keyPath: "~/.ssh/id_rsa",
                   },
                 });

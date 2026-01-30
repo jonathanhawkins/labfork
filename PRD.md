@@ -68,7 +68,7 @@ A complete pipeline for creating a custom voice model by:
 ## Project Structure
 
 ```
-voice-clone-pipeline/
+labfork/
 ├── README.md                 # This file
 ├── PRD.md                    # Full product requirements
 ├── SETUP.md                  # Detailed setup instructions
@@ -152,8 +152,8 @@ voice-clone-pipeline/
 
 ```bash
 # Clone the project
-git clone <your-repo-url> voice-clone-pipeline
-cd voice-clone-pipeline
+git clone <your-repo-url> labfork
+cd labfork
 
 # Run setup script
 chmod +x scripts/setup_mac.sh
@@ -171,8 +171,8 @@ chmod +x scripts/setup_mac.sh
 
 ```bash
 # Clone the project
-git clone <your-repo-url> voice-clone-pipeline
-cd voice-clone-pipeline
+git clone <your-repo-url> labfork
+cd labfork
 
 # Run setup script
 chmod +x scripts/setup_linux.sh

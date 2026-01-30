@@ -1,0 +1,91 @@
+# UDDETTS: Unified Dimensional Emotion TTS with ADV Control
+# Based on UDDETTS (arXiv:2505.10599)
+#
+# Key features:
+# - ADV space (Arousal-Dominance-Valence) for dimensional emotion control
+# - Nonlinear ADV quantization for fine-grained control
+# - Semi-supervised training on mixed annotation types
+# - OT-CFM (Optimal Transport Conditional Flow Matching) decoder
+
+model:
+  # ADV dimensions
+  adv_dim: 3  # Arousal, Dominance, Valence
+
+  # Model dimensions
+  input_dim: 768  # Input feature dimension (wav2vec2/HuBERT)
+  emotion_dim: 256  # Emotion embedding dimension
+  hidden_dim: 512  # Hidden layer dimension
+  output_dim: 2048  # Output to match prosody encoder (CSM)
+
+  # Nonlinear ADV quantization
+  num_quantization_levels: 16  # Levels per ADV dimension
+  use_nonlinear_quantization: true  # Apply nonlinear mapping for better control near origin
+  quantization_temperature: 0.1  # Softmax temperature for soft quantization
+
+  # Discrete emotion mapping
+  num_discrete_emotions: 8  # neutral, happy, sad, angry, surprised, calm, fearful, disgusted
+
+  # Semi-supervised training
+  use_semi_supervised: true
+  discrete_loss_weight: 1.0  # Weight for discrete emotion classification loss
+  adv_loss_weight: 1.0  # Weight for ADV regression loss
+  consistency_loss_weight: 0.5  # Weight for ADV <-> discrete consistency loss
+  kl_loss_weight: 0.1  # Weight for KL divergence to prior
+
+  # OT-CFM settings
+  use_ot_cfm: true  # Use Optimal Transport Conditional Flow Matching
+  sigma_min: 0.001  # Minimum std at t=1 (near-deterministic)
+  ot_reg: 0.05  # Sinkhorn regularization for OT coupling
+  num_flow_steps: 50  # ODE integration steps at inference
+  flow_hidden_dim: 512  # Flow network hidden dimension
+  flow_num_layers: 4  # Number of transformer layers in flow network
+  flow_num_heads: 8  # Attention heads in flow network
+
+  # Training settings
+  dropout: 0.1
+  use_layer_norm: true
+
+  # Integration settings
+  num_prosody_tokens: 4  # Number of prefix tokens to generate
+
+data:
+  # Path to training manifest JSON
+  # Each entry should have: id, [emotion], [adv], [vad]
+  # Example: {"id": "sample_001", "emotion": "happy", "adv": [0.6, 0.4, 0.8]}
+  manifest: ../data/emotion_manifest.json
+
+  # Directory containing pre-extracted prosody features
+  # Files named: {id}_prosody.pt
+  feature_dir: ../data/prosody_features
+
+  # Validation split ratio
+  val_split: 0.1
+
+training:
+  # Basic settings
+  batch_size: 16
+  num_epochs: 100
+  learning_rate: 0.0001  # 1e-4
+  weight_decay: 0.01
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Learning rate schedule
+  lr_scheduler: cosine
+  warmup_epochs: 5
+  min_lr: 0.000001  # 1e-6
+
+  # Checkpointing
+  checkpoint_dir: ../checkpoints/uddetts
+  save_every: 10  # Save checkpoint every N epochs
+  keep_last_k: 5  # Keep last K checkpoints
+
+  # Logging
+  log_interval: 50  # Log every N batches
+  eval_interval: 1  # Evaluate every N epochs
+
+# Hardware settings (auto-detected if not specified)
+device: auto  # auto, cuda, cpu
+precision: fp32  # fp32, fp16, bf16
+num_workers: 4

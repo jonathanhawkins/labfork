@@ -1,0 +1,144 @@
+# EME-TTS: Emphasis Meets Emotion TTS Configuration
+# Based on arXiv:2507.12015 (Interspeech 2025)
+#
+# Key Innovation: Systematic modeling of emphasis-emotion interaction
+# - Emphasis modulates emotional perception
+# - Weakly supervised emphasis detection from prosodic variance
+# - Emphasis Perception Enhancement (EPE) block for emotion-emphasis coupling
+
+# =============================================================================
+# MODEL ARCHITECTURE
+# =============================================================================
+
+# Input dimensions
+audio_feature_dim: 768        # wav2vec2/HuBERT feature dim
+text_hidden_dim: 768          # Text encoder hidden dim
+mel_dim: 80                   # Mel-spectrogram dimension
+
+# Emphasis feature settings
+emphasis_hidden_dim: 256      # Hidden dim for emphasis processing
+emphasis_embedding_dim: 256   # Emphasis embedding dimension
+num_emphasis_levels: 4        # Number of discrete levels (none, light, medium, strong)
+
+# Emotion settings
+emotion_embedding_dim: 256
+num_emotions: 8
+emotion_labels:
+  - neutral
+  - happy
+  - sad
+  - angry
+  - surprised
+  - calm
+  - fearful
+  - disgusted
+
+# EPE (Emphasis Perception Enhancement) block
+epe_num_heads: 8              # Attention heads
+epe_num_layers: 2             # Cross-attention layers
+epe_hidden_dim: 512           # EPE hidden dimension
+epe_dropout: 0.1
+
+# Variance-based emphasis extraction weights
+pitch_variance_weight: 0.4    # Pitch contributes 40%
+energy_variance_weight: 0.35  # Energy contributes 35%
+duration_variance_weight: 0.25 # Duration contributes 25%
+
+# Emphasis thresholds for discretization
+emphasis_threshold_low: 0.3   # Below = no emphasis
+emphasis_threshold_mid: 0.5   # Below = light emphasis
+emphasis_threshold_high: 0.75 # Below = medium, above = strong
+
+# Output settings
+output_dim: 2048              # CSM prosody hidden dimension
+num_prosody_tokens: 4         # Prefix tokens for prosody conditioning
+
+# =============================================================================
+# LLM INTEGRATION
+# =============================================================================
+
+llm_model_name: "gpt-4"       # For emphasis position prediction
+use_llm_emphasis: true        # Enable LLM-based emphasis prediction
+
+llm_prompt_template: |
+  Identify words that should be emphasized in the following sentence to convey
+  {emotion} emotion. Mark emphasized words with asterisks (*word*) for medium
+  emphasis or double asterisks (**word**) for strong emphasis.
+  Sentence: {text}
+
+# =============================================================================
+# TRAINING SETTINGS
+# =============================================================================
+
+# General training
+dropout: 0.1
+label_smoothing: 0.1
+use_pseudo_labels: true       # Weakly supervised emphasis labels
+pseudo_label_warmup_epochs: 5 # Epochs before using pseudo-labels for neural predictor
+
+# Optimizer
+optimizer: adamw
+learning_rate: 0.0001
+weight_decay: 0.01
+betas: [0.9, 0.999]
+
+# Scheduler
+scheduler: cosine_warmup
+warmup_epochs: 5
+min_lr: 0.00001
+
+# Loss weights
+pseudo_weight: 1.0            # Pseudo-label loss weight
+predictor_weight: 0.5         # Neural predictor loss weight
+compatibility_weight: 0.3     # Emphasis-emotion compatibility loss weight
+consistency_weight: 0.1       # Emphasis trajectory smoothness loss weight
+
+# =============================================================================
+# DATA SETTINGS
+# =============================================================================
+
+frame_rate: 100               # 10ms per frame for prosody extraction
+max_words: 50                 # Maximum words per utterance
+max_frames: 1000              # Maximum frames per utterance
+
+# Data augmentation
+augment_emphasis: true        # Random emphasis perturbation during training
+augment_prob: 0.3             # Probability of augmentation
+
+# =============================================================================
+# HARDWARE & PERFORMANCE
+# =============================================================================
+
+# For M4 Pro (64GB)
+batch_size_m4: 16
+gradient_accumulation_m4: 2
+num_workers_m4: 4
+
+# For RTX 4090 (24GB)
+batch_size_4090: 32
+gradient_accumulation_4090: 1
+num_workers_4090: 8
+
+# Mixed precision
+use_amp: true
+amp_dtype: float16
+
+# Gradient clipping
+max_grad_norm: 1.0
+
+# =============================================================================
+# CHECKPOINTING
+# =============================================================================
+
+checkpoint_dir: "../checkpoints/eme_tts"
+save_every_epochs: 5
+keep_last_n: 3
+
+# Logging
+log_every_steps: 100
+eval_every_epochs: 1
+
+# WandB (optional)
+use_wandb: false
+wandb_project: "eme-tts"
+wandb_entity: null

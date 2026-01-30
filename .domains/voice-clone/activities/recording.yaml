@@ -1,0 +1,33 @@
+# Recording Activity Configuration
+# Defines how voice recording is visualized in the 3D lab
+
+id: recording
+name: Voice Recording
+description: Recording voice samples for prosody labeling
+icon: Mic
+tags:
+  - audio
+  - input
+  - data-collection
+priority: 2
+
+visualization:
+  prop: microphone
+  animation: focused
+  particles: audio-waves
+  color: 0x4ecdc4  # Teal for audio input
+  workLocation: microphone
+  showProgress: false
+  highlightProp: true
+
+agentBehavior:
+  defaultStatus: working
+  typingSpeed: 0.5
+  faceProp: true
+
+progressDetection:
+  patterns:
+    - "Recording\\s+(\\d+)/(\\d+)"
+    - "Sample\\s+(\\d+)\\s+captured"
+  completionPattern: "Recording complete|Sample saved"
+  completionMessage: "Voice sample recorded"

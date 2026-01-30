@@ -1,0 +1,147 @@
+# FreeCodec Training Configuration
+# Parallel-Encoder Disentangled Speech Codec
+# Based on arXiv:2412.01053
+
+# Model settings
+model:
+  variant: "v2"  # v1, v2, or v3
+
+  # Input dimensions
+  mel_dim: 80
+  sample_rate: 16000
+  hop_length: 256
+
+  # Global Timbre Encoder (single vector, no temporal)
+  timbre_dim: 256
+  timbre_hidden_dim: 512
+  timbre_num_layers: 3
+
+  # Prosody Encoder (long-stride temporal)
+  prosody_dim: 128
+  prosody_hidden_dim: 256
+  prosody_num_layers: 4
+  prosody_stride: 4  # Key for efficiency
+  prosody_kernel_size: 8
+
+  # Content Encoder (VQ with semantic targets)
+  content_dim: 256
+  content_hidden_dim: 512
+  content_num_layers: 6
+  content_codebook_size: 1024
+  content_num_groups: 1
+  content_commitment_cost: 0.25
+  content_ema_decay: 0.99
+
+  # Semantic learning targets
+  semantic_dim: 768  # HuBERT dimension
+  use_semantic_target: true
+  semantic_weight: 1.0
+
+  # Decoder
+  decoder_hidden_dim: 512
+  decoder_num_layers: 6
+  decoder_num_heads: 8
+  decoder_ffn_dim: 2048
+
+  # Training settings
+  dropout: 0.1
+
+  # Disentanglement
+  use_orthogonality: true
+  ortho_weight: 0.01
+
+  # Discriminator (optional)
+  use_discriminator: false
+  discriminator_hidden_dim: 256
+  discriminator_num_layers: 3
+
+  # Output for CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+# Training settings
+training:
+  batch_size: 16
+  gradient_accumulation_steps: 1
+  num_epochs: 100
+
+  # Optimizer
+  optimizer: adamw
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  beta1: 0.9
+  beta2: 0.999
+
+  # LR schedule
+  lr_scheduler: cosine
+  warmup_steps: 1000
+  min_lr: 1.0e-6
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Mixed precision
+  use_amp: true
+  amp_dtype: float16
+
+  # Checkpointing
+  save_every: 1000
+  eval_every: 500
+
+  # Loss weights
+  reconstruction_weight: 1.0
+  commitment_weight: 0.25
+  semantic_weight: 1.0
+  ortho_weight: 0.01
+  adversarial_weight: 0.1
+
+# Data settings
+data:
+  manifest_path: "../data/manifest.json"
+  mel_dir: "../data/mel"
+  semantic_dir: "../data/hubert_features"  # Pre-extracted HuBERT features
+
+  # Audio processing
+  sample_rate: 16000
+  n_mels: 80
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+
+  # Sequence length
+  max_seq_len: 500  # ~8 seconds
+  min_seq_len: 50   # ~0.8 seconds
+
+  # Data loading
+  num_workers: 4
+  pin_memory: true
+
+# Feature extraction (for semantic targets)
+features:
+  hubert_model: "facebook/hubert-base-ls960"
+  hubert_layer: 6  # Layer to extract features from
+  precompute_features: true  # Pre-extract HuBERT features
+
+# Evaluation
+evaluation:
+  # Reconstruction quality
+  compute_mel_cepstral_distortion: true
+
+  # Disentanglement
+  compute_speaker_verification: true
+  compute_content_preservation: true
+
+  # Voice conversion
+  test_voice_conversion: true
+  num_vc_samples: 10
+
+# Logging
+logging:
+  project: "freecodec"
+  entity: null  # WandB entity
+  log_every: 50
+
+# Paths
+paths:
+  checkpoint_dir: "../checkpoints/freecodec"
+  log_dir: "../logs/freecodec"

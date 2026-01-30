@@ -100,7 +100,7 @@ python scripts/download_audio_datasets.py --dataset ravdess --samples 100
 
 ```bash
 # Download 100 samples with full annotations
-cd /Users/light/dev/web-apps/voice-clone-pipeline
+cd /Users/light/dev/web-apps/labfork
 python scripts/download_audio_datasets.py --dataset libritts_r --samples 100
 ```
 

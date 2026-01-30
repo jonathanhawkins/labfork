@@ -1,0 +1,161 @@
+# LSCodec: Low-Bitrate Speaker-Decoupled Discrete Speech Codec
+# Configuration for training and inference
+#
+# Based on: arXiv:2410.15764 (Interspeech 2025)
+# Three-stage unsupervised training with time stretching perturbation
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+# Bitrate variant: 50Hz (0.45 kbps) or 25Hz (0.25 kbps)
+frame_rate: 50  # 25 or 50 Hz
+vocab_size: 300  # 300 for 50Hz, 1024 for 25Hz
+
+# Audio settings
+sample_rate: 16000
+hop_length: 320  # 320 for 50Hz, 640 for 25Hz
+mel_dim: 80  # Cepstral-normalized mel bins
+
+# CNN Encoder
+encoder_hidden_dim: 512
+encoder_num_blocks: 11  # 11 for 50Hz, 12 for 25Hz
+encoder_output_dim: 128  # Split into μ (64) and σ² (64)
+code_dim: 64  # VQ code dimension
+
+# Conformer Decoder
+decoder_num_blocks: 2
+decoder_attention_dim: 184
+decoder_num_heads: 2
+decoder_ffn_dim: 512
+
+# WavLM Timbre Extractor
+wavlm_layer: 6  # WavLM-Large layer for timbre
+wavlm_dim: 1024
+
+# Prompt Prenet
+prenet_hidden_dims: [128, 256, 512]
+
+# SSL Token Prediction
+ssl_num_clusters: 2048  # K-means clusters
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+
+# Speaker Perturbation
+beta_min: 0.8  # Min time stretch factor
+beta_max: 1.2  # Max time stretch factor
+
+# Loss Weights (from paper)
+gamma_kl: 60.0
+gamma_recon: 60.0
+gamma_idx: 2.0
+gamma_cmt: 1.0
+
+# VQ Settings
+ema_decay: 0.99
+code_expiration_delay: 5000  # Reinitialize unused codes after N steps
+
+# Training General
+dropout: 0.1
+training_epochs_per_stage: 200
+min_utterance_seconds: 6.0
+prompt_ratio_min: 0.33
+prompt_ratio_max: 0.5
+
+# =============================================================================
+# Training Hyperparameters
+# =============================================================================
+
+# Stage 1: VAE Training
+stage1:
+  epochs: 200
+  batch_size: 16
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  warmup_steps: 1000
+  scheduler: cosine
+  gradient_clip: 1.0
+
+# Stage 2: VQ-VAE Training
+stage2:
+  epochs: 200
+  batch_size: 16
+  learning_rate: 0.00005
+  weight_decay: 0.01
+  warmup_steps: 500
+  scheduler: cosine
+  gradient_clip: 1.0
+  # Initialize VQ from Stage 1 means
+  init_vq_from_stage1: true
+  stage1_checkpoint: null  # Auto-detected if null
+
+# Stage 3: Token Vocoder Training
+stage3:
+  epochs: 100
+  batch_size: 8
+  learning_rate: 0.0002
+  weight_decay: 0.01
+  warmup_steps: 1000
+  scheduler: cosine
+  gradient_clip: 1.0
+  # Use adversarial training
+  use_discriminator: true
+  discriminator_lr: 0.0002
+
+# =============================================================================
+# Data Configuration
+# =============================================================================
+
+data:
+  # Data directory
+  manifest_path: ../data/manifest.json
+  audio_dir: ../data/audio
+
+  # Processing
+  max_audio_length: 30.0  # seconds
+  min_audio_length: 6.0  # seconds
+  num_workers: 4
+  prefetch_factor: 2
+
+  # SSL features (precomputed or extracted on-the-fly)
+  ssl_features_dir: ../data/ssl_features
+  precompute_ssl: false
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+
+# Device settings
+device: cuda
+mixed_precision: true  # Use FP16
+
+# Multi-GPU (if available)
+distributed: false
+world_size: 1
+
+# =============================================================================
+# Logging and Checkpointing
+# =============================================================================
+
+# Checkpoints
+checkpoint_dir: ../checkpoints/lscodec
+save_every_epochs: 10
+save_best: true
+
+# Logging
+log_every_steps: 100
+log_dir: ../logs/lscodec
+
+# Wandb (optional)
+use_wandb: false
+wandb_project: lscodec
+wandb_run_name: null  # Auto-generated if null
+
+# =============================================================================
+# CSM Integration
+# =============================================================================
+
+output_dim: 2048  # Match CSM hidden dim
+num_prefix_tokens: 4

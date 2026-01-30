@@ -1,0 +1,221 @@
+# ProMode Configuration
+# Based on ProMode (Interspeech 2025, arXiv:2508.09389)
+# Stand-alone prosody model for TTS
+
+# Model Architecture
+model:
+  # Input dimensions
+  acoustic_dim: 80  # Mel spectrogram channels
+  text_dim: 512  # Text encoder output (BERT/RoBERTa)
+
+  # Latent prosody embedding
+  latent_dim: 256  # Dimension of latent prosody
+  num_latent_queries: 32  # Fixed-length output
+
+  # Perceiver IO encoder
+  encoder_num_layers: 6
+  encoder_num_heads: 8
+  encoder_ffn_dim: 1024
+  encoder_dropout: 0.1
+
+  # Cross-attention (Perceiver IO)
+  num_cross_attn_layers: 4
+  cross_attn_heads: 8
+
+  # Dual decoders
+  decoder_num_layers: 4
+  decoder_num_heads: 8
+  decoder_ffn_dim: 1024
+  decoder_dropout: 0.1
+
+  # Masking settings
+  acoustic_mask_ratio: 0.5  # Mask 50% of acoustics
+  text_mask_ratio: 0.3  # Mask 30% of text
+  mask_patch_size: 4  # Patch-level masking
+
+  # Prosody prediction
+  f0_dim: 1
+  energy_dim: 1
+  duration_dim: 1
+  granularities:
+    - frame
+    - phoneme
+    - word
+
+  # Loss weights
+  reconstruction_weight: 1.0
+  f0_weight: 1.0
+  energy_weight: 0.5
+  duration_weight: 0.5
+  consistency_weight: 0.1
+
+  # Audio settings
+  sample_rate: 16000
+  hop_length: 256  # ~16ms frames
+  f0_min: 50.0
+  f0_max: 800.0
+
+  # Training
+  warmup_steps: 5000
+  dropout: 0.1
+
+  # Output for CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+# Training Configuration
+training:
+  # Data
+  manifest: "../data/manifest.json"
+  audio_dir: "../data/audio"
+
+  # Text encoder
+  text_encoder: "bert-base-uncased"  # Or roberta-base
+  use_pretrained_text_encoder: true
+  freeze_text_encoder: true
+
+  # Duration filtering
+  max_duration: 15.0  # seconds
+  min_duration: 1.0
+
+  # Training params
+  epochs: 100
+  batch_size: 16  # Reduce for memory
+  gradient_accumulation_steps: 2
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  warmup_epochs: 5
+
+  # LR schedule
+  lr_scheduler: "cosine_with_warmup"
+  min_lr: 1e-6
+
+  # Optimizer
+  optimizer: "adamw"
+  adam_beta1: 0.9
+  adam_beta2: 0.98
+  adam_eps: 1e-9
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Data loading
+  num_workers: 4
+
+  # Validation
+  val_every: 1  # Validate every N epochs
+  val_samples: 1000  # Number of validation samples
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/promode"
+  save_every: 5  # Save checkpoint every N epochs
+  keep_last_k: 3  # Keep last K checkpoints
+
+  # Early stopping
+  early_stopping_patience: 20
+  early_stopping_metric: "val_total_loss"
+
+# Hardware Configuration
+hardware:
+  # Device selection
+  device: "auto"  # auto, cuda, mps, cpu
+
+  # Mixed precision
+  mixed_precision: true
+  fp16: true  # Use FP16 on CUDA
+
+  # Compilation (PyTorch 2.0+)
+  compile: false  # Not stable on all platforms
+
+  # Multi-GPU
+  distributed: false
+  world_size: 1
+
+# Logging
+logging:
+  log_every: 50  # Log every N steps
+  use_wandb: false
+  wandb_project: "promode"
+  wandb_entity: null
+
+  # Tensorboard
+  use_tensorboard: true
+  tensorboard_dir: "../logs/promode"
+
+# Data Augmentation
+augmentation:
+  # Speed perturbation
+  speed_perturb: true
+  speed_perturb_range: [0.9, 1.1]
+
+  # Noise augmentation
+  add_noise: true
+  noise_snr_db: 20.0
+
+  # Volume perturbation
+  volume_perturb: true
+  volume_perturb_range: [0.8, 1.2]
+
+  # Time masking (SpecAugment style)
+  time_mask: true
+  time_mask_max_frames: 30
+  time_mask_num: 2
+
+  # Frequency masking
+  freq_mask: true
+  freq_mask_max_bins: 20
+  freq_mask_num: 2
+
+# Prosody Target Extraction
+prosody_extraction:
+  # F0 extraction
+  f0_method: "dio"  # dio, harvest, crepe
+  f0_frame_period: 16.0  # ms (match hop_length)
+
+  # Energy extraction
+  energy_type: "frame"  # frame or mel
+
+  # Duration extraction (if available)
+  use_durations: false  # Requires alignment
+
+# Evaluation
+evaluation:
+  # Metrics
+  compute_f0_metrics: true
+  compute_energy_metrics: true
+  compute_reconstruction_metrics: true
+
+  # F0 metrics
+  f0_metrics:
+    - rmse  # Root mean square error
+    - corr  # Correlation
+    - gross_pitch_error  # GPE
+    - voicing_accuracy
+
+  # Energy metrics
+  energy_metrics:
+    - rmse
+    - corr
+
+  # Reconstruction metrics
+  recon_metrics:
+    - mse
+    - mae
+
+# Downstream TTS Integration
+integration:
+  # FluentSpeech integration
+  fluentspeech_compatible: true
+
+  # CSM integration
+  csm_compatible: true
+
+  # FastSpeech 2 style integration
+  variance_adaptor_style: true
+
+# Dataset Sources (recommended for training)
+# GigaSpeech: Large-scale English speech (10,000h)
+# LibriSpeech: Clean read speech (960h)
+# VCTK: Multi-speaker with varied prosody
+# Common Voice: Diverse speakers and accents
+# Emotion datasets: RAVDESS, IEMOCAP for prosodic variation

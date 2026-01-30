@@ -1,0 +1,155 @@
+# Multi-Reward RL for TTS (GLM-TTS / EMORL-TTS approach)
+# Based on:
+# - GLM-TTS (arXiv:2512.14291): GRPO-based multi-reward RL
+# - EMORL-TTS (arXiv:2510.05758): VAD-based emotion control + RL
+#
+# This config is used for RL fine-tuning after initial prosody training.
+# The model optimizes multiple reward functions simultaneously.
+#
+# Usage:
+#   python multi_reward_rl.py --config config/multi_reward_rl.yaml \
+#     --checkpoint ../checkpoints/prosody_v6/best.pt \
+#     --manifest ../data/emotion_manifest.json
+
+# =============================================================================
+# GRPO Settings (Group Relative Policy Optimization)
+# =============================================================================
+
+# Group size: number of samples per input for GRPO
+# Higher = more stable gradient estimates but more compute
+group_size: 4
+
+# Sampling parameters
+temperature: 1.0        # Sampling temperature (higher = more diverse)
+top_k: 50              # Top-k sampling (0 to disable)
+top_p: 0.95            # Nucleus sampling threshold
+
+# =============================================================================
+# Reward Weights
+# =============================================================================
+# Adjust based on which quality aspect to emphasize
+
+# CER (Character Error Rate) - pronunciation accuracy
+# Higher weight emphasizes correct pronunciation
+cer_weight: 1.0
+
+# SIM (Speaker Similarity) - speaker identity preservation
+# Higher weight maintains speaker characteristics
+sim_weight: 1.0
+
+# Emotion accuracy - emotional expressiveness
+# Higher weight improves emotion recognition accuracy
+emotion_weight: 1.0
+
+# Naturalness - overall quality and smoothness
+# Lower weight as it's often already high from SFT
+naturalness_weight: 0.5
+
+# =============================================================================
+# EMORL-TTS: VAD-based Emotion Control
+# =============================================================================
+
+# Enable VAD (Valence-Arousal-Dominance) control
+use_vad_control: true
+
+# Reward for matching target emotion intensity
+intensity_reward_weight: 0.5
+
+# Reward for correct local emphasis placement
+emphasis_reward_weight: 0.5
+
+# =============================================================================
+# Policy Optimization
+# =============================================================================
+
+# KL penalty coefficient (beta in GRPO)
+# Higher = more conservative updates, closer to reference
+kl_coef: 0.1
+
+# PPO-style clipping ratio
+# Clips policy ratio to [1-clip, 1+clip]
+clip_ratio: 0.2
+
+# Entropy bonus for exploration
+# Higher = more exploration, may need if policy collapses
+entropy_coef: 0.01
+
+# Normalize advantages within each group
+advantage_normalization: true
+
+# =============================================================================
+# Training Settings
+# =============================================================================
+
+# Learning rate - lower than SFT for RL stability
+learning_rate: 5.0e-6
+
+# Batch size (number of inputs, effective samples = batch_size * group_size)
+batch_size: 4
+
+# Number of RL epochs (typically fewer than SFT)
+num_epochs: 5
+
+# Warmup steps for learning rate
+warmup_steps: 200
+
+# Gradient accumulation for larger effective batches
+gradient_accumulation: 4
+
+# Gradient clipping - tighter for RL stability
+max_grad_norm: 0.5
+
+# =============================================================================
+# Model Settings
+# =============================================================================
+
+# Should match pre-trained checkpoint
+hidden_size: 2048
+num_prosody_tokens: 4
+
+# =============================================================================
+# Reference Model
+# =============================================================================
+
+# Use frozen reference model for KL penalty
+use_reference_model: true
+
+# Update frequency (0 = never, frozen)
+reference_model_update_freq: 0
+
+# =============================================================================
+# SFT Regularization (EMORL-TTS style)
+# =============================================================================
+# Combines SFT + RL to prevent catastrophic forgetting
+
+# Initial SFT weight (alongside RL)
+sft_weight: 0.5
+
+# Decay per epoch (gradually shift from SFT to RL)
+sft_decay: 0.95
+
+# =============================================================================
+# External Reward Models (optional)
+# =============================================================================
+# Set to true if you have external models for more accurate rewards
+
+# Use external ASR for CER computation (e.g., Whisper)
+use_external_asr: false
+
+# Use external speaker encoder for SIM (e.g., ECAPA-TDNN)
+use_external_spk: false
+
+# Use external emotion classifier
+use_external_emo: false
+
+# =============================================================================
+# Output & Logging
+# =============================================================================
+
+output_dir: ../checkpoints/multi_reward_rl
+
+# Log every N steps
+log_every: 10
+
+# Save checkpoint every N epochs
+save_every_epochs: 1

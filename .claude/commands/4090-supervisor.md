@@ -11,7 +11,7 @@ Manages FREE AI workers on RTX 4090 using local Ollama (qwen3-coder-32k).
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│              RTX 4090 (100.83.78.111)               │
+│              RTX 4090 ($REMOTE_GPU_HOST)               │
 │                                                     │
 │  ┌─────────────┐       tmux        ┌─────────────┐ │
 │  │ SUPERVISOR  │ ───send-keys────▶ │ LAB-MANAGER │ │
@@ -28,22 +28,22 @@ Manages FREE AI workers on RTX 4090 using local Ollama (qwen3-coder-32k).
 
 ```bash
 # Check status
-ssh doc@100.83.78.111 "tmux list-sessions"
+ssh doc@$REMOTE_GPU_HOST "tmux list-sessions"
 
 # Start supervisor system
-ssh doc@100.83.78.111 "~/bin/start-supervisor"
+ssh doc@$REMOTE_GPU_HOST "~/bin/start-supervisor"
 
 # Attach to supervisor
-ssh doc@100.83.78.111 -t "tmux attach -t supervisor"
+ssh doc@$REMOTE_GPU_HOST -t "tmux attach -t supervisor"
 
 # Attach to worker
-ssh doc@100.83.78.111 -t "tmux attach -t lab-manager"
+ssh doc@$REMOTE_GPU_HOST -t "tmux attach -t lab-manager"
 
 # Check watchdog log
-ssh doc@100.83.78.111 "tail -20 ~/supervisor-watchdog.log"
+ssh doc@$REMOTE_GPU_HOST "tail -20 ~/supervisor-watchdog.log"
 
 # GPU status
-ssh doc@100.83.78.111 "~/bin/gpu-status"
+ssh doc@$REMOTE_GPU_HOST "~/bin/gpu-status"
 ```
 
 ## Scripts on 4090 (~/bin/)

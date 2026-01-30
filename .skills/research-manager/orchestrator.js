@@ -23,9 +23,9 @@ const notifications = require('./notifications');
 const CONFIG = {
   checkInterval: parseInt(process.argv.find((a, i) => process.argv[i-1] === '--interval') || '30') * 1000,
   maxAgents: parseInt(process.argv.find((a, i) => process.argv[i-1] === '--max-agents') || '3'),
-  researchTimeout: 20, // minutes
-  stuckTimeout: 10, // minutes no activity
-  maxRuntime: 60, // minutes
+  researchTimeout: 60, // minutes (increased from 20 - research takes time)
+  stuckTimeout: 30, // minutes no activity (increased from 10 - agents can be thinking)
+  maxRuntime: 240, // minutes (4 hours - safety net only, activity-based detection is primary)
   projectRoot: path.join(__dirname, '..', '..'),
 
   // Task prioritization settings
@@ -40,15 +40,82 @@ const CONFIG = {
   }
 };
 
-const STATE_DIR = path.join(__dirname, 'state');
+// Lab-aware state paths
+const LABS_DIR = path.join(__dirname, 'labs');
+const GLOBAL_STATE_DIR = path.join(__dirname, 'state');
+const ACTIVE_LAB_FILE = path.join(GLOBAL_STATE_DIR, 'active-lab.json');
+const RM_SCRIPT = path.join(__dirname, 'rm');
+const CODEX_CMD = 'codex';
+
+// Get current lab ID from env, flag, or active lab file
+function getLabId() {
+  // 1. Command line override
+  const labArg = process.argv.find((a, i) => process.argv[i-1] === '--lab');
+  if (labArg) return labArg;
+
+  // 2. Environment variable
+  if (process.env.CLAUDE_CODE_LAB_ID) return process.env.CLAUDE_CODE_LAB_ID;
+
+  // 3. Active lab from state file
+  try {
+    if (fs.existsSync(ACTIVE_LAB_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ACTIVE_LAB_FILE, 'utf-8'));
+      if (data.active_lab_id) return data.active_lab_id;
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+
+  // 4. Default
+  return 'voice-clone';
+}
+
+// Get lab configuration
+function getLabConfig(labId) {
+  const configPath = path.join(LABS_DIR, labId, 'config.json');
+  try {
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+  // Return virtual config for backwards compatibility
+  return {
+    id: labId,
+    name: labId,
+    taskListId: labId,
+    settings: { maxAgents: 3, autoSpawn: true }
+  };
+}
+
+// Current lab context
+const CURRENT_LAB_ID = getLabId();
+const LAB_CONFIG = getLabConfig(CURRENT_LAB_ID);
+
+// Get state directory for current lab
+function getStateDir() {
+  const labDir = path.join(LABS_DIR, CURRENT_LAB_ID);
+  const labStateDir = path.join(labDir, 'state');
+  if (fs.existsSync(path.join(labDir, 'config.json'))) {
+    if (!fs.existsSync(labStateDir)) {
+      fs.mkdirSync(labStateDir, { recursive: true });
+    }
+    return labStateDir;
+  }
+  // Fallback to global state
+  return GLOBAL_STATE_DIR;
+}
+
+// Dynamic state paths based on lab
+const STATE_DIR = getStateDir();
 const AGENTS_FILE = path.join(STATE_DIR, 'agents.json');
 const PROGRESS_FILE = path.join(STATE_DIR, 'progress.json');
 const COST_FILE = path.join(STATE_DIR, 'cost-tracking.json');
 const RESEARCH_STATE_FILE = path.join(STATE_DIR, 'research-state.json');
-const RM_SCRIPT = path.join(__dirname, 'rm');
+const PROPOSALS_FILE = path.join(STATE_DIR, 'proposals.json');
 const ORCHESTRATOR_LOG = path.join(STATE_DIR, 'orchestrator.log');
-const CODEX_CMD = 'codex';
-const TASK_LIST_ID = process.env.CLAUDE_CODE_TASK_LIST_ID || 'voice-clone-pipeline';
+const TASK_LIST_ID = process.env.CLAUDE_CODE_TASK_LIST_ID || LAB_CONFIG.taskListId || CURRENT_LAB_ID;
 
 // Cost configuration - estimated costs per hour by model type
 // We default to local Ollama (free) and use Codex only for hard analysis.
@@ -297,6 +364,44 @@ function getTasksWithRunningAgents() {
   return taskIds;
 }
 
+// Check if an implementation task is blocked by proposal approval
+function isBlockedByProposalApproval(task) {
+  const storyId = getStoryFromTask(task);
+  if (!storyId) return false;
+
+  // Only check implementation tasks (not research tasks)
+  if (isResearchTask(task)) return false;
+
+  // Check if this story has research tasks
+  const stories = getTasksByStory();
+  const story = stories[storyId];
+  if (!story || story.researchTasks.length === 0) return false;
+
+  // Check if research is complete
+  const researchStatus = isStoryResearchComplete(storyId);
+  if (!researchStatus.complete) {
+    // Research not complete - task is blocked by research, not proposal
+    return false;
+  }
+
+  // Research is complete - check proposal status
+  const proposals = getProposals();
+  const proposal = proposals.proposals?.[storyId];
+
+  if (!proposal) {
+    // No proposal yet - blocked pending proposal generation
+    return true;
+  }
+
+  // Check proposal status
+  if (proposal.status === 'approved') {
+    return false; // Approved - can proceed
+  }
+
+  // Any other status (generating, pending_review, rejected, needs_revision) blocks
+  return true;
+}
+
 // Get pending tasks (no owner, status pending, no agent already running)
 function getPendingTasks() {
   const tasks = getTasks();
@@ -306,7 +411,8 @@ function getPendingTasks() {
     t.status === 'pending' &&
     !t.owner &&
     !tasksWithAgents.has(String(t.id)) &&
-    !(t.blockedBy || []).some(id => !completedTaskIds.has(String(id)))
+    !(t.blockedBy || []).some(id => !completedTaskIds.has(String(id))) &&
+    !isBlockedByProposalApproval(t)  // NEW: Check proposal approval gate
   );
 }
 
@@ -472,6 +578,105 @@ function checkLogForCompletion(agent) {
   }
 }
 
+// Extract potential deliverable paths from task description
+function extractDeliverablePaths(taskDescription) {
+  if (!taskDescription) return [];
+
+  const paths = [];
+  const projectRoot = CONFIG.projectRoot;
+
+  // Pattern 1: Explicit file paths like "docs/firefly/analysis.md" or "frontend/lib/types.ts"
+  // Note: tsx/jsx must come before ts/js in the alternation to match correctly
+  const filePathPattern = /(?:^|[\s`'"(])([a-zA-Z0-9_\-./]+\.(?:md|tsx|jsx|ts|js|py|yaml|yml|json|sql))/g;
+  let match;
+  while ((match = filePathPattern.exec(taskDescription)) !== null) {
+    const filePath = match[1];
+    // Skip common false positives
+    if (!filePath.includes('/') || filePath.startsWith('http')) continue;
+    paths.push(path.join(projectRoot, filePath));
+  }
+
+  // Pattern 2: Create file instructions like "Create `frontend/lib/activities/types.ts`"
+  const createFilePattern = /[Cc]reate\s+(?:file:?\s*)?[`'"]*([a-zA-Z0-9_\-./]+\.(?:md|ts|tsx|js|jsx|py|yaml|yml|json|sql))[`'"]*/g;
+  while ((match = createFilePattern.exec(taskDescription)) !== null) {
+    paths.push(path.join(projectRoot, match[1]));
+  }
+
+  // Pattern 3: Output paths like "Write to docs/analysis.md"
+  const writePattern = /[Ww]rite\s+(?:to\s+)?[`'"]*([a-zA-Z0-9_\-./]+\.(?:md|ts|tsx|js|jsx|py|yaml|yml|json|sql))[`'"]*/g;
+  while ((match = writePattern.exec(taskDescription)) !== null) {
+    paths.push(path.join(projectRoot, match[1]));
+  }
+
+  // Deduplicate
+  return [...new Set(paths)];
+}
+
+// Check if deliverables mentioned in task description exist
+function checkDeliverablesExist(task) {
+  const description = task?.description || '';
+  const subject = task?.subject || '';
+  const fullText = `${subject}\n${description}`;
+
+  const deliverablePaths = extractDeliverablePaths(fullText);
+
+  if (deliverablePaths.length === 0) {
+    return { hasDeliverables: false, checked: 0, found: 0, paths: [] };
+  }
+
+  const foundPaths = [];
+  for (const filePath of deliverablePaths) {
+    if (fs.existsSync(filePath)) {
+      // Check if file was recently modified (within last 24 hours)
+      try {
+        const stats = fs.statSync(filePath);
+        const hoursSinceModified = (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceModified < 24) {
+          foundPaths.push(filePath);
+        }
+      } catch (e) {
+        // If we can't stat, still count it as found
+        foundPaths.push(filePath);
+      }
+    }
+  }
+
+  return {
+    hasDeliverables: foundPaths.length > 0,
+    checked: deliverablePaths.length,
+    found: foundPaths.length,
+    paths: foundPaths,
+  };
+}
+
+// Check if agent is making progress (activity-based heartbeat)
+function isAgentMakingProgress(agent) {
+  if (!agent.output_file || !fs.existsSync(agent.output_file)) {
+    return { making_progress: false, reason: 'no output file' };
+  }
+
+  try {
+    const stats = fs.statSync(agent.output_file);
+    const minutesSinceActivity = (Date.now() - stats.mtime.getTime()) / (1000 * 60);
+
+    // If output file was modified in the last 5 minutes, agent is active
+    if (minutesSinceActivity < 5) {
+      return { making_progress: true, reason: `output modified ${Math.round(minutesSinceActivity)}m ago` };
+    }
+
+    // Check file size - if it's growing, agent is working
+    const size = stats.size;
+    if (size > 50000) {
+      // Large output file suggests substantial work
+      return { making_progress: minutesSinceActivity < 15, reason: `large output (${Math.round(size/1024)}KB), last activity ${Math.round(minutesSinceActivity)}m ago` };
+    }
+
+    return { making_progress: false, reason: `no activity for ${Math.round(minutesSinceActivity)}m` };
+  } catch (e) {
+    return { making_progress: false, reason: `error checking output: ${e.message}` };
+  }
+}
+
 // Check agent health
 function checkAgentHealth(agent) {
   const now = Date.now();
@@ -491,6 +696,55 @@ function checkAgentHealth(agent) {
     isTimedOut: runningMinutes > CONFIG.maxRuntime,
     isResearchTimeout: agent.name.includes('researcher') && runningMinutes > CONFIG.researchTimeout,
   };
+}
+
+// Check if a research-lead agent completed and update proposal status
+function checkResearchLeadCompletion(agent, outcome) {
+  // Check if this is a research-lead agent
+  const match = agent.name.match(/^research-lead-(s\d+)-/i);
+  if (!match) return;
+
+  const storyId = match[1].toUpperCase();
+  const proposals = getProposals();
+
+  if (!proposals.proposals[storyId]) {
+    proposals.proposals[storyId] = {};
+  }
+
+  if (outcome === 'completed') {
+    // Check if proposal document was created
+    const projectRoot = path.join(__dirname, '..', '..');
+    const proposalPaths = [
+      path.join(projectRoot, 'docs', storyId.toLowerCase(), 'PROPOSAL.md'),
+      path.join(projectRoot, 'docs', `story_${storyId.toLowerCase()}`, 'PROPOSAL.md'),
+      path.join(projectRoot, 'docs', 'firefly', 'PROPOSAL.md'),
+    ];
+
+    const documentExists = proposalPaths.some(p => fs.existsSync(p));
+
+    if (documentExists) {
+      proposals.proposals[storyId].status = 'pending_review';
+      proposals.proposals[storyId].document_created_at = new Date().toISOString();
+
+      // Notify user that proposal is ready
+      notifications.notifyProposalReady(
+        storyId,
+        proposals.proposals[storyId].story_title
+      ).catch(() => {});
+
+      log('info', `Proposal for ${storyId} ready for review`);
+    } else {
+      proposals.proposals[storyId].status = 'generation_failed';
+      proposals.proposals[storyId].error = 'Document not created';
+      log('warn', `Research lead completed but proposal document not found for ${storyId}`);
+    }
+  } else {
+    proposals.proposals[storyId].status = 'generation_failed';
+    proposals.proposals[storyId].error = `Agent outcome: ${outcome}`;
+  }
+
+  proposals.proposals[storyId].updated_at = new Date().toISOString();
+  saveProposals(proposals);
 }
 
 // Record outcome to progress history
@@ -555,6 +809,9 @@ function cleanupAgents() {
     const taskMatch = agent.name.match(/^task-(\d+)-/);
     const taskId = taskMatch ? taskMatch[1] : undefined;
 
+    // Get the task for deliverable checking
+    const task = taskId ? allTasks.find(t => String(t.id) === String(taskId)) : null;
+
     let shouldKill = false;
     let reason = '';
     let outcome = 'completed';
@@ -571,45 +828,111 @@ function cleanupAgents() {
       reason = 'Log shows completion';
       outcome = 'completed';
     }
-    // Research timeout
-    else if (health.isResearchTimeout) {
-      shouldKill = true;
-      reason = `Research timeout (${Math.round(health.runningMinutes)}min)`;
-      outcome = 'timeout';
+    // Check if deliverables exist (task completed but agent didn't mark it)
+    else if (task && health.runningMinutes > 10) {
+      const deliverables = checkDeliverablesExist(task);
+      if (deliverables.hasDeliverables) {
+        shouldKill = true;
+        reason = `Deliverables found (${deliverables.found}/${deliverables.checked} files exist)`;
+        outcome = 'completed';
+        log('info', `Marking task complete due to deliverables`, {
+          taskId,
+          paths: deliverables.paths,
+        });
+      }
     }
-    // Stuck (no activity)
-    else if (health.isStuck) {
-      shouldKill = true;
-      reason = `No activity for ${Math.round(health.lastActivity)}min`;
-      outcome = 'stuck';
 
-      // Notify about stuck agent
-      notifications.notifyAgentStuck(agent.name, health.lastActivity).catch(() => {});
-    }
-    // Max runtime exceeded
-    else if (health.isTimedOut) {
-      shouldKill = true;
-      reason = `Max runtime exceeded (${Math.round(health.runningMinutes)}min)`;
-      outcome = 'timeout';
+    // Only check for stuck/timeout if we haven't already decided to kill
+    if (!shouldKill) {
+      // Check if agent is making progress (activity-based heartbeat)
+      const progress = isAgentMakingProgress(agent);
+
+      // Research agents get more lenient timeout
+      const isResearcher = agent.name.includes('researcher') || agent.name.includes('research');
+
+      // Stuck detection - only if truly no activity
+      if (health.isStuck && !progress.making_progress) {
+        // Before killing as stuck, check deliverables one more time
+        if (task) {
+          const deliverables = checkDeliverablesExist(task);
+          if (deliverables.hasDeliverables) {
+            shouldKill = true;
+            reason = `Stuck but deliverables found (${deliverables.found} files)`;
+            outcome = 'completed';
+          } else {
+            shouldKill = true;
+            reason = `No activity for ${Math.round(health.lastActivity)}min, no progress detected`;
+            outcome = 'stuck';
+            notifications.notifyAgentStuck(agent.name, health.lastActivity).catch(() => {});
+          }
+        } else {
+          shouldKill = true;
+          reason = `No activity for ${Math.round(health.lastActivity)}min`;
+          outcome = 'stuck';
+          notifications.notifyAgentStuck(agent.name, health.lastActivity).catch(() => {});
+        }
+      }
+      // Research timeout - but respect activity
+      else if (health.isResearchTimeout && isResearcher && !progress.making_progress) {
+        shouldKill = true;
+        reason = `Research timeout (${Math.round(health.runningMinutes)}min), no recent progress`;
+        outcome = 'timeout';
+      }
+      // Max runtime exceeded - this is a hard safety limit
+      else if (health.isTimedOut) {
+        // Even at max runtime, if making progress, log but still kill (safety)
+        if (progress.making_progress) {
+          log('warn', `Killing active agent at max runtime`, {
+            name: agent.name,
+            runtime: Math.round(health.runningMinutes),
+            progress: progress.reason,
+          });
+        }
+        // Check deliverables before killing
+        if (task) {
+          const deliverables = checkDeliverablesExist(task);
+          if (deliverables.hasDeliverables) {
+            shouldKill = true;
+            reason = `Max runtime but deliverables found (${deliverables.found} files)`;
+            outcome = 'completed';
+          } else {
+            shouldKill = true;
+            reason = `Max runtime exceeded (${Math.round(health.runningMinutes)}min) - safety limit`;
+            outcome = 'timeout';
+          }
+        } else {
+          shouldKill = true;
+          reason = `Max runtime exceeded (${Math.round(health.runningMinutes)}min) - safety limit`;
+          outcome = 'timeout';
+        }
+      }
     }
 
     if (shouldKill) {
-      log('info', `Killing agent: ${agent.name}`, { reason });
+      log('info', `Killing agent: ${agent.name}`, { reason, outcome });
+      agents[agent.name].kill_reason = reason;
+
       if (killAgent(agent.name)) {
         killed.push(agent.name);
         agents[agent.name].status = 'killed';
         agents[agent.name].killed_at = new Date().toISOString();
         const retryCount = recordOutcome(agent.name, taskId, outcome, health.runningMinutes, outcome === 'completed' ? 100 : 30);
 
+        // Check if this was a research-lead agent and update proposal status
+        checkResearchLeadCompletion(agent, outcome);
+
         // Notify on task completion
         if (outcome === 'completed' && taskId) {
-          const task = allTasks.find(t => t.id === taskId);
+          const task = allTasks.find(t => String(t.id) === String(taskId));
           notifications.notifyTaskCompleted(taskId, task?.subject || 'Unknown task', health.runningMinutes).catch(() => {});
+
+          // Mark the task as completed since deliverables exist
+          updateTaskFile(taskId, { status: 'completed', owner: `rm:${agent.name}` });
         }
 
         // Notify on repeated errors
         if (outcome !== 'completed' && taskId && retryCount > 0) {
-          const task = allTasks.find(t => t.id === taskId);
+          const task = allTasks.find(t => String(t.id) === String(taskId));
           notifications.notifyAgentErrorRepeated(taskId, task?.subject || 'Unknown task', retryCount + 1).catch(() => {});
         }
 
@@ -628,6 +951,74 @@ function cleanupAgents() {
   }
 
   return killed;
+}
+
+// Clean up orphaned in_progress tasks (tasks with no active agent)
+function cleanupOrphanedTasks() {
+  const allTasks = getTasks();
+  const agents = readJSON(AGENTS_FILE, {});
+  const activeAgentTaskIds = new Set();
+
+  // Build set of task IDs that have active agents
+  for (const [agentId, agent] of Object.entries(agents)) {
+    if (agent.status === 'running') {
+      // Extract task ID from agent name (e.g., "task-371-1234567890" -> "371")
+      const match = agentId.match(/^task-(\d+)-/);
+      if (match) {
+        activeAgentTaskIds.add(match[1]);
+      }
+    }
+  }
+
+  const orphaned = [];
+  const taskDir = path.join(os.homedir(), '.claude', 'tasks', TASK_LIST_ID);
+
+  for (const task of allTasks) {
+    if (task.status !== 'in_progress') continue;
+    if (activeAgentTaskIds.has(task.id)) continue; // Has active agent
+
+    // This task is in_progress but has no active agent - it's orphaned
+    // Check if it has deliverables
+    const deliverableCheck = checkDeliverablesExist(task);
+
+    const taskFile = path.join(taskDir, `${task.id}.json`);
+    if (!fs.existsSync(taskFile)) continue;
+
+    try {
+      const taskData = JSON.parse(fs.readFileSync(taskFile, 'utf-8'));
+
+      if (deliverableCheck.found) {
+        // Deliverables exist - mark as completed
+        taskData.status = 'completed';
+        taskData.completedAt = new Date().toISOString();
+        taskData.completedBy = 'orchestrator:deliverable-detection';
+        fs.writeFileSync(taskFile, JSON.stringify(taskData, null, 2));
+        orphaned.push({ id: task.id, action: 'completed', reason: 'deliverables exist' });
+        log('info', `Orphaned task ${task.id} completed (deliverables found)`, {
+          deliverables: deliverableCheck.paths,
+        });
+      } else {
+        // No deliverables - check how long it's been stuck
+        const updatedAt = taskData.updatedAt ? new Date(taskData.updatedAt).getTime() : 0;
+        const stuckMinutes = (Date.now() - updatedAt) / (1000 * 60);
+
+        if (stuckMinutes > 60) { // Stuck for more than 1 hour
+          // Reset to pending so it can be picked up again
+          taskData.status = 'pending';
+          delete taskData.owner;
+          taskData.resetAt = new Date().toISOString();
+          taskData.resetReason = 'orphaned:no-agent';
+          fs.writeFileSync(taskFile, JSON.stringify(taskData, null, 2));
+          orphaned.push({ id: task.id, action: 'reset', reason: `stuck ${Math.round(stuckMinutes)} min` });
+          log('info', `Orphaned task ${task.id} reset to pending (stuck ${Math.round(stuckMinutes)} min)`);
+        }
+      }
+    } catch (e) {
+      log('warn', `Failed to process orphaned task ${task.id}: ${e.message}`);
+    }
+  }
+
+  return orphaned;
 }
 
 // Spawn agent for a task
@@ -697,7 +1088,7 @@ function spawnTaskAgent(task) {
     log('warn', 'Codex not found; falling back to ollama', { taskId: task.id });
     agentType = 'ollama';
   }
-  const taskPrompt = `Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="voice-clone-pipeline"):
+  const taskPrompt = `Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="${TASK_LIST_ID}"):
 
 TASK #${task.id}: ${task.subject}
 ${task.description ? `\nDescription: ${task.description}` : ''}
@@ -1076,6 +1467,12 @@ async function mainLoop() {
     // 1b. Cleanup old killed agents from state file
     cleanupKilledAgents();
 
+    // 1c. Cleanup orphaned in_progress tasks (no active agent)
+    const orphaned = cleanupOrphanedTasks();
+    if (orphaned.length > 0) {
+      log('info', `Cleaned up ${orphaned.length} orphaned tasks`, { orphaned });
+    }
+
     // 2. Status with prioritization details
     const running = getRunningAgents();
     const pending = getPendingTasks();
@@ -1124,7 +1521,18 @@ async function mainLoop() {
     // 5. Cleanup stale agents (every 30 min)
     runCleanupIfNeeded();
 
-    // 6. Auto-spawn
+    // 6. Check for story research completion and trigger proposals
+    const proposalResults = checkStoryCompletionAndProposals();
+    if (proposalResults.length > 0) {
+      log('info', 'Proposal actions taken', { results: proposalResults });
+    }
+
+    // 7. Auto-spawn (skip if we just triggered a proposal)
+    if (proposalResults.some(r => r.success)) {
+      log('info', 'Skipping auto-spawn - proposal generation in progress');
+      return;
+    }
+
     const spawnResult = autoSpawn();
     if (spawnResult.spawned) {
       log('info', 'Spawned agent', spawnResult);
@@ -1159,8 +1567,210 @@ function getTaskPriorities() {
   return prioritizeTasks(pending, allTasks);
 }
 
+// =============================================================================
+// Story Completion Detection & Proposal Generation
+// =============================================================================
+
+// Extract story ID from task subject (e.g., "[S1][P1] Do something" -> "S1")
+function getStoryFromTask(task) {
+  const subject = task.subject || '';
+  const match = subject.match(/\[S(\d+)\]/);
+  return match ? `S${match[1]}` : null;
+}
+
+// Check if task is a research task (not implementation)
+function isResearchTask(task) {
+  const subject = (task.subject || '').toLowerCase();
+  const researchKeywords = [
+    'research', 'explore', 'analyze', 'investigate', 'study',
+    'compare', 'evaluate', 'survey', 'deep dive', 'assessment'
+  ];
+  return researchKeywords.some(kw => subject.includes(kw));
+}
+
+// Get all tasks grouped by story
+function getTasksByStory() {
+  const tasks = getTasks();
+  const stories = {};
+
+  for (const task of tasks) {
+    const storyId = getStoryFromTask(task);
+    if (!storyId) continue;
+
+    if (!stories[storyId]) {
+      stories[storyId] = {
+        storyId,
+        allTasks: [],
+        researchTasks: [],
+        implementationTasks: [],
+      };
+    }
+
+    stories[storyId].allTasks.push(task);
+
+    if (isResearchTask(task)) {
+      stories[storyId].researchTasks.push(task);
+    } else {
+      stories[storyId].implementationTasks.push(task);
+    }
+  }
+
+  return stories;
+}
+
+// Check if a story's research is complete
+function isStoryResearchComplete(storyId) {
+  const stories = getTasksByStory();
+  const story = stories[storyId];
+
+  if (!story || story.researchTasks.length === 0) {
+    return { complete: false, reason: 'no-research-tasks' };
+  }
+
+  const completed = story.researchTasks.filter(t => t.status === 'completed');
+  const pending = story.researchTasks.filter(t => t.status === 'pending');
+  const inProgress = story.researchTasks.filter(t => t.status === 'in_progress');
+
+  if (pending.length > 0 || inProgress.length > 0) {
+    return {
+      complete: false,
+      reason: 'tasks-remaining',
+      completed: completed.length,
+      pending: pending.length,
+      inProgress: inProgress.length,
+      total: story.researchTasks.length,
+    };
+  }
+
+  return {
+    complete: true,
+    completed: completed.length,
+    total: story.researchTasks.length,
+    tasks: completed.map(t => ({ id: t.id, subject: t.subject })),
+  };
+}
+
+// Load proposals state
+function getProposals() {
+  return readJSON(PROPOSALS_FILE, { proposals: {} });
+}
+
+// Save proposals state
+function saveProposals(proposals) {
+  writeJSON(PROPOSALS_FILE, proposals);
+}
+
+// Check if proposal already exists or is being generated for a story
+function hasProposal(storyId) {
+  const proposals = getProposals();
+  const proposal = proposals.proposals?.[storyId];
+
+  if (!proposal) return { exists: false };
+
+  // Check if proposal document exists on disk
+  const projectRoot = path.join(__dirname, '..', '..');
+  const proposalPaths = [
+    path.join(projectRoot, 'docs', storyId.toLowerCase(), 'PROPOSAL.md'),
+    path.join(projectRoot, 'docs', `story_${storyId.toLowerCase()}`, 'PROPOSAL.md'),
+    path.join(projectRoot, 'docs', 'firefly', 'PROPOSAL.md'),
+  ];
+
+  const documentExists = proposalPaths.some(p => fs.existsSync(p));
+
+  return {
+    exists: true,
+    status: proposal.status,
+    documentExists,
+    agent: proposal.agent,
+    updatedAt: proposal.updated_at || proposal.started_at,
+  };
+}
+
+// Trigger proposal generation for a story
+function triggerProposalGeneration(storyId, storyTitle = null) {
+  log('info', `Triggering proposal generation for ${storyId}`, { storyTitle });
+
+  // Use the rm script to spawn research lead
+  const args = ['proposal', 'generate', storyId];
+  if (storyTitle) {
+    args.push('--title', storyTitle);
+  }
+
+  const result = spawnSync(RM_SCRIPT, args, {
+    cwd: CONFIG.projectRoot,
+    encoding: 'utf-8',
+  });
+
+  if (result.status === 0) {
+    log('info', `Proposal generation started for ${storyId}`);
+
+    // Notify about proposal generation
+    notifications.notify('proposal_generating', {
+      title: `Generating Proposal for ${storyId}`,
+      message: `Research complete. Synthesizing findings into a proposal.`,
+      eventKey: storyId,
+    }).catch(() => {});
+
+    return { success: true, output: result.stdout };
+  } else {
+    log('warn', `Failed to start proposal generation for ${storyId}`, {
+      stderr: result.stderr,
+    });
+    return { success: false, error: result.stderr };
+  }
+}
+
+// Check all stories for research completion and trigger proposals
+function checkStoryCompletionAndProposals() {
+  const stories = getTasksByStory();
+  const results = [];
+
+  for (const [storyId, story] of Object.entries(stories)) {
+    // Skip if no research tasks
+    if (story.researchTasks.length === 0) continue;
+
+    const researchStatus = isStoryResearchComplete(storyId);
+
+    if (!researchStatus.complete) continue;
+
+    // Check if proposal already exists
+    const proposalStatus = hasProposal(storyId);
+
+    if (proposalStatus.exists) {
+      // Proposal exists - check status
+      if (proposalStatus.status === 'pending_review' && proposalStatus.documentExists) {
+        // Notify user that proposal is ready for review
+        notifications.notify('proposal_ready', {
+          title: `Proposal Ready: ${storyId}`,
+          message: `Research proposal for ${storyId} is ready for your review.`,
+          eventKey: `${storyId}-review`,
+        }).catch(() => {});
+      }
+      continue;
+    }
+
+    // Research complete, no proposal - trigger generation
+    log('info', `Story ${storyId} research complete, generating proposal`, {
+      completedTasks: researchStatus.completed,
+    });
+
+    const genResult = triggerProposalGeneration(storyId);
+    results.push({
+      storyId,
+      action: 'proposal-generation-triggered',
+      success: genResult.success,
+    });
+  }
+
+  return results;
+}
+
 // Start daemon
 log('info', 'Orchestrator daemon starting', {
+  lab: CURRENT_LAB_ID,
+  labName: LAB_CONFIG.name,
+  taskListId: TASK_LIST_ID,
+  stateDir: STATE_DIR,
   interval: CONFIG.checkInterval / 1000 + 's',
   maxAgents: CONFIG.maxAgents,
 });
@@ -1185,4 +1795,4 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-log('info', `Orchestrator running (checking every ${CONFIG.checkInterval/1000}s)`);
+log('info', `Orchestrator running for lab "${CURRENT_LAB_ID}" (checking every ${CONFIG.checkInterval/1000}s)`);

@@ -1,0 +1,92 @@
+# SpeechTripleNet VAE Configuration
+# Based on "SpeechTripleNet: End-to-End Disentangled Speech Representation Learning" (ACM MM 2023)
+#
+# Key Features:
+# - Triple disentanglement: content, timbre, prosody
+# - No explicit labels needed (unsupervised via architectural constraints)
+# - Content: Discrete VQ bottleneck
+# - Timbre: Global pooling + VAE
+# - Prosody: Sequence-level VAE with low-dim bottleneck
+
+model:
+  # Input dimensions
+  mel_dim: 80
+  sample_rate: 16000
+  hop_length: 256
+
+  # Encoder architecture
+  encoder_hidden_dim: 512
+  encoder_layers: 4
+  encoder_heads: 8
+  encoder_ffn_dim: 2048
+
+  # Content latent (discrete VQ)
+  content_codebook_size: 512  # Number of discrete content codes
+  content_code_dim: 256       # Dimension per content code
+  content_num_groups: 2       # Product quantization groups
+  content_commitment_cost: 0.25
+  content_ema_decay: 0.99
+
+  # Timbre latent (global continuous)
+  timbre_latent_dim: 256  # Speaker identity dimension
+
+  # Prosody latent (sequence continuous)
+  prosody_latent_dim: 64  # Low dimension for information bottleneck
+
+  # Decoder architecture
+  decoder_hidden_dim: 512
+  decoder_layers: 4
+  decoder_heads: 8
+  decoder_ffn_dim: 2048
+
+  # Training settings
+  dropout: 0.1
+  kl_weight: 0.1           # β for β-VAE
+  kl_anneal_steps: 10000   # Anneal KL from 0 to kl_weight
+
+  # Orthogonality regularization
+  use_orthogonality: true
+  ortho_weight: 0.1
+  timbre_prosody_beta: 0.0001  # Strict orthogonality between timbre and prosody
+
+  # CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+data:
+  train_manifest: ../data/train_manifest.json
+  val_manifest: ../data/val_manifest.json
+  max_len: 400  # Maximum mel sequence length
+
+training:
+  batch_size: 8
+  learning_rate: 1e-4
+  weight_decay: 1e-5
+  gradient_clip: 1.0
+  num_epochs: 100
+  num_workers: 4
+
+  # Logging
+  log_interval: 100
+  save_interval: 1000
+  checkpoint_dir: ../checkpoints/speech_triple_net
+
+  # Scheduler
+  scheduler:
+    type: cosine_annealing_warm_restarts
+    T_0: 1000
+    T_mult: 2
+
+# Hardware-specific settings
+hardware:
+  # M4 Pro Mac settings
+  m4_pro:
+    batch_size: 8
+    gradient_checkpointing: false
+    mixed_precision: false  # MPS doesn't support bf16
+
+  # RTX 4090 settings
+  rtx_4090:
+    batch_size: 16
+    gradient_checkpointing: true
+    mixed_precision: true  # Use bf16

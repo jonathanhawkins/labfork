@@ -23,44 +23,96 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Literal
 
+# Import labs module for multi-lab support
+import labs as labs_module
+
 # Paths
 SKILL_DIR = Path(__file__).parent
-STATE_DIR = SKILL_DIR / "state"
-AGENTS_FILE = STATE_DIR / "agents.json"
-REMINDERS_FILE = STATE_DIR / "reminders.json"
-OUTPUTS_DIR = STATE_DIR / "outputs"
+TEMPLATES_DIR = SKILL_DIR / "templates"
 
-# Shared task list ID for Claude Code agents
-# All agents spawned with this manager share the same task list
-CLAUDE_TASK_LIST_ID = "voice-clone-pipeline"
+# Lab-aware state directories (resolved dynamically)
+_current_lab_id: Optional[str] = None  # Can be overridden via --lab flag
 
-# Ensure directories exist
+
+def get_current_lab_id() -> str:
+    """Get the current lab ID (from override, env, or active lab)."""
+    global _current_lab_id
+    return labs_module.get_effective_lab_id(_current_lab_id)
+
+
+def get_state_dir() -> Path:
+    """Get the state directory for the current lab."""
+    lab_id = get_current_lab_id()
+    lab = labs_module.get_lab(lab_id)
+    if lab:
+        return labs_module.get_lab_state_dir(lab_id)
+    # Fallback to global state for backwards compatibility
+    return SKILL_DIR / "state"
+
+
+def get_agents_file() -> Path:
+    return get_state_dir() / "agents.json"
+
+
+def get_reminders_file() -> Path:
+    return get_state_dir() / "reminders.json"
+
+
+def get_outputs_dir() -> Path:
+    outputs = get_state_dir() / "outputs"
+    outputs.mkdir(parents=True, exist_ok=True)
+    return outputs
+
+
+def get_proposals_file() -> Path:
+    return get_state_dir() / "proposals.json"
+
+
+def get_task_list_id() -> str:
+    """Get the Claude Code task list ID for the current lab."""
+    return labs_module.get_task_list_id(get_current_lab_id())
+
+
+# Legacy aliases for backwards compatibility
+STATE_DIR = SKILL_DIR / "state"  # Used only for initialization
+AGENTS_FILE = STATE_DIR / "agents.json"  # Legacy - use get_agents_file()
+REMINDERS_FILE = STATE_DIR / "reminders.json"  # Legacy
+OUTPUTS_DIR = STATE_DIR / "outputs"  # Legacy - use get_outputs_dir()
+PROPOSALS_FILE = STATE_DIR / "proposals.json"  # Legacy
+
+# Ensure base directories exist
 STATE_DIR.mkdir(exist_ok=True)
 OUTPUTS_DIR.mkdir(exist_ok=True)
 
 
 def load_agents() -> dict:
     """Load agent registry from file."""
-    if AGENTS_FILE.exists():
-        return json.loads(AGENTS_FILE.read_text())
+    agents_file = get_agents_file()
+    if agents_file.exists():
+        return json.loads(agents_file.read_text())
     return {}
 
 
 def save_agents(agents: dict):
     """Save agent registry to file."""
-    AGENTS_FILE.write_text(json.dumps(agents, indent=2, default=str))
+    agents_file = get_agents_file()
+    agents_file.parent.mkdir(parents=True, exist_ok=True)
+    agents_file.write_text(json.dumps(agents, indent=2, default=str))
 
 
 def load_reminders() -> list:
     """Load reminders from file."""
-    if REMINDERS_FILE.exists():
-        return json.loads(REMINDERS_FILE.read_text())
+    reminders_file = get_reminders_file()
+    if reminders_file.exists():
+        return json.loads(reminders_file.read_text())
     return []
 
 
 def save_reminders(reminders: list):
     """Save reminders to file."""
-    REMINDERS_FILE.write_text(json.dumps(reminders, indent=2, default=str))
+    reminders_file = get_reminders_file()
+    reminders_file.parent.mkdir(parents=True, exist_ok=True)
+    reminders_file.write_text(json.dumps(reminders, indent=2, default=str))
 
 
 def tmux_session_exists(name: str) -> bool:
@@ -127,7 +179,8 @@ TASK: """
         working_dir = str(SKILL_DIR.parent.parent)  # Project root
 
     # Output file for this agent
-    output_file = OUTPUTS_DIR / f"{name}.log"
+    outputs_dir = get_outputs_dir()
+    output_file = outputs_dir / f"{name}.log"
 
     # Initialize the output file with metadata
     output_file.write_text(f"""=== Research Manager Agent Log ===
@@ -144,7 +197,9 @@ Session: {session_name}
     # Build the command based on agent type
     # Use 'script' command to provide a PTY for CLIs that need it
     # Set CLAUDE_CODE_TASK_LIST_ID so all agents share the same task list
-    env_prefix = f'export CLAUDE_CODE_TASK_LIST_ID="{CLAUDE_TASK_LIST_ID}" && '
+    task_list_id = get_task_list_id()
+    lab_id = get_current_lab_id()
+    env_prefix = f'export CLAUDE_CODE_TASK_LIST_ID="{task_list_id}" && export CLAUDE_CODE_LAB_ID="{lab_id}" && '
 
     def ansi_c_quote(text: str) -> str:
         escaped = (
@@ -169,6 +224,10 @@ Session: {session_name}
         lab_cmd = Path.home() / "bin" / "lab-manager"
         if lab_cmd.exists():
             return str(lab_cmd)
+        # Check ~/bin/claude wrapper
+        bin_claude = Path.home() / "bin" / "claude"
+        if bin_claude.exists():
+            return str(bin_claude)
         # Last resort: plain claude (expects env vars to point to Ollama)
         return "claude"
 
@@ -179,6 +238,10 @@ Session: {session_name}
             resolved = Path(env_path).expanduser()
             if resolved.exists():
                 return str(resolved)
+        # Check ~/bin/codex first
+        bin_codex = Path.home() / "bin" / "codex"
+        if bin_codex.exists():
+            return str(bin_codex)
         found = shutil.which("codex")
         if found:
             return found
@@ -190,22 +253,18 @@ Session: {session_name}
         return None
 
     if agent_type == "codex":
-        # OpenAI Codex CLI needs a PTY - use script command
-        prompt_arg = ansi_c_quote(task)
-        # script -q runs quietly, -a appends to file
-        # Add timeout config (30 min = 1800000ms) and use mini model for cost efficiency
-        codex_flags = '-c model=codex-mini-latest -c timeout=1800000'
-        codex_cmd = resolve_codex_command()
-        if not codex_cmd:
-            raise ValueError("codex CLI not found (check PATH or NVM install)")
-        cmd = f'{codex_cmd} {codex_flags} {prompt_arg}'
-        agent_cmd = build_script_command(cmd, output_file)
+        # Use spawn script to avoid quoting issues with multi-line prompts
+        task_file = outputs_dir / f"{name}.task"
+        task_file.write_text(task)
+        spawn_script = SKILL_DIR / "spawn-codex-agent.sh"
+        agent_cmd = f'bash "{spawn_script}" "{task_file}" "{output_file}"'
     elif agent_type in {"ollama", "opus"}:
         # Local Claude Code via Ollama (no Anthropic key). "opus" kept as alias for backward compatibility.
-        prompt_arg = ansi_c_quote(task)
-        ollama_cmd = resolve_ollama_command(working_dir)
-        cmd = f'{ollama_cmd} {prompt_arg}'
-        agent_cmd = build_script_command(cmd, output_file)
+        # Use simplified spawn script to avoid quoting issues
+        task_file = outputs_dir / f"{name}.task"
+        task_file.write_text(task)
+        spawn_script = SKILL_DIR / "spawn-ollama-agent.sh"
+        agent_cmd = f'bash "{spawn_script}" "{task_file}" "{output_file}"'
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")
 
@@ -221,13 +280,14 @@ Session: {session_name}
     ], check=True)
 
     # For local Claude Code agents, send /rename after CLI starts
-    if agent_type in {"ollama", "opus"} and auto_rename:
-        # Give the CLI time to start
-        time.sleep(2)
-        rename_cmd = f"/rename RM:{name}"
-        subprocess.run([
-            "tmux", "send-keys", "-t", session_name, rename_cmd, "Enter"
-        ], check=False)  # Don't fail if this doesn't work
+    # DISABLED: This causes syntax errors when script command exits before CLI starts
+    # if agent_type in {"ollama", "opus"} and auto_rename:
+    #     # Give the CLI time to start
+    #     time.sleep(2)
+    #     rename_cmd = f"/rename RM:{name}"
+    #     subprocess.run([
+    #         "tmux", "send-keys", "-t", session_name, rename_cmd, "Enter"
+    #     ], check=False)  # Don't fail if this doesn't work
 
     # Record agent info
     agent_info = {
@@ -712,9 +772,9 @@ def fetch_url(url: str, raw: bool = False):
 # RTX 4090 Remote Training Management
 # =============================================================================
 
-RTX_4090_HOST = "doc@100.83.78.111"
-RTX_4090_PROJECT = "~/dev/voice-clone-pipeline"
-RTX_4090_CONDA = "voice"
+RTX_4090_HOST = f"{os.environ.get('REMOTE_GPU_USER', 'doc')}@{os.environ.get('REMOTE_GPU_HOST', '')}"
+RTX_4090_PROJECT = os.environ.get("REMOTE_GPU_PROJECT", "~/dev/voice-clone-pipeline")
+RTX_4090_CONDA = os.environ.get("REMOTE_GPU_CONDA", "voice")
 
 
 def rtx_run(command: str, background: bool = False) -> str:
@@ -739,8 +799,12 @@ def rtx_status():
     print("=" * 60)
 
     # Check if reachable
+    gpu_host = os.environ.get("REMOTE_GPU_HOST", "")
+    if not gpu_host:
+        print("Status: NOT CONFIGURED (set REMOTE_GPU_HOST env var)")
+        return
     ping = subprocess.run(
-        ["ping", "-c", "1", "-t", "5", "100.83.78.111"],
+        ["ping", "-c", "1", "-t", "5", gpu_host],
         capture_output=True
     )
     if ping.returncode != 0:
@@ -1632,6 +1696,322 @@ def update_landing_results(eval_dir: str = None, version: str = None, descriptio
     return summary
 
 
+# =============================================================================
+# Research Lead & Proposal System
+# =============================================================================
+
+RESEARCH_LEAD_PROMPT = """You are the Research Lead for the AI Research Lab. Your job is to synthesize research findings into a clear proposal for user approval.
+
+## Your Task
+Review the completed research tasks for Story {story_id} and create a PROPOSAL document.
+
+## Completed Research Tasks
+{research_tasks}
+
+## Research Artifacts
+Check these output files for detailed findings:
+{artifact_files}
+
+## Instructions
+1. Read each research artifact carefully
+2. Synthesize the findings into a coherent proposal
+3. Write the proposal to: docs/{story_dir}/PROPOSAL.md
+
+## Proposal Structure (REQUIRED)
+Use this exact structure:
+
+```markdown
+# Research Proposal: {story_title}
+
+**Story ID:** {story_id}
+**Generated:** [current date]
+**Status:** Pending Review
+
+---
+
+## Executive Summary
+[2-3 paragraphs: What was researched, key findings, recommended path forward]
+
+---
+
+## Research Findings
+[For each task: summary, key findings, relevant sources]
+
+---
+
+## Recommended Approach
+
+### Primary Recommendation
+[What technology/technique to use and why]
+
+### Implementation Roadmap
+[Table: Phase | Description | Dependencies | Complexity]
+
+### Success Criteria
+[Checkboxes with measurable outcomes]
+
+---
+
+## Alternatives Considered
+[For each alternative: pros, cons, why not chosen]
+
+---
+
+## Open Questions
+[Questions needing user input before proceeding]
+
+---
+
+## Risk Assessment
+[Table: Risk | Likelihood | Impact | Mitigation]
+
+---
+
+## Estimated Effort
+[T-shirt size and breakdown by component]
+
+---
+
+## Approval
+- [ ] **Approved** - Proceed with implementation
+- [ ] **Needs Revision** - Address feedback below
+- [ ] **Rejected** - Do not proceed
+```
+
+## After Writing the Proposal
+1. Call TaskCreate to create a "Review proposal for Story {story_id}" task
+2. The proposal will be reviewed by the user before implementation begins
+
+Be thorough but concise. Focus on actionable recommendations.
+"""
+
+
+def load_proposals() -> dict:
+    """Load proposals state from file."""
+    proposals_file = get_proposals_file()
+    if proposals_file.exists():
+        return json.loads(proposals_file.read_text())
+    return {"proposals": {}}
+
+
+def save_proposals(proposals: dict):
+    """Save proposals state to file."""
+    proposals_file = get_proposals_file()
+    proposals_file.parent.mkdir(parents=True, exist_ok=True)
+    proposals_file.write_text(json.dumps(proposals, indent=2, default=str))
+
+
+def get_story_from_task(task: dict) -> Optional[str]:
+    """Extract story ID from task subject (e.g., [S1] -> S1)."""
+    import re
+    subject = task.get("subject", "")
+    match = re.search(r'\[S(\d+)\]', subject)
+    if match:
+        return f"S{match.group(1)}"
+    return None
+
+
+def get_story_research_status(story_id: str) -> dict:
+    """
+    Check research status for a story.
+
+    Returns:
+        {
+            'story_id': str,
+            'total_tasks': int,
+            'completed_tasks': int,
+            'pending_tasks': int,
+            'in_progress_tasks': int,
+            'is_complete': bool,
+            'tasks': list of task summaries
+        }
+    """
+    # Get tasks from Claude Code task list
+    import os
+    task_list_id = get_task_list_id()
+    tasks_dir = Path.home() / ".claude" / "tasks" / task_list_id
+
+    if not tasks_dir.exists():
+        return {
+            'story_id': story_id,
+            'total_tasks': 0,
+            'completed_tasks': 0,
+            'pending_tasks': 0,
+            'in_progress_tasks': 0,
+            'is_complete': False,
+            'tasks': []
+        }
+
+    story_tasks = []
+    for task_file in tasks_dir.glob("*.json"):
+        try:
+            task = json.loads(task_file.read_text())
+            if get_story_from_task(task) == story_id:
+                # Check if it's a research task (not implementation)
+                subject_lower = task.get("subject", "").lower()
+                if any(kw in subject_lower for kw in ['research', 'explore', 'analyze', 'investigate', 'study', 'compare', 'evaluate']):
+                    story_tasks.append({
+                        'id': task.get('id'),
+                        'subject': task.get('subject'),
+                        'status': task.get('status'),
+                        'description': task.get('description', '')[:200]
+                    })
+        except:
+            continue
+
+    completed = sum(1 for t in story_tasks if t['status'] == 'completed')
+    pending = sum(1 for t in story_tasks if t['status'] == 'pending')
+    in_progress = sum(1 for t in story_tasks if t['status'] == 'in_progress')
+
+    return {
+        'story_id': story_id,
+        'total_tasks': len(story_tasks),
+        'completed_tasks': completed,
+        'pending_tasks': pending,
+        'in_progress_tasks': in_progress,
+        'is_complete': len(story_tasks) > 0 and completed == len(story_tasks),
+        'tasks': story_tasks
+    }
+
+
+def get_research_artifacts(story_id: str) -> list:
+    """Find research output files for a story."""
+    project_root = SKILL_DIR.parent.parent
+    artifacts = []
+
+    # Check docs directory
+    docs_dir = project_root / "docs"
+    story_dirs = [
+        docs_dir / story_id.lower(),
+        docs_dir / f"story_{story_id.lower()}",
+        docs_dir / "firefly",  # Current project uses this
+    ]
+
+    for story_dir in story_dirs:
+        if story_dir.exists():
+            for md_file in story_dir.glob("*.md"):
+                if md_file.name != "PROPOSAL.md":
+                    artifacts.append(str(md_file))
+
+    # Check agent output logs
+    outputs_dir = get_outputs_dir()
+    for log_file in outputs_dir.glob("*.log"):
+        content = log_file.read_text()
+        if story_id in content:
+            artifacts.append(str(log_file))
+
+    return artifacts
+
+
+def spawn_research_lead(story_id: str, story_title: str = None) -> dict:
+    """
+    Spawn a research lead agent to synthesize findings into a proposal.
+
+    Args:
+        story_id: The story ID (e.g., "S1")
+        story_title: Optional title for the story
+
+    Returns:
+        Agent info dict
+    """
+    status = get_story_research_status(story_id)
+
+    if not status['is_complete']:
+        raise ValueError(f"Story {story_id} research not complete. {status['pending_tasks']} pending, {status['in_progress_tasks']} in progress.")
+
+    artifacts = get_research_artifacts(story_id)
+
+    # Build the prompt
+    research_tasks_text = "\n".join([
+        f"- Task #{t['id']}: {t['subject']} (Status: {t['status']})"
+        for t in status['tasks']
+    ])
+
+    artifacts_text = "\n".join([f"- {a}" for a in artifacts]) if artifacts else "No artifact files found - check agent output logs"
+
+    # Determine story directory
+    story_dir = story_id.lower()
+    if story_id.startswith("S"):
+        # Use current project's naming convention
+        story_dir = "firefly"
+
+    prompt = RESEARCH_LEAD_PROMPT.format(
+        story_id=story_id,
+        story_title=story_title or f"Story {story_id}",
+        research_tasks=research_tasks_text,
+        artifact_files=artifacts_text,
+        story_dir=story_dir
+    )
+
+    agent_name = f"research-lead-{story_id.lower()}-{int(time.time())}"
+
+    # Spawn using Codex for quality synthesis
+    agent_info = spawn_agent("codex", agent_name, prompt)
+
+    # Record proposal status
+    proposals = load_proposals()
+    proposals["proposals"][story_id] = {
+        "status": "generating",
+        "agent": agent_name,
+        "started_at": datetime.now().isoformat(),
+        "story_title": story_title,
+        "research_tasks": [t['id'] for t in status['tasks']],
+    }
+    save_proposals(proposals)
+
+    return agent_info
+
+
+def update_proposal_status(story_id: str, status: str, notes: str = None):
+    """
+    Update proposal status.
+
+    Args:
+        story_id: Story ID
+        status: One of: generating, pending_review, approved, rejected, needs_revision
+        notes: Optional reviewer notes
+    """
+    proposals = load_proposals()
+
+    if story_id not in proposals["proposals"]:
+        proposals["proposals"][story_id] = {}
+
+    proposals["proposals"][story_id]["status"] = status
+    proposals["proposals"][story_id]["updated_at"] = datetime.now().isoformat()
+
+    if notes:
+        proposals["proposals"][story_id]["notes"] = notes
+
+    if status == "approved":
+        proposals["proposals"][story_id]["approved_at"] = datetime.now().isoformat()
+
+    save_proposals(proposals)
+    print(f"Proposal for {story_id}: {status}")
+
+
+def list_proposals() -> list:
+    """List all proposals and their status."""
+    proposals = load_proposals()
+    return [
+        {"story_id": k, **v}
+        for k, v in proposals.get("proposals", {}).items()
+    ]
+
+
+def check_proposal_exists(story_id: str) -> bool:
+    """Check if a proposal document exists for a story."""
+    project_root = SKILL_DIR.parent.parent
+
+    # Check common locations
+    proposal_paths = [
+        project_root / "docs" / story_id.lower() / "PROPOSAL.md",
+        project_root / "docs" / f"story_{story_id.lower()}" / "PROPOSAL.md",
+        project_root / "docs" / "firefly" / "PROPOSAL.md",
+    ]
+
+    return any(p.exists() for p in proposal_paths)
+
+
 def rtx_logs(lines: int = 50):
     """Get recent training logs from RTX 4090."""
     # Check for training output in common locations
@@ -1657,7 +2037,41 @@ def rtx_logs(lines: int = 50):
 
 def main():
     parser = argparse.ArgumentParser(description="Research Manager - Orchestrate AI agents")
+
+    # Global --lab flag to override active lab
+    parser.add_argument("--lab", "-L", dest="lab_override", help="Override active lab for this command")
+
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # Lab management commands
+    lab_parser = subparsers.add_parser("lab", help="Manage research labs")
+    lab_subparsers = lab_parser.add_subparsers(dest="lab_command")
+
+    lab_subparsers.add_parser("list", help="List all labs")
+
+    lab_create_parser = lab_subparsers.add_parser("create", help="Create a new lab")
+    lab_create_parser.add_argument("lab_id", help="Unique lab ID (lowercase, hyphens)")
+    lab_create_parser.add_argument("--name", "-n", required=True, help="Display name")
+    lab_create_parser.add_argument("--description", "-d", default="", help="Lab description")
+    lab_create_parser.add_argument("--task-list", "-t", help="Task list ID (defaults to lab_id)")
+    lab_create_parser.add_argument("--domain", help="Link to .domains/ config")
+
+    lab_switch_parser = lab_subparsers.add_parser("switch", help="Switch active lab")
+    lab_switch_parser.add_argument("lab_id", help="Lab ID to switch to")
+
+    lab_status_parser = lab_subparsers.add_parser("status", help="Show lab status")
+    lab_status_parser.add_argument("lab_id", nargs="?", help="Lab ID (current if omitted)")
+
+    lab_info_parser = lab_subparsers.add_parser("info", help="Show detailed lab info")
+    lab_info_parser.add_argument("lab_id", help="Lab ID")
+
+    lab_delete_parser = lab_subparsers.add_parser("delete", help="Delete a lab")
+    lab_delete_parser.add_argument("lab_id", help="Lab ID to delete")
+    lab_delete_parser.add_argument("--force", "-f", action="store_true", help="Force delete even if running agents")
+
+    lab_migrate_parser = lab_subparsers.add_parser("migrate", help="Migrate global state to a lab")
+    lab_migrate_parser.add_argument("lab_id", help="Target lab ID")
+    lab_migrate_parser.add_argument("--overwrite", action="store_true", help="Overwrite existing files")
 
     # Spawn command
     spawn_parser = subparsers.add_parser("spawn", help="Spawn a new agent")
@@ -1834,10 +2248,155 @@ def main():
     halt_parser.add_argument("description", help="What needs to be done")
     halt_parser.add_argument("--task-id", "-t", type=int, help="Task ID to track")
 
+    # Proposal management commands
+    proposal_parser = subparsers.add_parser("proposal", help="Manage research proposals")
+    proposal_subparsers = proposal_parser.add_subparsers(dest="proposal_command")
+
+    proposal_subparsers.add_parser("list", help="List all proposals")
+
+    proposal_status_parser = proposal_subparsers.add_parser("status", help="Check story research status")
+    proposal_status_parser.add_argument("story_id", help="Story ID (e.g., S1)")
+
+    proposal_generate_parser = proposal_subparsers.add_parser("generate", help="Generate proposal for a story")
+    proposal_generate_parser.add_argument("story_id", help="Story ID (e.g., S1)")
+    proposal_generate_parser.add_argument("--title", "-t", help="Story title")
+
+    proposal_approve_parser = proposal_subparsers.add_parser("approve", help="Approve a proposal")
+    proposal_approve_parser.add_argument("story_id", help="Story ID (e.g., S1)")
+    proposal_approve_parser.add_argument("--notes", "-n", help="Approval notes")
+
+    proposal_reject_parser = proposal_subparsers.add_parser("reject", help="Reject a proposal")
+    proposal_reject_parser.add_argument("story_id", help="Story ID (e.g., S1)")
+    proposal_reject_parser.add_argument("--notes", "-n", help="Rejection reason")
+
+    proposal_revise_parser = proposal_subparsers.add_parser("revise", help="Request revision for a proposal")
+    proposal_revise_parser.add_argument("story_id", help="Story ID (e.g., S1)")
+    proposal_revise_parser.add_argument("--notes", "-n", required=True, help="What needs to change")
+
     args = parser.parse_args()
 
+    # Handle global --lab override
+    global _current_lab_id
+    if hasattr(args, 'lab_override') and args.lab_override:
+        _current_lab_id = args.lab_override
+
     try:
-        if args.command == "spawn":
+        if args.command == "lab":
+            active_lab_id = labs_module.get_active_lab_id()
+
+            if args.lab_command == "list":
+                labs = labs_module.list_labs()
+                if not labs:
+                    print("No labs configured")
+                    print("\nCreate one with: ./rm lab create <id> --name 'Lab Name'")
+                else:
+                    print("\nResearch Labs")
+                    print("=" * 60)
+                    for lab in labs:
+                        is_active = lab.get('id') == active_lab_id
+                        marker = "*" if is_active else " "
+                        status = "active" if lab.get('active', True) else "paused"
+                        print(f"  {marker} {lab['id']}: {lab.get('name', 'Unnamed')}")
+                        print(f"      Status: {status} | Tasks: {lab.get('taskListId', lab['id'])}")
+                        if lab.get('description'):
+                            print(f"      {lab['description'][:60]}")
+                    print()
+                    if active_lab_id:
+                        print(f"  * = active lab ({active_lab_id})")
+
+            elif args.lab_command == "create":
+                try:
+                    lab = labs_module.create_lab(
+                        args.lab_id,
+                        args.name,
+                        args.description,
+                        args.task_list,
+                        args.domain
+                    )
+                    print(f"\nCreated lab: {lab['id']}")
+                    print(f"  Name: {lab['name']}")
+                    print(f"  Task List: {lab['taskListId']}")
+                    print(f"\nSwitch to it with: ./rm lab switch {lab['id']}")
+                except ValueError as e:
+                    print(f"Error: {e}")
+                    sys.exit(1)
+
+            elif args.lab_command == "switch":
+                try:
+                    lab = labs_module.set_active_lab(args.lab_id)
+                    print(f"\nSwitched to lab: {lab['id']}")
+                    print(f"  Name: {lab['name']}")
+                    print(f"  Task List: {lab['taskListId']}")
+                except ValueError as e:
+                    print(f"Error: {e}")
+                    sys.exit(1)
+
+            elif args.lab_command == "status":
+                lab_id = args.lab_id or active_lab_id
+                if not lab_id:
+                    print("No active lab. Specify a lab ID or run: ./rm lab switch <id>")
+                    sys.exit(1)
+                try:
+                    status = labs_module.get_lab_status(lab_id)
+                    lab = status['lab']
+                    is_active = status['isActive']
+
+                    print(f"\nLab Status: {lab['id']}")
+                    print("=" * 50)
+                    print(f"  Name: {lab['name']}")
+                    print(f"  Active: {'Yes *' if is_active else 'No'}")
+                    print(f"  Task List: {lab.get('taskListId', lab['id'])}")
+                    if lab.get('domain'):
+                        print(f"  Domain: {lab['domain']}")
+                    print()
+                    print(f"  Agents: {status['agents']['running']} running / {status['agents']['total']} total")
+                    print(f"  Proposals: {status['proposals']['pendingReview']} pending review / {status['proposals']['total']} total")
+                    print()
+                    print(f"  Tasks:")
+                    print(f"    Pending:     {status['tasks']['pending']}")
+                    print(f"    In Progress: {status['tasks']['in_progress']}")
+                    print(f"    Completed:   {status['tasks']['completed']}")
+                    print(f"    Total:       {status['tasks']['total']}")
+                except ValueError as e:
+                    print(f"Error: {e}")
+                    sys.exit(1)
+
+            elif args.lab_command == "info":
+                lab = labs_module.get_lab(args.lab_id)
+                if not lab:
+                    print(f"Lab '{args.lab_id}' not found")
+                    sys.exit(1)
+                print(json.dumps(lab, indent=2))
+
+            elif args.lab_command == "delete":
+                try:
+                    labs_module.delete_lab(args.lab_id, force=args.force)
+                    print(f"Deleted lab: {args.lab_id}")
+                except ValueError as e:
+                    print(f"Error: {e}")
+                    sys.exit(1)
+
+            elif args.lab_command == "migrate":
+                try:
+                    result = labs_module.migrate_global_state_to_lab(args.lab_id, overwrite=args.overwrite)
+                    print(f"Migrated state to lab '{args.lab_id}':")
+                    print(f"  Files migrated: {result['migrated']}")
+                    print(f"  Files skipped: {result['skipped']}")
+                except ValueError as e:
+                    print(f"Error: {e}")
+                    sys.exit(1)
+
+            else:
+                print("Lab Commands:")
+                print("  lab list                    - List all labs")
+                print("  lab create <id> --name 'X'  - Create a new lab")
+                print("  lab switch <id>             - Switch active lab")
+                print("  lab status [id]             - Show lab status")
+                print("  lab info <id>               - Show lab config (JSON)")
+                print("  lab delete <id>             - Delete a lab")
+                print("  lab migrate <id>            - Migrate global state to lab")
+
+        elif args.command == "spawn":
             spawn_agent(args.type, args.name, args.task, args.dir)
 
         elif args.command == "status":
@@ -1923,20 +2482,39 @@ def main():
             print("Research Manager Info")
             print("=" * 40)
             print(f"Skill Directory: {SKILL_DIR}")
-            print(f"State Directory: {STATE_DIR}")
-            print(f"Agents File: {AGENTS_FILE}")
-            print(f"Reminders File: {REMINDERS_FILE}")
-            print(f"Outputs Directory: {OUTPUTS_DIR}")
+
+            # Show lab info
+            current_lab_id = get_current_lab_id()
+            lab = labs_module.get_lab(current_lab_id)
+            print()
+            print("Current Lab:")
+            print(f"  ID: {current_lab_id}")
+            if lab:
+                print(f"  Name: {lab.get('name', 'Unknown')}")
+                print(f"  Task List: {lab.get('taskListId', current_lab_id)}")
+                print(f"  State Dir: {get_state_dir()}")
+            else:
+                print(f"  (Using default/global state)")
+                print(f"  State Dir: {STATE_DIR}")
+
+            print()
+            print("Current State Files:")
+            print(f"  Agents: {get_agents_file()}")
+            print(f"  Reminders: {get_reminders_file()}")
+            print(f"  Outputs: {get_outputs_dir()}")
             print()
             print("Agent Types:")
             print("  codex  -> OpenAI Codex CLI")
             print("  ollama -> Local Claude Code via Ollama (scripts/claude-free)")
             print("  opus   -> Alias for ollama (kept for backward compatibility)")
+            print()
+            print("Lab Commands: ./rm lab --help")
 
         elif args.command == "limits":
-            # Read cost and progress data
-            cost_file = STATE_DIR / "cost-tracking.json"
-            progress_file = STATE_DIR / "progress.json"
+            # Read cost and progress data (from current lab)
+            state_dir = get_state_dir()
+            cost_file = state_dir / "cost-tracking.json"
+            progress_file = state_dir / "progress.json"
 
             cost_data = {"sessions": [], "totals": {}}
             progress_data = {"tasks": {}}
@@ -2063,8 +2641,16 @@ def main():
             print("         RESEARCH MANAGER DASHBOARD")
             print("=" * 60)
 
+            # Lab info section
+            current_lab_id = get_current_lab_id()
+            lab = labs_module.get_lab(current_lab_id)
+            print(f"\nLab: {current_lab_id}")
+            if lab:
+                print(f"     Name: {lab.get('name', 'Unknown')}")
+                print(f"     Tasks: {lab.get('taskListId', current_lab_id)}")
+
             # Agents section
-            print("\n📦 AGENTS")
+            print("\nAGENTS")
             print("-" * 40)
             agents = get_agent_status()
             if not agents:
@@ -2159,6 +2745,99 @@ def main():
             if args.task_id:
                 cmd.extend(["--task-id", str(args.task_id)])
             subprocess.run(cmd)
+
+        elif args.command == "proposal":
+            if args.proposal_command == "list":
+                proposals = list_proposals()
+                if not proposals:
+                    print("No proposals found")
+                else:
+                    print("\nResearch Proposals")
+                    print("=" * 60)
+                    for p in proposals:
+                        status_icon = {
+                            "generating": "🔄",
+                            "pending_review": "📋",
+                            "approved": "✅",
+                            "rejected": "❌",
+                            "needs_revision": "📝",
+                        }.get(p.get("status", "unknown"), "❓")
+                        print(f"\n{status_icon} {p['story_id']}: {p.get('story_title', 'Untitled')}")
+                        print(f"   Status: {p.get('status', 'unknown')}")
+                        if p.get('updated_at'):
+                            print(f"   Updated: {p['updated_at']}")
+                        if p.get('notes'):
+                            print(f"   Notes: {p['notes']}")
+
+            elif args.proposal_command == "status":
+                story_id = args.story_id.upper()
+                if not story_id.startswith("S"):
+                    story_id = f"S{story_id}"
+                status = get_story_research_status(story_id)
+                print(f"\nResearch Status for {story_id}")
+                print("=" * 50)
+                print(f"Total research tasks: {status['total_tasks']}")
+                print(f"Completed: {status['completed_tasks']}")
+                print(f"In Progress: {status['in_progress_tasks']}")
+                print(f"Pending: {status['pending_tasks']}")
+                print(f"\nResearch Complete: {'✅ Yes' if status['is_complete'] else '❌ No'}")
+
+                if status['tasks']:
+                    print("\nTasks:")
+                    for t in status['tasks']:
+                        icon = {"completed": "✅", "in_progress": "🔄", "pending": "○"}.get(t['status'], "?")
+                        print(f"  {icon} #{t['id']}: {t['subject'][:50]}")
+
+                # Check if proposal exists
+                if check_proposal_exists(story_id):
+                    print(f"\n📄 Proposal document exists")
+                elif status['is_complete']:
+                    print(f"\n💡 Ready to generate proposal: .skills/research-manager/rm proposal generate {story_id}")
+
+            elif args.proposal_command == "generate":
+                story_id = args.story_id.upper()
+                if not story_id.startswith("S"):
+                    story_id = f"S{story_id}"
+                try:
+                    agent_info = spawn_research_lead(story_id, args.title)
+                    print(f"\n✅ Research Lead agent spawned: {agent_info['name']}")
+                    print(f"   Monitor: .skills/research-manager/rm read --name {agent_info['name']}")
+                    print(f"   Session: tmux attach -t {agent_info['session']}")
+                except ValueError as e:
+                    print(f"\n❌ Cannot generate proposal: {e}")
+                    sys.exit(1)
+
+            elif args.proposal_command == "approve":
+                story_id = args.story_id.upper()
+                if not story_id.startswith("S"):
+                    story_id = f"S{story_id}"
+                update_proposal_status(story_id, "approved", args.notes)
+                print(f"\n✅ Proposal for {story_id} APPROVED")
+                print("   Implementation tasks can now be spawned.")
+
+            elif args.proposal_command == "reject":
+                story_id = args.story_id.upper()
+                if not story_id.startswith("S"):
+                    story_id = f"S{story_id}"
+                update_proposal_status(story_id, "rejected", args.notes)
+                print(f"\n❌ Proposal for {story_id} REJECTED")
+
+            elif args.proposal_command == "revise":
+                story_id = args.story_id.upper()
+                if not story_id.startswith("S"):
+                    story_id = f"S{story_id}"
+                update_proposal_status(story_id, "needs_revision", args.notes)
+                print(f"\n📝 Proposal for {story_id} needs revision")
+                print(f"   Feedback: {args.notes}")
+
+            else:
+                print("Proposal Commands:")
+                print("  proposal list              - List all proposals")
+                print("  proposal status <story_id> - Check research status for story")
+                print("  proposal generate <story_id> - Generate proposal from research")
+                print("  proposal approve <story_id>  - Approve proposal")
+                print("  proposal reject <story_id>   - Reject proposal")
+                print("  proposal revise <story_id>   - Request revision")
 
         else:
             parser.print_help()

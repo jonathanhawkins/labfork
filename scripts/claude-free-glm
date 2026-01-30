@@ -1,0 +1,12 @@
+#!/bin/bash
+# Force use GLM-4.7-Flash (if it's better)
+
+export ANTHROPIC_BASE_URL="http://localhost:11434"
+export ANTHROPIC_AUTH_TOKEN="ollama"
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+
+echo "⚡ Starting Claude Code with GLM-4.7-Flash (forced)"
+echo "💰 Cost: $0"
+echo ""
+
+claude --model glm-4.7-flash "$@"

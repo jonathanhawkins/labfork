@@ -1,0 +1,59 @@
+# Segment-Aware Conditioning Configuration
+# Training-free intra-utterance emotion control based on arXiv:2601.03170
+
+# Segment settings
+max_segments: 10                    # Maximum number of emotion segments per utterance
+min_segment_length_sec: 0.3         # Minimum segment length in seconds
+
+# Emotion settings
+num_emotions: 8
+emotion_labels:
+  - neutral
+  - happy
+  - sad
+  - angry
+  - surprised
+  - fearful
+  - calm
+  - disgusted
+emotion_dim: 256                    # Emotion embedding dimension
+
+# Attention masking
+mask_softness: 0.1                  # Soft mask transition (0 = hard, 1 = very soft)
+causal_lookahead: 0                 # Future tokens visible (0 = strict causal)
+use_monotonic_filter: true          # Enable monotonic stream alignment
+
+# Transition scheduling
+transition_type: "sigmoid"          # "sigmoid", "linear", "cosine", "step"
+transition_duration_frames: 10      # Frames for emotion transition
+min_transition_overlap: 0.05        # Minimum overlap ratio between segments
+max_transition_overlap: 0.2         # Maximum overlap ratio
+
+# Monotonic alignment
+monotonic_temperature: 0.1          # Temperature for monotonic attention
+alignment_chunk_size: 50            # Chunk size for streaming alignment
+enforce_monotonicity: true          # Strictly enforce monotonic progression
+
+# Duration control
+enable_duration_control: true
+min_duration_scale: 0.5             # Minimum duration scaling
+max_duration_scale: 2.0             # Maximum duration scaling
+
+# Model integration
+hidden_dim: 2048                    # Match TTS hidden dimension
+num_attention_heads: 16
+output_dim: 2048                    # CSM prosody hidden dimension
+num_prosody_tokens: 4
+
+# Inference settings
+streaming_mode: true                # Enable streaming generation
+chunk_overlap_ratio: 0.1            # Overlap between streaming chunks
+
+# Optional fine-tuning settings (training-free by default)
+# Set learning_rate > 0 to enable fine-tuning
+learning_rate: 0.0                  # 0 = inference only (training-free)
+dropout: 0.1                        # Only used if fine-tuning
+
+# Loss weights (for optional fine-tuning)
+emotion_consistency_weight: 1.0
+transition_smoothness_weight: 0.1

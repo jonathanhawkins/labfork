@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""
+execute-plan: Execute a Codex-generated JSON plan step by step.
+
+Usage:
+    execute-plan plan.json          # Execute all steps
+    execute-plan plan.json --step 2 # Execute only step 2
+    execute-plan plan.json --dry-run # Show what would be done
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def read_plan(plan_file: str) -> dict:
+    """Read and parse the JSON plan."""
+    with open(plan_file, 'r') as f:
+        content = f.read()
+        # Handle potential markdown code blocks
+        if content.startswith('```'):
+            lines = content.split('\n')
+            content = '\n'.join(lines[1:-1])
+        return json.loads(content)
+
+
+def execute_write_file(step: dict, project_dir: str, dry_run: bool) -> bool:
+    """Execute a write_file step."""
+    path = os.path.join(project_dir, step['path'])
+    content = step.get('content', '')
+
+    print(f"  Writing: {step['path']}")
+    if dry_run:
+        print(f"  [DRY RUN] Would write {len(content)} chars to {path}")
+        return True
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, 'w') as f:
+        f.write(content)
+
+    print(f"  [OK] Wrote {len(content)} chars")
+    return True
+
+
+def execute_edit_file(step: dict, project_dir: str, dry_run: bool) -> bool:
+    """Execute an edit_file step."""
+    path = os.path.join(project_dir, step['path'])
+    find_text = step.get('find', '')
+    replace_text = step.get('replace', '')
+
+    print(f"  Editing: {step['path']}")
+
+    if not os.path.exists(path):
+        print(f"  [ERROR] File not found: {path}")
+        return False
+
+    with open(path, 'r') as f:
+        content = f.read()
+
+    if find_text not in content:
+        print(f"  [ERROR] Text not found in file")
+        print(f"  Looking for: {find_text[:50]}...")
+        return False
+
+    if dry_run:
+        print(f"  [DRY RUN] Would replace text in {path}")
+        return True
+
+    new_content = content.replace(find_text, replace_text, 1)
+
+    with open(path, 'w') as f:
+        f.write(new_content)
+
+    print(f"  [OK] Replaced text")
+    return True
+
+
+def execute_bash(step: dict, project_dir: str, dry_run: bool) -> bool:
+    """Execute a bash command step."""
+    command = step.get('command', '')
+
+    print(f"  Running: {command[:80]}...")
+
+    if dry_run:
+        print(f"  [DRY RUN] Would run: {command}")
+        return True
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minute timeout
+        )
+
+        if result.returncode == 0:
+            print(f"  [OK] Command succeeded")
+            if result.stdout:
+                print(f"  Output: {result.stdout[:200]}...")
+            return True
+        else:
+            print(f"  [ERROR] Command failed (exit {result.returncode})")
+            if result.stderr:
+                print(f"  Error: {result.stderr[:200]}...")
+            return False
+
+    except subprocess.TimeoutExpired:
+        print(f"  [ERROR] Command timed out after 5 minutes")
+        return False
+
+
+def execute_read_file(step: dict, project_dir: str, dry_run: bool) -> bool:
+    """Execute a read_file step (informational only)."""
+    path = os.path.join(project_dir, step['path'])
+
+    print(f"  Reading: {step['path']}")
+
+    if not os.path.exists(path):
+        print(f"  [ERROR] File not found: {path}")
+        return False
+
+    if dry_run:
+        print(f"  [DRY RUN] Would read {path}")
+        return True
+
+    with open(path, 'r') as f:
+        content = f.read()
+
+    print(f"  [OK] Read {len(content)} chars")
+    # Print first 500 chars
+    if len(content) > 500:
+        print(f"  Preview: {content[:500]}...")
+    else:
+        print(f"  Content: {content}")
+    return True
+
+
+def execute_step(step: dict, project_dir: str, dry_run: bool) -> bool:
+    """Execute a single step based on its type."""
+    step_type = step.get('type', '')
+    description = step.get('description', 'No description')
+
+    print(f"\n[Step {step.get('id', '?')}] {description}")
+
+    handlers = {
+        'write_file': execute_write_file,
+        'edit_file': execute_edit_file,
+        'bash': execute_bash,
+        'read_file': execute_read_file,
+    }
+
+    handler = handlers.get(step_type)
+    if not handler:
+        print(f"  [ERROR] Unknown step type: {step_type}")
+        return False
+
+    return handler(step, project_dir, dry_run)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Execute a Codex-generated plan')
+    parser.add_argument('plan_file', help='Path to the JSON plan file')
+    parser.add_argument('--step', type=int, help='Execute only this step number')
+    parser.add_argument('--dry-run', action='store_true', help='Show what would be done')
+    parser.add_argument('--project-dir', default=os.path.expanduser('~/dev/voice-clone-pipeline'),
+                        help='Project directory')
+
+    args = parser.parse_args()
+
+    # Read the plan
+    try:
+        plan = read_plan(args.plan_file)
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON: {e}")
+        sys.exit(1)
+    except FileNotFoundError:
+        print(f"Plan file not found: {args.plan_file}")
+        sys.exit(1)
+
+    # Print plan summary
+    print("=" * 60)
+    print(f"TASK: {plan.get('task', 'Unknown')}")
+    print("=" * 60)
+    print(f"\nAnalysis: {plan.get('analysis', 'No analysis')}")
+    print(f"\nSteps: {len(plan.get('steps', []))}")
+    if args.dry_run:
+        print("\n[DRY RUN MODE - No changes will be made]")
+
+    # Execute steps
+    steps = plan.get('steps', [])
+    successful = 0
+    failed = 0
+
+    for step in steps:
+        step_id = step.get('id', 0)
+
+        # Skip if we're only running a specific step
+        if args.step is not None and step_id != args.step:
+            continue
+
+        success = execute_step(step, args.project_dir, args.dry_run)
+        if success:
+            successful += 1
+        else:
+            failed += 1
+            # Ask whether to continue on failure
+            if not args.dry_run:
+                response = input("\nStep failed. Continue? [y/N] ")
+                if response.lower() != 'y':
+                    break
+
+    # Print summary
+    print("\n" + "=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
+    print(f"Successful: {successful}")
+    print(f"Failed: {failed}")
+    print(f"\nVerification: {plan.get('verification', 'No verification specified')}")
+
+    if failed > 0:
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

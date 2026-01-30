@@ -1,0 +1,164 @@
+# Climate Modeling Research Lab
+# Research AI for weather forecasting, climate prediction, and environmental modeling
+
+name: "Climate Modeling Lab"
+slug: "climate-modeling"
+description: "Research AI for weather forecasting, climate prediction, and Earth system modeling"
+longDescription: |
+  A research lab dedicated to applying machine learning to climate science. Focus areas include
+  weather forecasting, climate downscaling, extreme event prediction, ocean modeling, and
+  carbon cycle simulation. Build models that help understand and predict our changing climate.
+difficulty: advanced
+
+branding:
+  primaryColor: "#0ea5e9"    # Sky blue (atmosphere)
+  accentColor: "#22c55e"     # Green (earth/vegetation)
+  backgroundStyle: "sky"     # Earth-like sky
+  backgroundColor: "#f0f9ff"
+
+scene:
+  props:
+    - id: earth-globe
+      type: custom
+      customPath: "props/EarthGlobe3D"
+      position: [0, 2, -4]
+      scale: 2.5
+      accentColor: 0x0ea5e9
+
+    - id: weather-display
+      type: chart-wall
+      position: [-5, 1.5, -3]
+      scale: 1.5
+      accentColor: 0x22c55e
+
+    - id: ocean-monitor
+      type: waveform
+      position: [5, 1, -3]
+      scale: 1.5
+      accentColor: 0x0ea5e9
+
+    - id: climate-supercomputer
+      type: supercomputer
+      position: [-5, 0, 5]
+      scale: 1.5
+      accentColor: 0x3b82f6
+
+    - id: data-server
+      type: server
+      position: [5, 0, 5]
+      scale: 1.3
+      accentColor: 0x8b5cf6
+
+  decorations:
+    plants: true
+    floatingCubes: false
+    particles: true
+
+  lighting:
+    ambientIntensity: 0.7
+    mainLightIntensity: 0.9
+    mainLightColor: "#fffef0"
+
+  fog:
+    enabled: true
+    near: 15
+    far: 40
+
+research:
+  arxivCategories:
+    - physics.ao-ph    # Atmospheric and Oceanic Physics
+    - cs.LG            # Machine Learning
+    - stat.ML          # Statistics ML
+    - physics.geo-ph   # Geophysics
+    - cs.CV            # Computer Vision (satellite imagery)
+
+  keywords:
+    - weather forecasting machine learning
+    - climate prediction neural network
+    - earth system modeling AI
+    - extreme weather prediction
+    - climate downscaling deep learning
+    - ocean modeling machine learning
+    - transformer weather forecasting
+    - satellite imagery climate
+    - carbon cycle prediction
+    - graph neural network weather
+
+  additionalSources:
+    - semantic-scholar
+    - github
+    - papers-with-code
+
+  maxPapersPerSession: 6
+
+evaluation:
+  primaryMetric: rmse
+  baselineComparison: true
+  metrics:
+    - id: rmse
+      name: RMSE
+      description: Root Mean Square Error of predictions
+      range: [0, 50]
+      higherIsBetter: false
+      unit: "K or mm"
+
+    - id: correlation
+      name: Correlation
+      description: Pearson correlation with ground truth
+      range: [0, 1]
+      higherIsBetter: true
+
+    - id: bias
+      name: Bias
+      description: Systematic prediction error
+      range: [-10, 10]
+      higherIsBetter: false
+      unit: "K or mm"
+
+    - id: skill_score
+      name: Skill Score
+      description: Improvement over climatological baseline
+      range: [0, 1]
+      higherIsBetter: true
+
+    - id: extreme_detection
+      name: Extreme Event Detection
+      description: F1 score for detecting extreme events
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: forecast_lead_time
+      name: Forecast Lead Time
+      description: Days ahead with useful skill
+      range: [1, 30]
+      higherIsBetter: true
+      unit: "days"
+
+hardware:
+  gpuRequired: true
+  minGpuVram: 16
+  recommendedGpuVram: 48
+  minRam: 128
+  platforms:
+    - linux
+    - darwin
+
+prompts:
+  research: prompts/research.md
+  implementation: prompts/implementation.md
+  evaluation: prompts/evaluation.md
+  preamble: |
+    You are working on a Climate Modeling Research Lab focused on applying machine learning
+    to weather and climate prediction. Prioritize physical consistency, uncertainty quantification,
+    and actionable forecasts for society.
+
+tags:
+  - climate
+  - weather
+  - earth-science
+  - forecasting
+  - geospatial
+  - satellite-imagery
+
+version: "1.0"

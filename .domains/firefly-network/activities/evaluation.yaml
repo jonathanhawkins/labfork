@@ -1,0 +1,29 @@
+# Evaluation Activity for Firefly Network
+id: evaluation
+name: "Evaluation"
+description: "Testing prototypes, measuring performance, and validating designs"
+
+animation:
+  type: "scanning"
+  color: "#22c55e"
+  particleCount: 15
+
+agentBehavior:
+  movementPattern: "systematic"
+  speed: 0.4
+  pauseDuration: [3, 6]
+
+statusMessages:
+  - "Measuring solar efficiency..."
+  - "Testing mesh range..."
+  - "Validating battery cycles..."
+  - "Checking network latency..."
+  - "Running temperature tests..."
+  - "Measuring light output..."
+  - "Testing water resistance..."
+  - "Verifying power consumption..."
+
+workstationGlow:
+  color: "#22c55e"
+  intensity: 0.9
+  pulse: true

@@ -1,0 +1,92 @@
+{
+  "task-2-1769751300717": {
+    "name": "task-2-1769751300717",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"voice-clone-pipeline\"):\n\nTASK #2: Rebrand voice-clone-pipeline to labfork\n\nDescription: Rename all references from voice-clone-pipeline to labfork across package.json, README, config files, and code comments\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #2 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-2-1769751300717",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-2-1769751300717.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:35:00.822723",
+    "status": "running"
+  },
+  "task-2-1769751360741": {
+    "name": "task-2-1769751360741",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"voice-clone-pipeline\"):\n\nTASK #2: Rebrand voice-clone-pipeline to labfork\n\nDescription: Rename all references from voice-clone-pipeline to labfork across package.json, README, config files, and code comments\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #2 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-2-1769751360741",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-2-1769751360741.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:36:00.838530",
+    "status": "running"
+  },
+  "task-3-1769751419600": {
+    "name": "task-3-1769751419600",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"voice-clone-pipeline\"):\n\nTASK #3: Verify tests pass\n\nDescription: Run all existing tests to ensure nothing is broken before migration\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #3 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-3-1769751419600",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-3-1769751419600.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:36:59.700394",
+    "status": "running"
+  },
+  "task-3-1769751479623": {
+    "name": "task-3-1769751479623",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"voice-clone-pipeline\"):\n\nTASK #3: Verify tests pass\n\nDescription: Run all existing tests to ensure nothing is broken before migration\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #3 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-3-1769751479623",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-3-1769751479623.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:37:59.725467",
+    "status": "running"
+  },
+  "task-3-1769751539616": {
+    "name": "task-3-1769751539616",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"labfork\"):\n\nTASK #3: Verify tests pass\n\nDescription: Run all existing tests to ensure nothing is broken before migration\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #3 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-3-1769751539616",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-3-1769751539616.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:38:59.722448",
+    "status": "running"
+  },
+  "task-3-1769751599640": {
+    "name": "task-3-1769751599640",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"labfork\"):\n\nTASK #3: Verify tests pass\n\nDescription: Run all existing tests to ensure nothing is broken before migration\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #3 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-3-1769751599640",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-3-1769751599640.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:39:59.750058",
+    "status": "running"
+  },
+  "task-3-1769751659632": {
+    "name": "task-3-1769751659632",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"labfork\"):\n\nTASK #3: Verify tests pass\n\nDescription: Run all existing tests to ensure nothing is broken before migration\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #3 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-3-1769751659632",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-3-1769751659632.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:40:59.766369",
+    "status": "running"
+  },
+  "task-4-1769751719883": {
+    "name": "task-4-1769751719883",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"labfork\"):\n\nTASK #4: Set up CI/CD pipeline\n\nDescription: Create GitHub Actions workflow for linting, testing, and basic CI on PRs and pushes\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #4 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-4-1769751719883",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-4-1769751719883.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:42:00.045674",
+    "status": "running"
+  },
+  "task-5-1769751779629": {
+    "name": "task-5-1769751779629",
+    "type": "opus",
+    "task": "\u26a0\ufe0f CRITICAL RULES:\n1. NEVER modify CLAUDE.md - document in docstrings, TaskUpdate, or config comments\n2. STAY FOCUSED - complete the specific task, don't expand scope\n3. LIMIT WEB SEARCHES - max 5 searches per task, be specific\n4. TIME LIMIT - you have ~30 minutes, wrap up and report findings\n5. NO ENDLESS LOOPS - if stuck after 3 attempts, report blockers and stop\n\nTASK: Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID=\"labfork\"):\n\nTASK #5: Create public GitHub repo and push\n\nDescription: Create labfork repo on GitHub, update remote, push all branches\n\nCRITICAL PROJECT CONTEXT:\n- Current F0 correlation: 0.051 (target: > 0.3)\n- Current problem: Happy pitch < Sad pitch (INVERTED)\n- Goal: Fix prosody/emotion conditioning in TTS\n\nINSTRUCTIONS:\n1. Call TaskUpdate to mark task #5 as in_progress with your name as owner\n2. Implement the feature/fix described\n3. VERIFY IT WORKS:\n   - If the task has SUCCESS CRITERIA in description, check those\n   - Run any relevant tests or evaluation scripts\n   - Check that your changes don't break existing functionality\n4. ONLY mark completed if you have EVIDENCE it works:\n   - Show test output or evaluation metrics\n   - If you can't verify (e.g., needs GPU training), note this and mark completed with caveat\n5. If verification FAILS, do NOT mark complete - fix the issue or document what went wrong\n\nDO NOT just write code and mark complete. VERIFY your changes work.\n\nYou have access to all Claude Code tools. Be autonomous and thorough.",
+    "session": "rm-task-5-1769751779629",
+    "output_file": "/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/labs/voice-clone/state/outputs/task-5-1769751779629.log",
+    "working_dir": "/Users/light/dev/web-apps/voice-clone-pipeline",
+    "started_at": "2026-01-29T21:42:59.733781",
+    "status": "running"
+  }
+}

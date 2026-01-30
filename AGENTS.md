@@ -60,24 +60,24 @@ python generate.py --model ../models/checkpoints/voice_v1/best.pt --text "Hello"
 A Windows 10 machine with RTX 4090 (24GB VRAM) is available for training via Tailscale VPN.
 
 ### Connection Details
-- **Host**: `doc@100.83.78.111` (Tailscale IP)
-- **Project Path**: `~/dev/voice-clone-pipeline`
+- **Host**: `doc@$REMOTE_GPU_HOST` (Tailscale IP)
+- **Project Path**: `~/dev/labfork`
 - **Conda Environment**: `voice` (REQUIRED - always activate before running Python)
 - **GPU Command**: `/usr/lib/wsl/lib/nvidia-smi` (WSL2 path)
 
 ### SSH Access
 ```bash
 # Basic connection
-ssh doc@100.83.78.111
+ssh doc@$REMOTE_GPU_HOST
 
 # Run a command
-ssh doc@100.83.78.111 "source ~/miniconda3/bin/activate && conda activate voice && <command>"
+ssh doc@$REMOTE_GPU_HOST "source ~/miniconda3/bin/activate && conda activate voice && <command>"
 
 # Check GPU status
-ssh doc@100.83.78.111 "/usr/lib/wsl/lib/nvidia-smi"
+ssh doc@$REMOTE_GPU_HOST "/usr/lib/wsl/lib/nvidia-smi"
 
 # Attach to training tmux session
-ssh doc@100.83.78.111 -t "tmux attach -t training"
+ssh doc@$REMOTE_GPU_HOST -t "tmux attach -t training"
 ```
 
 ### File Syncing
@@ -85,8 +85,8 @@ ssh doc@100.83.78.111 -t "tmux attach -t training"
 # Sync from Mac to 4090 (run on Mac)
 rsync -avz --progress \
   --exclude 'node_modules' --exclude '.next' --exclude 'venv' \
-  /Users/light/dev/web-apps/voice-clone-pipeline/ \
-  doc@100.83.78.111:~/dev/voice-clone-pipeline/
+  /Users/light/dev/web-apps/labfork/ \
+  doc@$REMOTE_GPU_HOST:~/dev/labfork/
 ```
 
 ## Vercel Deployment (Public /watch Page)
@@ -169,8 +169,8 @@ TaskUpdate #36 status=completed
 codex -c model=codex-mini-latest "Analyze task X and produce a JSON plan"
 
 # 2. Execute the returned plan
-~/dev/voice-clone-pipeline/scripts/execute-plan \
-  ~/dev/voice-clone-pipeline/.codex-plans/plan_*.json
+~/dev/labfork/scripts/execute-plan \
+  ~/dev/labfork/.codex-plans/plan_*.json
 
 # 3. Mark task complete
 TaskUpdate #36 status=completed
@@ -220,13 +220,13 @@ Managers must review and record a decision before any technique is considered â€
 ### Active Sessions
 ```bash
 # Check what's running
-ssh doc@100.83.78.111 "tmux list-sessions"
+ssh doc@$REMOTE_GPU_HOST "tmux list-sessions"
 
 # Send commands to agents
-ssh doc@100.83.78.111 "tmux send-keys -t lab-manager 'TaskList' C-m"
+ssh doc@$REMOTE_GPU_HOST "tmux send-keys -t lab-manager 'TaskList' C-m"
 
 # View recent activity
-ssh doc@100.83.78.111 "tmux capture-pane -t lab-manager -p | tail -30"
+ssh doc@$REMOTE_GPU_HOST "tmux capture-pane -t lab-manager -p | tail -30"
 ```
 
 ## Automation & Safety Notes

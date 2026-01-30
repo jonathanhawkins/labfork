@@ -1,0 +1,25 @@
+# Idle Activity for Firefly Network
+id: idle
+name: "Idle"
+description: "Waiting for new tasks or conserving energy"
+
+animation:
+  type: "gentle-pulse"
+  color: "#1a1a2e"
+  particleCount: 5
+
+agentBehavior:
+  movementPattern: "rest"
+  speed: 0.1
+  pauseDuration: [10, 20]
+
+statusMessages:
+  - "Awaiting instructions..."
+  - "Monitoring network health..."
+  - "Conserving energy..."
+  - "Ready for next task..."
+
+workstationGlow:
+  color: "#FFB84D"
+  intensity: 0.3
+  pulse: true

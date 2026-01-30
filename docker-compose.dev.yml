@@ -1,0 +1,71 @@
+# AI Research Lab - Development Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Features: Hot reload, exposed ports, debug logging
+
+version: "3.8"
+
+services:
+  # Frontend with hot reload
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${FRONTEND_PORT:-3003}:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8003}
+      - NEXT_PUBLIC_OLLAMA_URL=http://localhost:${OLLAMA_PORT:-11434}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+  # Backend with auto-reload
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${BACKEND_PORT:-8003}:8003"
+    environment:
+      - PORT=8003
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - DATABASE_URL=postgresql://lab:${DB_PASSWORD:-labpassword}@postgres:5432/researchlab
+      - OLLAMA_URL=http://ollama:11434
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./outputs:/app/outputs
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --reload
+
+  # PostgreSQL with exposed port for debugging
+  postgres:
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-labpassword}
+
+  # Ollama with verbose logging
+  ollama:
+    environment:
+      - OLLAMA_DEBUG=1
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_HOST=0.0.0.0
+
+  # Orchestrator in development mode
+  orchestrator:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.orchestrator.dev
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - DATABASE_URL=postgresql://lab:${DB_PASSWORD:-labpassword}@postgres:5432/researchlab
+      - OLLAMA_URL=http://ollama:11434
+      - BACKEND_URL=http://backend:8003

@@ -3053,9 +3053,9 @@ async def websocket_live_transform(websocket: WebSocket):
 
 # ============== GPU Stats (Remote Training Machine) ==============
 
-# Remote RTX 4090 machine configuration
-REMOTE_GPU_HOST = "100.83.78.111"
-REMOTE_GPU_USER = "doc"
+# Remote RTX 4090 machine configuration (from environment)
+REMOTE_GPU_HOST = os.environ.get("REMOTE_GPU_HOST", "")
+REMOTE_GPU_USER = os.environ.get("REMOTE_GPU_USER", "doc")
 NVIDIA_SMI_PATH = "/usr/lib/wsl/lib/nvidia-smi"
 
 def is_running_on_gpu_machine() -> bool:
@@ -3252,7 +3252,7 @@ def get_process_details(pids: list, run_local: bool = False) -> dict:
     pid_cmds = [f'echo "CMDLINE:{pid}:$(cat /proc/{pid}/cmdline 2>/dev/null | tr "\\\\0" " ")"' for pid in pids]
     cmd = '; '.join(pid_cmds)
     cmd += '; tmux list-sessions -F "SESSION:#{session_name}" 2>/dev/null || true'
-    cmd += '; tail -1 ~/dev/voice-clone-pipeline/training/v7_train.log 2>/dev/null | sed "s/^/LOG:/"'
+    cmd += '; tail -1 ~/dev/labfork/training/v7_train.log 2>/dev/null | sed "s/^/LOG:/"'
 
     try:
         if run_local:
@@ -3575,7 +3575,7 @@ async def get_research_agents():
     """Fetch Research Manager agent state (local or via SSH to 4090)."""
     script = """
 import json, pathlib
-path = pathlib.Path('~/dev/voice-clone-pipeline/.skills/research-manager/state/agents.json').expanduser()
+path = pathlib.Path('~/dev/labfork/.skills/research-manager/state/agents.json').expanduser()
 agents = {}
 if path.exists():
     agents = json.loads(path.read_text())
@@ -3589,10 +3589,10 @@ print(json.dumps({"agents": agents}))
 
 @app.get("/api/lab/tasks")
 async def get_lab_tasks():
-    """Fetch Claude task list (voice-clone-pipeline) from 4090."""
+    """Fetch Claude task list (labfork) from 4090."""
     script = """
 import json, pathlib
-root = pathlib.Path('~/.claude/tasks/voice-clone-pipeline').expanduser()
+root = pathlib.Path('~/.claude/tasks/labfork').expanduser()
 tasks = []
 if root.exists():
     def sort_key(p):
@@ -3605,7 +3605,7 @@ if root.exists():
             tasks.append(json.loads(path.read_text()))
         except Exception:
             pass
-print(json.dumps({"tasks": tasks, "sessionId": root.name, "taskListId": "voice-clone-pipeline"}))
+print(json.dumps({"tasks": tasks, "sessionId": root.name, "taskListId": "labfork"}))
 """
     try:
         return run_remote_python(script, timeout=10)
@@ -3625,7 +3625,7 @@ async def create_lab_task(payload: Dict[str, Any]):
     script = f"""
 import json, pathlib
 payload = json.loads({input_payload!r})
-root = pathlib.Path('~/.claude/tasks/voice-clone-pipeline').expanduser()
+root = pathlib.Path('~/.claude/tasks/labfork').expanduser()
 root.mkdir(parents=True, exist_ok=True)
 
 existing = [p for p in root.glob('*.json') if p.stem.isdigit()]
@@ -3670,7 +3670,7 @@ async def update_lab_task(payload: Dict[str, Any]):
     script = f"""
 import json, pathlib
 payload = json.loads({input_payload!r})
-root = pathlib.Path('~/.claude/tasks/voice-clone-pipeline').expanduser()
+root = pathlib.Path('~/.claude/tasks/labfork').expanduser()
 path = root / f"{{payload['id']}}.json"
 if not path.exists():
     print(json.dumps({{"error": "Task not found"}}))
@@ -3701,7 +3701,7 @@ METRICS_FILE = RM_STATE_DIR / "metrics.json"
 OUTPUTS_DIR = RM_STATE_DIR / "outputs"
 RESEARCH_STATE_FILE = RM_STATE_DIR / "research-state.json"
 ORCHESTRATOR_PID_FILE = RM_STATE_DIR / "orchestrator.pid"
-TASKS_DIR = Path.home() / ".claude" / "tasks" / "voice-clone-pipeline"
+TASKS_DIR = Path.home() / ".claude" / "tasks" / "labfork"
 
 
 def read_json_file(path: Path, default: Any) -> Any:
@@ -4459,7 +4459,7 @@ def spawn_agent_for_task(task: Dict[str, Any]) -> bool:
     agent_type = select_agent_type(task)
     description = task.get("description") or ""
     description_block = f"\nDescription: {description}" if description else ""
-    prompt = f"""Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="voice-clone-pipeline"):
+    prompt = f"""Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="labfork"):
 
 TASK #{task.get('id')}: {task.get('subject')}
 {description_block}

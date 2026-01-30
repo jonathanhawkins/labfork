@@ -1,0 +1,373 @@
+#!/usr/bin/env node
+/**
+ * Notification CLI for Research Manager Orchestrator
+ *
+ * Usage:
+ *   ./notify test [desktop|sound|webhook]  - Test notifications
+ *   ./notify config                        - Show current configuration
+ *   ./notify config:set <key> <value>      - Set configuration value
+ *   ./notify enable <channel>              - Enable notification channel
+ *   ./notify disable <channel>             - Disable notification channel
+ *   ./notify webhook <url>                 - Set webhook URL
+ *   ./notify status                        - Show notification status
+ */
+
+const fs = require('fs');
+const path = require('path');
+const notifications = require('./notifications');
+
+const STATE_DIR = path.join(__dirname, 'state');
+const NOTIFICATION_LOG = path.join(STATE_DIR, 'notifications.log');
+
+// Ensure config exists
+notifications.ensureConfig();
+
+const args = process.argv.slice(2);
+const command = args[0];
+const subCommand = args[1];
+
+function printHelp() {
+  console.log(`
+Notification System CLI
+
+Commands:
+  test [type]              Test notifications (desktop, sound, webhook, or all)
+  config                   Show current configuration
+  config:set <key> <value> Set a configuration value
+  enable <channel>         Enable a notification channel (desktop, sound, webhook)
+  disable <channel>        Disable a notification channel
+  webhook <url>            Set webhook URL (Slack or Discord)
+  webhook:type <type>      Set webhook type (slack or discord)
+  events <channel> <list>  Set events for a channel (comma-separated)
+  status                   Show notification system status
+  logs [n]                 Show last n notification log entries (default: 20)
+  cooldown:clear           Clear all notification cooldowns
+
+Examples:
+  ./notify test desktop              # Test desktop notification
+  ./notify test all                  # Test all enabled channels
+  ./notify enable webhook            # Enable webhook notifications
+  ./notify webhook https://hooks...  # Set Slack/Discord webhook URL
+  ./notify webhook:type discord      # Set webhook type to Discord
+  ./notify events webhook all_tasks_completed,cost_threshold_exceeded
+  ./notify logs 50                   # Show last 50 log entries
+`);
+}
+
+async function testNotifications(type) {
+  const config = notifications.loadConfig();
+
+  console.log('Testing notifications...\n');
+
+  if (type === 'desktop' || type === 'all') {
+    if (config.desktop.enabled) {
+      console.log('Sending desktop notification...');
+      await notifications.notify('task_completed', {
+        title: 'Test Notification',
+        message: 'This is a test from the orchestrator notification system',
+        eventKey: 'test-' + Date.now(), // Bypass cooldown
+      });
+      console.log('✓ Desktop notification sent\n');
+    } else {
+      console.log('⚠ Desktop notifications disabled\n');
+    }
+  }
+
+  if (type === 'sound' || type === 'all') {
+    if (config.sound.enabled) {
+      console.log('Playing sound alert...');
+      const { playSound } = require('./notifications');
+      // Access internal function via require
+      const notifModule = require('./notifications');
+      // The playSound is not exported, so we use notify with a sound event
+      await notifications.notify('all_tasks_completed', {
+        title: 'Sound Test',
+        message: 'Testing sound alert',
+        eventKey: 'test-sound-' + Date.now(),
+      });
+      console.log('✓ Sound alert played\n');
+    } else {
+      console.log('⚠ Sound alerts disabled\n');
+    }
+  }
+
+  if (type === 'webhook' || type === 'all') {
+    if (config.webhook.enabled && config.webhook.url) {
+      console.log('Sending webhook notification...');
+      await notifications.notify('task_completed', {
+        title: 'Test Webhook',
+        message: 'This is a test from the orchestrator notification system',
+        eventKey: 'test-webhook-' + Date.now(),
+        fields: [
+          { name: 'Test Field', value: 'Test Value' },
+        ],
+      });
+      console.log('✓ Webhook notification sent\n');
+    } else {
+      console.log('⚠ Webhook disabled or URL not set\n');
+    }
+  }
+
+  console.log('Test complete!');
+}
+
+function showConfig() {
+  const config = notifications.loadConfig();
+  console.log('Current Notification Configuration:\n');
+  console.log(JSON.stringify(config, null, 2));
+}
+
+function setConfig(key, value) {
+  const config = notifications.loadConfig();
+
+  // Parse the key path (e.g., "webhook.url" -> ["webhook", "url"])
+  const keys = key.split('.');
+  let obj = config;
+
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (!obj[keys[i]]) {
+      console.error(`Invalid config key: ${key}`);
+      process.exit(1);
+    }
+    obj = obj[keys[i]];
+  }
+
+  const finalKey = keys[keys.length - 1];
+
+  // Parse value
+  let parsedValue = value;
+  if (value === 'true') parsedValue = true;
+  else if (value === 'false') parsedValue = false;
+  else if (!isNaN(value)) parsedValue = Number(value);
+  else if (value.startsWith('[') || value.startsWith('{')) {
+    try {
+      parsedValue = JSON.parse(value);
+    } catch (e) {}
+  }
+
+  obj[finalKey] = parsedValue;
+  notifications.saveConfig(config);
+
+  console.log(`Set ${key} = ${JSON.stringify(parsedValue)}`);
+}
+
+function enableChannel(channel) {
+  const config = notifications.loadConfig();
+
+  if (!config[channel]) {
+    console.error(`Invalid channel: ${channel}`);
+    console.log('Valid channels: desktop, sound, webhook');
+    process.exit(1);
+  }
+
+  config[channel].enabled = true;
+  notifications.saveConfig(config);
+  console.log(`✓ Enabled ${channel} notifications`);
+}
+
+function disableChannel(channel) {
+  const config = notifications.loadConfig();
+
+  if (!config[channel]) {
+    console.error(`Invalid channel: ${channel}`);
+    console.log('Valid channels: desktop, sound, webhook');
+    process.exit(1);
+  }
+
+  config[channel].enabled = false;
+  notifications.saveConfig(config);
+  console.log(`✓ Disabled ${channel} notifications`);
+}
+
+function setWebhook(url) {
+  const config = notifications.loadConfig();
+  config.webhook.url = url;
+  config.webhook.enabled = true;
+
+  // Auto-detect type
+  if (url.includes('discord.com')) {
+    config.webhook.type = 'discord';
+    console.log('Detected Discord webhook');
+  } else if (url.includes('slack.com') || url.includes('hooks.slack')) {
+    config.webhook.type = 'slack';
+    console.log('Detected Slack webhook');
+  }
+
+  notifications.saveConfig(config);
+  console.log(`✓ Webhook URL set and enabled`);
+}
+
+function setWebhookType(type) {
+  if (type !== 'slack' && type !== 'discord') {
+    console.error('Invalid webhook type. Use: slack or discord');
+    process.exit(1);
+  }
+
+  const config = notifications.loadConfig();
+  config.webhook.type = type;
+  notifications.saveConfig(config);
+  console.log(`✓ Webhook type set to ${type}`);
+}
+
+function setEvents(channel, events) {
+  const config = notifications.loadConfig();
+
+  if (!config[channel]) {
+    console.error(`Invalid channel: ${channel}`);
+    process.exit(1);
+  }
+
+  const eventList = events.split(',').map(e => e.trim());
+  config[channel].events = eventList;
+  notifications.saveConfig(config);
+  console.log(`✓ Events for ${channel}: ${eventList.join(', ')}`);
+}
+
+function showStatus() {
+  const config = notifications.loadConfig();
+
+  console.log('\nNotification System Status\n');
+  console.log('═'.repeat(50));
+
+  console.log(`\nGlobal: ${config.enabled ? '✓ Enabled' : '✗ Disabled'}`);
+
+  console.log(`\n📢 Desktop Notifications: ${config.desktop.enabled ? '✓ Enabled' : '✗ Disabled'}`);
+  if (config.desktop.enabled) {
+    console.log(`   Events: ${config.desktop.events.join(', ')}`);
+  }
+
+  console.log(`\n🔔 Sound Alerts: ${config.sound.enabled ? '✓ Enabled' : '✗ Disabled'}`);
+  if (config.sound.enabled) {
+    console.log(`   Events: ${config.sound.events.join(', ')}`);
+    if (config.sound.customSound) {
+      console.log(`   Custom Sound: ${config.sound.customSound}`);
+    }
+  }
+
+  console.log(`\n🌐 Webhook: ${config.webhook.enabled ? '✓ Enabled' : '✗ Disabled'}`);
+  if (config.webhook.enabled) {
+    console.log(`   Type: ${config.webhook.type}`);
+    console.log(`   URL: ${config.webhook.url ? config.webhook.url.substring(0, 50) + '...' : 'Not set'}`);
+    console.log(`   Events: ${config.webhook.events.join(', ')}`);
+  }
+
+  console.log(`\n⏱️ Cooldowns:`);
+  for (const [event, minutes] of Object.entries(config.cooldowns)) {
+    console.log(`   ${event}: ${minutes} min`);
+  }
+
+  console.log(`\n⚡ Thresholds:`);
+  console.log(`   Error repeat count: ${config.thresholds.errorRepeatCount}`);
+  console.log(`   Daily cost warning: $${config.thresholds.dailyCostWarning}`);
+  console.log(`   Daily cost alert: $${config.thresholds.dailyCostAlert}`);
+  console.log(`   Weekly cost warning: $${config.thresholds.weeklyCostWarning}`);
+  console.log(`   Weekly cost alert: $${config.thresholds.weeklyCostAlert}`);
+
+  console.log('\n' + '═'.repeat(50));
+}
+
+function showLogs(n = 20) {
+  if (!fs.existsSync(NOTIFICATION_LOG)) {
+    console.log('No notification logs found');
+    return;
+  }
+
+  const content = fs.readFileSync(NOTIFICATION_LOG, 'utf-8');
+  const lines = content.trim().split('\n');
+  const lastN = lines.slice(-n);
+
+  console.log(`Last ${lastN.length} notification log entries:\n`);
+  for (const line of lastN) {
+    console.log(line);
+  }
+}
+
+function clearCooldowns() {
+  const cooldownFile = path.join(STATE_DIR, 'notification-cooldowns.json');
+  if (fs.existsSync(cooldownFile)) {
+    fs.unlinkSync(cooldownFile);
+    console.log('✓ Notification cooldowns cleared');
+  } else {
+    console.log('No cooldowns to clear');
+  }
+}
+
+// Main command handler
+(async () => {
+  switch (command) {
+    case 'test':
+      await testNotifications(subCommand || 'all');
+      break;
+
+    case 'config':
+      showConfig();
+      break;
+
+    case 'config:set':
+      if (!args[1] || args[2] === undefined) {
+        console.error('Usage: ./notify config:set <key> <value>');
+        process.exit(1);
+      }
+      setConfig(args[1], args[2]);
+      break;
+
+    case 'enable':
+      if (!subCommand) {
+        console.error('Usage: ./notify enable <channel>');
+        process.exit(1);
+      }
+      enableChannel(subCommand);
+      break;
+
+    case 'disable':
+      if (!subCommand) {
+        console.error('Usage: ./notify disable <channel>');
+        process.exit(1);
+      }
+      disableChannel(subCommand);
+      break;
+
+    case 'webhook':
+      if (!subCommand) {
+        console.error('Usage: ./notify webhook <url>');
+        process.exit(1);
+      }
+      setWebhook(subCommand);
+      break;
+
+    case 'webhook:type':
+      if (!subCommand) {
+        console.error('Usage: ./notify webhook:type <slack|discord>');
+        process.exit(1);
+      }
+      setWebhookType(subCommand);
+      break;
+
+    case 'events':
+      if (!args[1] || !args[2]) {
+        console.error('Usage: ./notify events <channel> <event1,event2,...>');
+        process.exit(1);
+      }
+      setEvents(args[1], args[2]);
+      break;
+
+    case 'status':
+      showStatus();
+      break;
+
+    case 'logs':
+      showLogs(parseInt(subCommand) || 20);
+      break;
+
+    case 'cooldown:clear':
+      clearCooldowns();
+      break;
+
+    case 'help':
+    case '--help':
+    case '-h':
+    default:
+      printHelp();
+      break;
+  }
+})();

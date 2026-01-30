@@ -429,8 +429,8 @@ Reuse the KeyframeTimeline component for scheduled emotion changes:
 
 ```bash
 # On RTX 4090 machine (WSL)
-ssh doc@100.83.78.111
-cd ~/dev/voice-clone-pipeline
+ssh doc@$REMOTE_GPU_HOST
+cd ~/dev/labfork
 git clone https://github.com/Plachtaa/seed-vc
 cd seed-vc
 pip install -r requirements.txt

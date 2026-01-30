@@ -1,81 +1,73 @@
-# Voice Clone Pipeline
+# LabFork
 
-> **Research Question:** Can explicit multi-layer prosody labels improve voice cloning when training data is limited?
+**Fork research labs. Watch AI agents implement papers. Discover synergies across domains.**
 
-A complete exploration toolkit for prosody-controlled voice synthesis. This project tests whether analyzing audio from multiple perspectives (semantic, acoustic, rhythm, contour) and using that as conditioning during training can improve voice cloning results with limited data.
+LabFork is an open platform for collaborative AI research. Create a "lab" for any research domain, and AI agents will automatically find relevant papers, implement techniques, and discover connections between different fields.
 
-![Landing Page](docs/screenshots/landing.png)
+![LabFork Landing Page](docs/screenshots/landing.png)
 
-## The Hypothesis
+## What is LabFork?
 
-Traditional voice cloning works well with large datasets, but prosody (the rhythm, intonation, and emphasis that make speech sound natural) is hard to capture. Sesame's CSM-1B model learns prosody from conversation context, but with limited personal data (20-60 minutes vs their 1M hours), we hypothesized that **explicit prosody labels could accelerate learning**.
+Think of it as GitHub for AI research, but instead of just hosting code, you're hosting *active research programs* that AI agents can work on.
 
-### The "Prosody Cube" Concept
-
-Instead of treating audio as a single signal, we analyze it from 4 perspectives simultaneously:
-
-| Layer | What it captures | Tool |
-|-------|------------------|------|
-| **Semantic** | Emotion, intent, tone | Qwen2-Audio |
-| **Acoustic** | Pitch, formants, harmonics | Parselmouth |
-| **Rhythm** | Pauses, speaking rate, syllables | librosa |
-| **Contour** | Pitch trajectory over time | Time-series analysis |
-
-This multi-layer representation creates a richer training signal than emotion labels alone.
+**The Core Loop:**
+1. **Fork** a research lab or create your own
+2. **Watch** AI agents implement papers and techniques in real-time
+3. **Discover** synergies across domains (e.g., a climate modeling technique that helps drug discovery)
+4. **Collaborate** with others working on similar problems
 
 ## Features
 
-### Data Collection
-- **Studio** - Record voice samples with real-time waveform visualization and auto prosody labeling
-- **Perform** - Script-based emotional recording with guided prompts from movies, speeches, Shakespeare
+### Labs
+- Create research labs for any domain (voice synthesis, quant trading, robotics, etc.)
+- AI agents automatically find and implement relevant papers
+- Track progress with real-time dashboards
 
-### Voice Generation
-- **Generate** - Create speech with prosody control, voice cloning (Pocket TTS), or style transfer
-- **Author** - Keyframe timeline for emotion transitions (like video editing but for voice)
-- **Live** - Real-time voice transformation via WebSocket
+### Domains
+Built-in support for 9 research domains:
+- Voice Clone (TTS, prosody control, emotion synthesis)
+- Quant Trading
+- Game AI
+- Robotics ML
+- Drug Discovery
+- Climate Modeling
+- NLP Research
+- Computer Vision
+- Biotech NLP
 
-### Analysis
-- **Compare** - A/B test base models vs fine-tuned models with metrics
-- **Training** - Real-time dashboard with loss curves, LR schedule visualization, memory usage
+### Meta-Agents
+AI agents that look *across* labs to find synergies between different research domains.
 
-## Tech Stack
-
-**Frontend:** Next.js 14, React 18, Three.js (3D visualizations), Tailwind CSS, shadcn/ui
-
-**Backend:** FastAPI, PyTorch, Whisper (transcription), Qwen2-Audio (emotion), Parselmouth (acoustics)
-
-**Training:** CSM-1B, PEFT/LoRA, DeepSeek techniques (MTP, custom LR schedule)
-
-**Voice Cloning:** Pocket TTS (zero-shot), CSM-1B fine-tuning
+### Live View
+Watch AI agents work in real-time as they implement techniques from papers.
 
 ## Quick Start
 
 ### Prerequisites
-- M4 Pro Mac (64GB) or RTX 4090 (24GB)
-- Python 3.10+
 - Node.js 18+
+- Python 3.10+ (for backend/training)
 
 ### Setup
 
 ```bash
-# Clone
-git clone https://github.com/yourusername/voice-clone-pipeline
-cd voice-clone-pipeline
+# Clone the repo
+git clone https://github.com/jonathanhawkins/labfork
+cd labfork
 
-# Mac setup
-./scripts/setup_mac.sh
+# Install frontend
+cd frontend && npm install
 
-# Or Linux/CUDA
-./scripts/setup_linux.sh
-
-# Download models
-python scripts/download_models.py
+# Install backend
+cd ../backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### Run
 
 ```bash
-# Terminal 1: Backend
+# Terminal 1: Backend API
 cd backend && source venv/bin/activate && python main.py --port 8003
 
 # Terminal 2: Frontend
@@ -87,166 +79,52 @@ Open http://localhost:3003
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    VOICE CLONE PIPELINE                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  COLLECT          LABEL           TRAIN          GENERATE       │
-│  ┌──────┐        ┌──────┐        ┌──────┐        ┌──────┐      │
-│  │Studio│───────▶│Prosody│───────▶│CSM-1B│───────▶│Output│      │
-│  │Perform│       │ Cube │        │+LoRA │        │      │      │
-│  └──────┘        └──────┘        └──────┘        └──────┘      │
-│                      │                               ▲          │
-│                      ▼                               │          │
-│              ┌───────────────┐                       │          │
-│              │ Qwen2-Audio   │ Semantic              │          │
-│              │ Parselmouth   │ Acoustic        ┌─────┴─────┐   │
-│              │ librosa       │ Rhythm          │ Generate  │   │
-│              │ Time-series   │ Contour         │ Author    │   │
-│              └───────────────┘                 │ Live      │   │
-│                                                └───────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Training
-
-### DeepSeek Techniques Applied
-
-We incorporated techniques from DeepSeek-V3 for faster convergence:
-
-- **Multi-Token Prediction (MTP):** Predicts 4 tokens ahead for denser training signal
-- **Custom LR Schedule:** Warmup → Stable → Cosine decay phases
-- **LoRA:** For efficient fine-tuning with limited data (0.07% of parameters)
-
-```bash
-cd training
-
-# LoRA training (recommended for < 500 samples)
-python train_lora_deepseek.py --config config/rtx_4090_lora.yaml
-
-# Full fine-tune (for larger datasets)
-python train_csm_final.py --config config/rtx_4090_deepseek.yaml
-```
-
-## Project Structure
-
-```
-voice-clone-pipeline/
+labfork/
 ├── frontend/                # Next.js web UI
 │   ├── app/
-│   │   ├── page.tsx        # Landing page (research overview)
-│   │   ├── studio/         # Recording interface
-│   │   ├── perform/        # Script-based recording
-│   │   ├── generate/       # Speech synthesis
-│   │   ├── author/         # Keyframe emotion editor
-│   │   ├── live/           # Real-time transformation
-│   │   ├── compare/        # A/B model testing
-│   │   └── training/       # Training dashboard
+│   │   ├── page.tsx        # Landing page
+│   │   ├── explore/        # Browse public labs
+│   │   ├── watch/          # Live agent view
+│   │   ├── lab/            # Lab management
+│   │   ├── domains/        # Domain browser
+│   │   └── demos/          # Research technique demos
 │   └── components/
-│       └── ProsodyMatrixVisualizer.tsx  # 3D cube
+│       ├── landing/        # Landing page components
+│       ├── labs/           # Lab UI components
+│       └── domain/         # Domain components
 │
 ├── backend/                 # FastAPI server
 │   ├── main.py             # API endpoints
-│   ├── prosody_analyzer.py # Multi-layer analysis
-│   ├── keyframe_prosody.py # Emotion interpolation
-│   └── live_voice_transformer.py  # WebSocket
+│   └── prosody_analyzer.py # Example: voice domain analysis
 │
-├── training/               # Training scripts
-│   ├── train_lora_deepseek.py
-│   ├── train_csm_final.py
-│   └── config/             # Hardware configs
+├── .domains/               # Domain configurations
+│   └── voice-clone/        # Voice clone domain (example)
 │
-└── inference/              # Generation scripts
+└── .skills/                # Agent skills
+    └── research-manager/   # Research orchestration
 ```
 
-## Evaluation Methodology
+## Tech Stack
 
-To test the hypothesis, we run controlled A/B comparisons:
+- **Frontend:** Next.js 14, React 18, Three.js, Tailwind CSS, shadcn/ui
+- **Backend:** FastAPI, PyTorch, Whisper, Transformers
+- **AI:** Claude Code agents, Ollama for local inference
 
-### Experiment Design
+## Case Study: Voice Clone Lab
 
-| Model | Description |
-|-------|-------------|
-| **Baseline** | Standard LoRA fine-tuning, no prosody conditioning |
-| **Prosody** | LoRA + multi-layer prosody conditioning |
+LabFork was originally built to explore voice cloning with prosody control. The Voice Clone domain demonstrates:
 
-Both models trained on identical data with identical hyperparameters.
+- **Multi-layer prosody analysis** (semantic, acoustic, rhythm, contour)
+- **Training pipelines** with DeepSeek techniques (MTP, LoRA)
+- **Real-time audio processing** and 3D visualization
 
-### Metrics
+See [docs/voice-clone-case-study/](docs/voice-clone-case-study/) for the full voice clone documentation.
 
-| Metric | What it measures | Tool |
-|--------|------------------|------|
-| Speaker Similarity | Does it sound like you? | SpeechBrain ECAPA-TDNN |
-| Emotion Accuracy | Does happy sound happy? | Qwen2-Audio classification |
-| Prosody Match | Pitch/rhythm correlation | Parselmouth + librosa |
-| MCD | Acoustic similarity | Mel Cepstral Distortion |
-| Human Preference | Blind A/B listening test | Web interface |
+## Contributing
 
-### Running Evaluations
-
-```bash
-cd evaluation
-
-# Run full A/B comparison
-python run_ab_comparison.py \
-    --baseline ../models/checkpoints/baseline_no_prosody/best.pt \
-    --prosody ../models/checkpoints/prosody_joint/best.pt \
-    --reference ../data/voice_samples/reference.wav
-
-# Test emotion accuracy specifically
-python evaluate_emotion_accuracy.py \
-    --baseline-dir results/baseline/ \
-    --prosody-dir results/prosody/
-
-# Use the web interface for blind listening tests
-# Navigate to /evaluate in the frontend
-```
-
-### Success Criteria
-
-- **Hypothesis Supported:** Prosody model scores 5+ points higher on average
-- **Partially Supported:** Prosody model better for emotion accuracy but not similarity
-- **Not Supported:** No significant difference or baseline performs better
-
-## Research Status
-
-**Pipeline Complete** - All tools functional, end-to-end workflow works
-
-**Evaluation Complete** - Three model iterations tested with progressive improvements
-
-### Results (January 2025)
-
-| Version | Description | F0 Correlation | Emotion Accuracy |
-|---------|-------------|----------------|------------------|
-| v1 Baseline | No prosody conditioning | -0.006 | N/A |
-| v2 Prosody | + Prosody encoder | 0.328 | 0/4 (0%) |
-| **v3 Energy** | + Intensity fix, + Energy predictor | **0.328** | **2/4 (50%)** |
-
-**Key Achievement:** Fixed inverted pitch patterns
-- Happy: 144 Hz → **211 Hz** (now highest, correct)
-- Sad: 274 Hz → **167 Hz** (now lowest, correct)
-
-**Conclusion:** SUPPORTED (with caveats)
-
-The energy predictor auxiliary loss and intensity mapping fix demonstrate that explicit prosody conditioning works. Pitch patterns now correctly differentiate emotions. Happy and sad are correctly detected; angry/neutral still need work.
-
-See [evaluation/RESULTS.md](evaluation/RESULTS.md) for full analysis.
-
----
-
-This is an exploration project. The hypothesis is interesting but unproven. The tools demonstrate:
-- Full-stack ML pipeline development
-- Real-time audio processing
-- Multi-model orchestration (Whisper, Qwen2-Audio, CSM, Pocket TTS)
-- Modern web UI with 3D visualization
-
-## Hardware Tested
-
-| Hardware | Use Case | Notes |
-|----------|----------|-------|
-| M4 Pro (64GB) | Development, full fine-tune | Larger batches, slower per-step |
-| RTX 4090 (24GB) | Production training | 3-4x faster, LoRA recommended |
+We welcome contributions! Please see:
+- Issues for current tasks
+- PRs welcome for bug fixes and new domains
 
 ## License
 
@@ -254,4 +132,4 @@ MIT License
 
 ---
 
-*Built by Jonathan Hawkins | Aligned Tools*
+*Built with Next.js, Three.js, and Claude*

@@ -1,0 +1,141 @@
+# PitchFlow Training Configuration
+# Quantized Pitch Control for Flow-Matching TTS
+#
+# Based on PitchFlow (Interspeech 2024)
+# https://www.isca-archive.org/interspeech_2024/sadekova24_interspeech.pdf
+
+# =============================================================================
+# DATA
+# =============================================================================
+data_dir: ../data/splits
+manifest: ../data/manifest.json
+max_audio_len: 10.0  # Max audio length in seconds
+
+# =============================================================================
+# PITCH BINNING
+# =============================================================================
+
+# Number of pitch quantization bins (including unvoiced)
+num_pitch_bins: 50
+
+# F0 range (Hz) - covers most human voice range
+f0_min: 50.0
+f0_max: 800.0
+
+# Use logarithmic binning (perceptually uniform)
+use_log_scale: true
+
+# Bin 0 reserved for unvoiced frames
+unvoiced_bin: 0
+
+# =============================================================================
+# F0 EXTRACTION (Praat settings)
+# =============================================================================
+pitch_floor: 50.0
+pitch_ceiling: 800.0
+time_step: 0.01  # 10ms hop between pitch estimates
+voicing_threshold: 0.45
+
+# =============================================================================
+# MEL SPECTROGRAM
+# =============================================================================
+n_mels: 80
+sample_rate: 24000
+hop_length: 256
+win_length: 1024
+fmin: 0.0
+fmax: 12000.0
+
+# =============================================================================
+# PITCH CLASSIFIER
+# =============================================================================
+classifier_hidden_dim: 256
+classifier_num_layers: 4
+classifier_kernel_size: 5
+classifier_dropout: 0.1
+
+# Training noise augmentation for robust classifier
+train_noise_std: 0.1
+train_noise_schedule: cosine_decay  # constant, linear_decay, cosine_decay
+
+# =============================================================================
+# FLOW MATCHING
+# =============================================================================
+flow_hidden_dim: 512
+flow_num_layers: 4
+flow_num_heads: 8
+
+# Prosody dimensions
+prosody_dim: 2048
+num_prosody_tokens: 4
+text_dim: 768
+
+# ODE solver settings
+num_ode_steps: 50
+ode_method: euler
+
+# =============================================================================
+# LOSS WEIGHTS
+# =============================================================================
+classifier_ce_weight: 1.0
+pitch_accuracy_bonus: 0.1
+flow_loss_weight: 1.0
+
+# =============================================================================
+# TRAINING
+# =============================================================================
+epochs: 100
+batch_size: 16
+lr: 1e-4
+weight_decay: 0.01
+grad_clip: 1.0
+warmup_steps: 1000
+
+# Two-stage training
+# Stage 1: Train classifier only (20% of epochs)
+# Stage 2: Train full model
+classifier_only_epochs: 20
+
+# Optimizer settings
+optimizer: adamw
+betas: [0.9, 0.999]
+
+# Learning rate schedule
+lr_schedule: cosine
+min_lr: 1e-6
+
+# =============================================================================
+# DATA LOADING
+# =============================================================================
+num_workers: 4
+pin_memory: true
+
+# =============================================================================
+# CHECKPOINTING
+# =============================================================================
+save_every: 10
+save_best: true
+best_metric: classifier_accuracy  # accuracy, loss
+
+# Checkpoint directory
+checkpoint_dir: ../checkpoints/pitchflow
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+log_every: 100
+use_wandb: false
+wandb_project: labfork
+wandb_run_name: pitchflow
+
+# =============================================================================
+# HARDWARE CONFIGS
+# =============================================================================
+
+# M4 Pro Mac (64GB) - conservative settings
+# batch_size: 8
+# num_workers: 2
+
+# RTX 4090 (24GB VRAM) - can use larger batches
+# batch_size: 32
+# num_workers: 4

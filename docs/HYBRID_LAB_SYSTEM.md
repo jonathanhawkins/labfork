@@ -136,10 +136,10 @@ For 7 pending tasks:
 
 ```bash
 # SSH to machine
-ssh doc@100.83.78.111
+ssh doc@$REMOTE_GPU_HOST
 
 # Run setup
-cd ~/dev/voice-clone-pipeline
+cd ~/dev/labfork
 ./scripts/setup-4090-hybrid.sh
 
 # Ensure Codex CLI is installed and authenticated
@@ -153,7 +153,7 @@ cd ~/dev/voice-clone-pipeline
 
 ```
 # Attach to lab-manager
-ssh doc@100.83.78.111 -t "tmux attach -t lab-manager"
+ssh doc@$REMOTE_GPU_HOST -t "tmux attach -t lab-manager"
 
 # In lab-manager, user asks: "Work on task #36"
 

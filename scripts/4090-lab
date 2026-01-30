@@ -1,8 +1,11 @@
 #!/bin/bash
 # 4090 Lab Manager - Remote control from Mac
 # Connects to RTX 4090 via Tailscale
+#
+# Configure: Set REMOTE_GPU_HOST and REMOTE_GPU_USER environment variables
+# Example: export REMOTE_GPU_HOST=100.x.x.x REMOTE_GPU_USER=youruser
 
-HOST="doc@100.83.78.111"
+HOST="${REMOTE_GPU_USER:-doc}@${REMOTE_GPU_HOST:?Set REMOTE_GPU_HOST environment variable}"
 
 usage() {
     echo "4090 Lab Manager"

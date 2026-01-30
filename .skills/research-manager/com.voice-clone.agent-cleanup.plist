@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.voice-clone.agent-cleanup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/cleanup.py</string>
+        <string>--execute</string>
+        <string>--quiet</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/state/cleanup.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager/state/cleanup.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/light/dev/web-apps/voice-clone-pipeline/.skills/research-manager</string>
+</dict>
+</plist>

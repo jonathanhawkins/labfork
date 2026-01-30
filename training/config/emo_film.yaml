@@ -1,0 +1,100 @@
+# Emo-FiLM Configuration
+# Word-level emotion modulation with emotion2vec
+# Based on "Beyond Global Emotion" (arXiv:2509.20378)
+
+model:
+  # emotion2vec settings
+  emotion2vec_model: "iic/emotion2vec_base_finetuned"
+  emotion2vec_dim: 768
+  frame_rate: 50  # 50Hz frame rate
+  use_gpu: true
+
+  # Emotion categories (emotion2vec fine-tuned)
+  num_emotions: 9
+  emotion_labels:
+    - "angry"
+    - "disgusted"
+    - "fearful"
+    - "happy"
+    - "neutral"
+    - "other"
+    - "sad"
+    - "surprised"
+    - "unknown"
+
+  # Word alignment
+  alignment_method: "duration"  # "forced", "duration", or "attention"
+  use_mfa: false
+
+  # FiLM layer
+  film_hidden_dim: 512
+  num_film_layers: 2
+  film_activation: "gelu"
+  use_layer_norm: true
+
+  # Output dimensions
+  text_hidden_dim: 768
+  output_dim: 2048
+  num_prosody_tokens: 4
+
+  # Training
+  dropout: 0.1
+  emotion_smoothing: 0.1
+
+  # Inference
+  emotion_scale: 1.0
+  interpolation_method: "linear"
+
+training:
+  # Data
+  manifest_path: "../data/emotion_manifest.json"
+  val_manifest_path: "../data/emotion_manifest_val.json"
+  max_audio_length: 15.0
+  sample_rate: 16000
+
+  # Optimization
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  batch_size: 8
+  num_epochs: 50
+  warmup_steps: 1000
+
+  # Loss weights
+  classification_weight: 1.0
+  reconstruction_weight: 0.5
+  consistency_weight: 0.3
+  smoothness_weight: 0.1
+
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+  # Checkpointing
+  checkpoint_dir: "../checkpoints/emo_film"
+  save_every_n_epochs: 10
+
+  # Logging
+  log_every_n_steps: 100
+  eval_every_n_epochs: 1
+
+evaluation:
+  # FEDD metrics
+  compute_wea: true
+  compute_ets: true
+  compute_dynamic_range: true
+  compute_temporal_consistency: true
+
+  # Evaluation window
+  transition_window_sec: 0.5
+
+inference:
+  # Default emotion settings
+  default_emotion: "neutral"
+  default_intensity: 0.5
+
+  # Interpolation
+  transition_steps: 5
+  smooth_transitions: true
+
+  # Word-level control
+  allow_per_word_emotion: true
+  allow_emotion_trajectory: true

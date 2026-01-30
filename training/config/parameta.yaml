@@ -1,0 +1,83 @@
+# ParaMETA: Disentangled Paralinguistic Representation Learning
+# Based on arXiv:2601.12289 (January 2025)
+#
+# Key Features:
+# - META embedding space for unified paralinguistic learning
+# - Task-specific subspaces for emotion, gender, age, accent, etc.
+# - Prototype-based text-speech alignment
+# - Orthogonality constraints for inter-task independence
+
+# Model Architecture
+input_dim: 768                # wav2vec2/HuBERT feature dimension
+mel_dim: 80                   # Mel spectrogram channels
+sample_rate: 16000
+
+# META Embedding Space
+meta_dim: 512                 # Shared META embedding dimension
+hidden_dim: 512               # Hidden layer dimension
+num_heads: 8                  # Transformer attention heads
+num_layers: 6                 # Transformer layers for shared encoder
+dropout: 0.1
+
+# Task-Specific Subspaces
+task_subspace_dim: 128        # Dimension per task subspace
+num_projection_layers: 2      # Layers in task projectors
+
+# Prototype-Based Alignment
+num_prototypes: 128           # Number of learned prototypes
+prototype_dim: 256            # Prototype embedding dimension
+alignment_temperature: 0.07   # Temperature for contrastive loss
+
+# Text Encoder (for text-speech alignment)
+text_encoder_dim: 768         # Text encoder output dimension
+use_text_alignment: true
+
+# Loss Weights
+classification_weight: 1.0    # Weight for classification losses
+contrastive_weight: 0.5       # Weight for contrastive clustering
+prototype_weight: 0.3         # Weight for prototype alignment
+orthogonality_weight: 0.1     # Weight for subspace orthogonality
+intra_class_weight: 0.2       # Weight for intra-class compactness
+
+# Training Settings
+num_epochs: 100
+batch_size: 32
+learning_rate: 1e-4
+weight_decay: 0.01
+gradient_accumulation: 1
+warmup_epochs: 5
+
+# Scheduler
+scheduler_type: "cosine"
+min_lr_ratio: 0.01            # Minimum LR = learning_rate * min_lr_ratio
+
+# Data
+manifest_path: "../data/paralinguistic_manifest.json"
+max_length: 500               # Maximum sequence length
+use_precomputed_features: true
+
+# Task Configuration (auto-populated from PARALINGUISTIC_TASKS)
+# Each task: (num_classes, is_discrete)
+# - emotion: 8 classes (neutral, happy, sad, angry, fearful, surprised, disgusted, calm)
+# - gender: 2 classes (male, female)
+# - age: 5 classes (child, teen, young_adult, adult, senior)
+# - accent: 10 classes (american, british, australian, indian, chinese, spanish, french, german, japanese, korean)
+# - speaking_rate: 3 classes (slow, normal, fast)
+# - energy: 3 classes (low, medium, high)
+
+# Output for CSM Integration
+output_dim: 2048              # Match CSM hidden dimension
+num_prosody_tokens: 4         # Number of prefix tokens
+
+# Checkpointing
+checkpoint_dir: "../checkpoints/parameta"
+save_every_n_epochs: 10
+
+# Logging
+log_every_n_steps: 50
+eval_every_n_epochs: 1
+
+# Hardware
+num_workers: 4
+pin_memory: true
+use_amp: false                # Automatic mixed precision

@@ -1,0 +1,144 @@
+# Period VITS Training Configuration
+# Based on "Period VITS: Variational Inference with Explicit Pitch Modeling"
+# ICASSP 2023 - https://arxiv.org/abs/2210.15964
+#
+# Key innovation: Explicit periodicity generator for stable emotional pitch
+# Addresses the "unstable pitch with audible artifacts" problem
+
+# Model paths
+model_path: ../models/csm-1b
+
+# Data
+train_manifest: ../data/splits/train.json
+val_manifest: ../data/splits/val.json
+prosody_cache_dir: ../data/prosody_cache
+
+# Output
+output_dir: ../models/checkpoints/period_vits
+
+# =============================================================================
+# AUDIO SETTINGS
+# =============================================================================
+sample_rate: 24000
+hop_length: 256
+
+# =============================================================================
+# F0 SETTINGS
+# =============================================================================
+f0_min: 50.0
+f0_max: 800.0
+use_log_f0: true  # Predict in log-scale for better gradient flow
+
+# =============================================================================
+# FRAME PITCH PREDICTOR (FPP)
+# =============================================================================
+fpp_hidden_dim: 256
+fpp_num_layers: 3
+fpp_kernel_size: 5
+fpp_dropout: 0.1
+fpp_use_gru: true  # Crucial for temporal dependencies in pitch contours
+
+# =============================================================================
+# PERIODICITY GENERATOR (PG)
+# =============================================================================
+pg_upsample_scales:
+  - 4
+  - 4
+  - 4
+  - 4  # 4*4*4*4 = 256 = hop_length
+pg_noise_scale: 0.003  # Noise for unvoiced regions
+pg_sine_amplitude: 0.1
+pg_use_learnable_amplitude: true
+
+# =============================================================================
+# OUTPUT SETTINGS (CSM Integration)
+# =============================================================================
+output_dim: 2048  # Match CSM hidden dimension
+num_prosody_tokens: 4
+
+# =============================================================================
+# TRAINING SETTINGS
+# =============================================================================
+num_epochs: 50
+batch_size: 8
+learning_rate: 0.0001
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# Learning rate schedule
+lr_scheduler: cosine
+warmup_epochs: 5
+min_lr: 0.00001
+
+# Optimizer
+optimizer: adamw
+adam_beta1: 0.9
+adam_beta2: 0.98
+adam_eps: 1.0e-9
+
+# =============================================================================
+# LOSS WEIGHTS
+# =============================================================================
+f0_loss_weight: 1.0
+voicing_loss_weight: 0.5
+periodicity_loss_weight: 0.1
+
+# Adversarial training (optional)
+use_adversarial: false
+adversarial_weight: 1.0
+feature_matching_weight: 2.0
+
+# =============================================================================
+# EMOTION INTEGRATION
+# =============================================================================
+combine_emotions: true
+emotion_dim: 256
+
+# =============================================================================
+# VALIDATION & METRICS
+# =============================================================================
+log_every: 10
+save_every_epochs: 5
+validate_every_epochs: 1
+
+# Key metrics to track (from paper)
+track_metrics:
+  - f0_correlation    # Target: > 0.3 (currently 0.051)
+  - f0_jitter         # Frame-to-frame stability
+  - voicing_accuracy  # V/UV classification
+  - contour_smoothness
+
+# Success criteria
+min_f0_correlation: 0.3  # Paper reports near human-level
+max_f0_jitter: 10.0      # Hz, lower is better
+
+# Early stopping
+early_stopping_patience: 10
+early_stopping_metric: f0_correlation
+early_stopping_mode: max  # Higher correlation is better
+
+# =============================================================================
+# DATA AUGMENTATION
+# =============================================================================
+use_augmentation: true
+augmentation:
+  pitch_shift_semitones: 2.0  # Random pitch shift ±2 semitones
+  time_stretch_range:
+    - 0.9
+    - 1.1
+  noise_level: 0.001
+
+# =============================================================================
+# EXPECTED PITCH PATTERNS (for validation)
+# =============================================================================
+expected_pitch_order:
+  - fearful    # Highest pitch
+  - angry
+  - happy
+  - surprised
+  - neutral
+  - calm
+  - sad        # Lowest pitch
+
+# Minimum separation for emotion validation
+min_happy_sad_separation: 30  # Hz

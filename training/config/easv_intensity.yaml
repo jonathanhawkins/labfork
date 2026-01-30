@@ -1,0 +1,143 @@
+# ECE-TTS EASV (Emotion-Adaptive Spherical Vectors) Intensity Control
+# Based on: https://www.mdpi.com/2076-3417/15/9/5108
+# And EmoSphere++: https://arxiv.org/abs/2411.02625
+#
+# Key Features:
+# - Arithmetic intensity control: emotion' = emotion * alpha
+# - Emotion-specific shift centers (M_k) for optimal VAD separation
+# - IQR normalization for robust intensity scaling
+# - Extended intensity range [0.0, 2.0]
+#
+# SUCCESS CRITERIA:
+# - Intensity=0.5 should produce weaker emotion than intensity=1.0
+# - Intensity=1.5 should produce stronger/exaggerated emotion
+# - Happy pitch contour at intensity=1.5 > intensity=1.0 > intensity=0.5
+#
+# Usage:
+#   python train_easv.py --config config/easv_intensity.yaml
+
+# Model Configuration
+model:
+  name: "EASV-Intensity"
+  version: "v1.0"
+
+# EASV Configuration
+easv:
+  # Core dimensions
+  vad_dim: 3  # Valence, Arousal, Dominance
+  embedding_dim: 256
+  hidden_dim: 512
+  output_dim: 2048  # Match CSM prosody hidden
+  num_prosody_tokens: 4
+
+  # ECE-TTS intensity settings
+  min_intensity: 0.0  # Neutral (no emotion)
+  max_intensity: 2.0  # Maximum exaggeration
+  default_intensity: 1.0  # Normal training level
+
+  # ECE-TTS specific features
+  use_arithmetic_intensity: true  # Key ECE-TTS feature
+  use_shift_centers: true  # Emotion-specific M_k centers
+  shift_center_margin: 0.3  # Min distance from neutral
+  use_iqr_normalization: true  # Robust intensity scaling
+  iqr_q1: 0.25
+  iqr_q3: 0.75
+
+  # Spherical encoding
+  use_enhanced_spherical: true  # Higher-order terms
+  learn_intensity_predictor: true  # For analysis
+
+  # Emotions
+  num_emotions: 8
+  emotions:
+    - neutral
+    - happy
+    - sad
+    - angry
+    - fearful
+    - surprised
+    - disgusted
+    - calm
+
+# Training Configuration
+training:
+  # Basic settings
+  epochs: 50
+  batch_size: 32
+  gradient_accumulation: 1
+
+  # Learning rate
+  learning_rate: 0.0001
+  lr_scheduler: "cosine"
+  warmup_steps: 500
+  min_lr: 0.00001
+
+  # Optimization
+  optimizer: "AdamW"
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+  max_grad_norm: 1.0
+
+  # Loss weights
+  loss_weights:
+    monotonicity: 1.0  # Higher intensity -> larger magnitude
+    direction: 0.5  # Preserve emotion type across intensities
+    classification: 0.3  # Same emotion at different intensities
+    smoothness: 0.2  # Gradual embedding change
+
+  # Intensity training strategy
+  intensity_training:
+    # Train with random intensities
+    random_intensity_range: [0.3, 1.7]
+    # Paired training for monotonicity loss
+    intensity_pairs:
+      - [0.5, 1.0]
+      - [1.0, 1.5]
+      - [0.5, 1.5]
+    # Sample emotion uniformly
+    uniform_emotion_sampling: true
+
+  # Checkpointing
+  save_every: 5
+  eval_every: 2
+
+# Validation Configuration
+validation:
+  batch_size: 64
+
+  # Intensity sweep verification
+  sweep_intensities: [0.5, 1.0, 1.5]
+  sweep_emotions: ["happy", "sad", "angry"]
+
+  # Metrics
+  metrics:
+    - monotonicity_score  # Must increase with intensity
+    - direction_preservation  # Cosine similarity of directions
+    - classification_accuracy  # Same emotion predicted
+    - embedding_smoothness  # Gradual change
+
+# Hardware Configuration
+hardware:
+  # M4 Pro settings
+  device: "mps"
+  precision: "float32"
+  num_workers: 4
+
+  # Alternative: CUDA settings
+  # device: "cuda"
+  # precision: "bfloat16"
+  # num_workers: 8
+
+# Logging
+logging:
+  project: "voice-clone-easv"
+  run_name: "easv-intensity-v1"
+  log_interval: 100
+  wandb: false  # Enable if needed
+
+# Paths
+paths:
+  data_dir: "../data/splits"
+  output_dir: "../checkpoints/easv_intensity"
+  log_dir: "../logs/easv_intensity"

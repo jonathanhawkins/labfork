@@ -1,0 +1,122 @@
+# Cross-Utterance Context Prosody Prediction Configuration
+# Based on CUC-VAE and ParaTTS research
+
+# Model configuration
+model:
+  # Context window
+  num_prev_sentences: 2          # Number of previous sentences to consider
+  num_next_sentences: 1          # Number of future sentences (bidirectional context)
+  max_sentence_length: 128       # Maximum tokens per sentence
+  max_context_sentences: 4       # Maximum total context sentences
+
+  # Text encoder (pre-trained language model)
+  text_encoder_model: "roberta-base"  # Options: roberta-base, bert-base-uncased, sentence-transformers/all-MiniLM-L6-v2
+  text_encoder_dim: 768               # Hidden dimension from text encoder
+  freeze_text_encoder: true           # Freeze pre-trained weights (recommended)
+  text_encoder_layers_to_use: -1      # -1 = use all layers
+
+  # Context encoder
+  context_hidden_dim: 512        # Hidden dimension for context encoder
+  context_num_layers: 2          # Number of transformer layers
+  context_num_heads: 8           # Number of attention heads
+  use_bidirectional_context: true # Use both past and future context
+
+  # Variational encoder (VAE)
+  latent_dim: 256                # Dimension of latent prosody space z
+  use_vae: true                  # Use variational encoder (vs deterministic)
+  kl_weight: 0.1                 # KL divergence weight (β-VAE style)
+  kl_annealing_steps: 5000       # Steps to anneal KL weight from 0 to full
+  min_kl_weight: 0.0             # Minimum KL weight during annealing
+  prior_type: "context"          # "standard" (N(0,1)) or "context" (context-conditioned)
+
+  # Prosody prediction
+  prosody_hidden_dim: 512        # Hidden dimension for prosody predictor
+  prosody_num_layers: 4          # Number of transformer layers
+  prosody_num_heads: 8           # Number of attention heads
+  output_dim: 2048               # CSM prosody hidden dimension
+  num_prosody_tokens: 4          # Prefix tokens for prosody conditioning
+
+  # Multi-speaker (set num_speakers > 0 to enable)
+  num_speakers: 0                # Number of speakers (0 = single speaker mode)
+  speaker_embedding_dim: 256     # Speaker embedding dimension
+  use_speaker_in_context: true   # Include speaker in context encoding
+
+  # Emotion integration (optional)
+  use_emotion: false             # Whether to integrate emotion
+  emotion_dim: 256               # Emotion embedding dimension
+  num_emotions: 8                # Number of emotion categories
+
+  # Training
+  dropout: 0.1
+  label_smoothing: 0.0
+  use_gradient_checkpointing: false
+
+  # Inference
+  sample_from_prior: false       # Sample z from prior at inference
+  context_dropout: 0.0           # Dropout for context during training
+
+
+# Training configuration
+training:
+  # Optimization
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 1000
+  max_steps: 100000
+  gradient_clip: 1.0
+
+  # Batch size
+  batch_size: 16                 # Per-GPU batch size
+  accumulation_steps: 1          # Gradient accumulation
+
+  # Data
+  max_audio_length: 15.0         # Maximum audio length in seconds
+  sample_rate: 16000             # Audio sample rate
+
+  # Logging and checkpointing
+  log_interval: 100
+  eval_interval: 1000
+  save_interval: 5000
+  checkpoint_dir: "../checkpoints/cross_utterance"
+
+  # Early stopping
+  patience: 10                   # Number of evals without improvement
+  min_delta: 0.001               # Minimum improvement delta
+
+
+# Dataset configuration
+data:
+  train_manifest: "../data/paragraph_manifest.jsonl"
+  val_manifest: null             # If null, split from train
+  val_split: 0.1                 # Validation split ratio
+  max_paragraph_length: 10       # Maximum sentences per paragraph
+
+  # Preprocessing
+  normalize_prosody: true        # Normalize prosody features
+  augment_context_dropout: 0.1   # Randomly drop context sentences during training
+
+
+# Evaluation metrics
+evaluation:
+  # Paragraph coherence metrics
+  compute_coherence_score: true
+  compute_boundary_smoothness: true
+  compute_context_dependency: true
+
+  # Sample generation
+  num_samples: 10                # Number of samples to generate for evaluation
+
+
+# Hardware configuration
+hardware:
+  num_workers: 4                 # DataLoader workers
+  pin_memory: true
+  mixed_precision: false         # Use AMP (requires GPU)
+  compile_model: false           # torch.compile (PyTorch 2.0+)
+
+
+# Logging
+logging:
+  use_wandb: false
+  project_name: "cross-utterance-prosody"
+  run_name: null                 # Auto-generated if null

@@ -1,0 +1,59 @@
+# Joint Prosody + Audio Training for RTX 4090
+# This trains prosody encoder with actual audio reconstruction loss
+
+# ============== Model ==============
+model_path: "../models/csm-1b"
+lora_checkpoint: "../models/checkpoints/csm_lora_450/best"
+
+# ============== Prosody Configuration ==============
+prosody:
+  semantic_dim: 16
+  acoustic_dim: 16
+  rhythm_dim: 8
+  contour_dim: 64
+  prefix_tokens: 8
+  dropout: 0.1
+
+# ============== Joint Training ==============
+use_audio_loss: true
+audio_loss_weight: 0.5    # Weight for audio reconstruction loss
+prosody_scale: 0.1        # Scale prosody prefix to avoid dominating
+
+# ============== Prosody Loss Weights ==============
+# These help distinguish high-energy emotions (angry) from low-energy (sad)
+prosody_loss_weight: 2.0  # Boost prosody reconstruction loss (default 2.0)
+energy_loss_weight: 1.5   # Energy prediction auxiliary loss (angry vs sad separation)
+
+# ============== Data ==============
+train_manifest: "../data/training/train_large.json"
+val_manifest: "../data/training/val_large.json"
+prosody_cache_dir: "../data/prosody_cache"
+max_audio_length_ms: 15000
+sample_rate: 24000
+
+# ============== Training ==============
+batch_size: 2             # Smaller batch for audio loss
+gradient_accumulation: 8  # Effective batch = 16
+num_epochs: 20
+learning_rate: 5.0e-5     # Lower LR for joint training
+weight_decay: 0.1
+warmup_steps: 200
+max_grad_norm: 1.0
+
+# ============== Temporal ==============
+train_temporal: true
+num_temporal_segments: 4
+
+# ============== Evaluation ==============
+eval_every: 100
+save_every: 200
+log_every: 20
+save_every_epochs: 2
+
+# ============== Hardware ==============
+device: "cuda"
+precision: "fp32"
+num_workers: 2
+
+# ============== Output ==============
+output_dir: "../models/checkpoints/prosody_joint"

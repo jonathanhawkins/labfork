@@ -1,0 +1,34 @@
+# AI Research Lab - Backend Development Dockerfile
+# Hot reload enabled for development
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ffmpeg \
+    libsndfile1 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source files
+COPY . .
+
+# Set development environment
+ENV PORT=8003
+ENV PYTHONUNBUFFERED=1
+ENV DEBUG=true
+ENV LOG_LEVEL=debug
+
+# Create directories
+RUN mkdir -p /app/data /app/models /app/outputs
+
+EXPOSE 8003
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]

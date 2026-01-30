@@ -1,0 +1,33 @@
+# Generation Activity Configuration
+# Defines how speech synthesis is visualized in the 3D lab
+
+id: generation
+name: Speech Generation
+description: Generating synthesized speech with emotion control
+icon: Sparkles
+tags:
+  - audio
+  - output
+  - inference
+priority: 3
+
+visualization:
+  prop: speaker
+  animation: focused
+  particles: audio-waves
+  color: 0xffe66d  # Yellow for audio output
+  workLocation: speaker
+  showProgress: true
+  highlightProp: true
+
+agentBehavior:
+  defaultStatus: working
+  typingSpeed: 0.8
+  faceProp: true
+
+progressDetection:
+  patterns:
+    - "Generating\\s+(\\d+)/(\\d+)"
+    - "Synthesizing.*?(\\d+)%"
+  completionPattern: "Generation complete|Audio saved|Saved .*.wav"
+  completionMessage: "Speech generated successfully"

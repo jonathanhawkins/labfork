@@ -1,0 +1,104 @@
+# Prosody-Conditioned Training V5 Configuration
+# Key improvements: anti-overfitting measures from research
+
+# Model settings
+model_path: ../models/csm-1b
+use_lora: true
+lora_r: 8
+lora_alpha: 16
+lora_target_modules:
+  - q_proj
+  - v_proj
+lora_dropout: 0.1
+
+# Training settings
+learning_rate: 0.0001
+weight_decay: 0.01
+num_epochs: 15  # Reduced from 25 - early stopping will stop earlier
+batch_size: 4
+max_grad_norm: 1.0
+
+# Data paths (update for your setup)
+train_manifest: ../data/training/train.json
+val_manifest: ../data/training/val.json
+prosody_cache_dir: ../data/prosody_cache
+
+# Output
+output_dir: ../models/checkpoints/prosody_v5
+save_every_epochs: 3
+log_every: 10
+
+# =============================================================================
+# V5 ANTI-OVERFITTING SETTINGS
+# =============================================================================
+
+# Emotion loss warmup: ramp up emotion loss over first N epochs
+# Prevents model from overfitting to emotion before learning prosody
+emotion_warmup_epochs: 10
+
+# Gradient detachment: emotion head doesn't affect acoustic features
+# Prevents pitch pattern corruption (happy/sad Hz inversion)
+detach_emotion_grad: true
+
+# V5 FIX: Energy gradient detachment - CRITICAL for preventing pitch inversion
+# Without this, energy predictor gradients flow back through acoustic_encoder
+# and corrupt pitch_mean (acoustic[0]) causing happy < sad Hz inversion
+detach_energy_grad: true
+
+# Early stopping: stop when pitch patterns degrade
+early_stopping_patience: 3
+
+# Curriculum learning: start with easy emotions, gradually add hard ones
+# easy (0.0): neutral, calm
+# medium (0.3-0.5): happy, sad, surprised
+# hard (0.7-0.9): angry, excited, disgusted
+use_curriculum: true
+curriculum_start: 0.4      # Start with 40% easiest samples
+curriculum_increment: 0.1  # Add 10% more each epoch
+
+# Don't use weighted random sampling with curriculum (they're mutually exclusive)
+balance_emotions: false
+
+# =============================================================================
+# LOSS WEIGHTS (V5 adjusted)
+# =============================================================================
+
+# Main prosody reconstruction loss
+prosody_loss_weight: 2.0
+
+# Temporal encoder loss
+temporal_loss_weight: 1.0
+train_temporal: true
+num_temporal_segments: 4
+
+# Energy prediction auxiliary loss (angry/sad discrimination)
+energy_loss_weight: 1.0
+
+# Emotion classification auxiliary loss
+# Note: This is the BASE weight - actual weight = base * warmup_factor
+emotion_loss_weight: 1.0  # Reduced from 1.5
+
+# Audio reconstruction (optional, expensive)
+use_audio_loss: false
+audio_loss_weight: 0.1
+
+# Prosody embedding scale when prepending to text
+prosody_scale: 0.1
+
+# =============================================================================
+# ENERGY AUGMENTATION (optional, helps angry/sad contrast)
+# =============================================================================
+
+energy_augmentation:
+  enabled: false  # Disabled by default in V5 - gradient detachment handles this
+  angry_boost_db: 6.0
+  sad_reduce_db: -6.0
+  probability: 0.5
+
+# =============================================================================
+# PROSODY ENCODER SETTINGS
+# =============================================================================
+
+hidden_size: 2048
+num_prosody_tokens: 4
+dropout: 0.1  # Could increase to 0.2 for more regularization

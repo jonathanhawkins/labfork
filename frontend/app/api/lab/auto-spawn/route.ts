@@ -475,7 +475,7 @@ RETRY STRATEGY: Previous attempt timed out. Simplify:
 
   return new Promise((resolve) => {
     const agentName = `task-${task.id}-${Date.now()}`;
-    const taskPrompt = `Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="voice-clone-pipeline"):
+    const taskPrompt = `Work on this task from the shared task list (CLAUDE_CODE_TASK_LIST_ID="labfork"):
 
 TASK #${task.id}: ${task.subject}
 ${task.description ? `\nDescription: ${task.description}` : ""}

@@ -1,0 +1,151 @@
+# Biotech NLP Research Lab
+# Research NLP applications for drug discovery and biomedical text mining
+
+name: "Biotech NLP Lab"
+slug: "biotech-nlp"
+description: "Research NLP for drug discovery, biomedical text mining, and clinical AI"
+longDescription: |
+  A research lab at the intersection of NLP and biotechnology. Focus areas include
+  biomedical named entity recognition, drug-drug interaction extraction, clinical
+  text understanding, protein language models, and AI-assisted drug discovery.
+difficulty: intermediate
+
+branding:
+  primaryColor: "#8b5cf6"    # Purple (biotech/science)
+  accentColor: "#22c55e"     # Green (biology/life)
+  backgroundStyle: "gradient"
+  backgroundColor: "#0f0520"
+  gradientColors: ["#1a0530", "#0f1520"]
+
+scene:
+  props:
+    - id: molecule-display
+      type: molecule
+      position: [-5, 1, -4]
+      scale: 2.5
+      accentColor: 0x8b5cf6
+
+    - id: research-terminal
+      type: terminal
+      position: [5, 0, -5]
+      scale: 1.4
+      accentColor: 0x22c55e
+
+    - id: data-server
+      type: server
+      position: [-6, 0, 4]
+      scale: 1.3
+      accentColor: 0x3b82f6
+
+    - id: analysis-computer
+      type: supercomputer
+      position: [6, 0, 4]
+      scale: 1.2
+      accentColor: 0xec4899
+
+  decorations:
+    plants: true
+    floatingCubes: false
+    particles: true
+
+  lighting:
+    ambientIntensity: 0.5
+    mainLightIntensity: 0.7
+    mainLightColor: "#f0e8ff"
+
+  fog:
+    enabled: true
+    near: 10
+    far: 30
+
+research:
+  arxivCategories:
+    - cs.CL       # Computational Linguistics
+    - cs.LG       # Machine Learning
+    - q-bio.BM    # Biomolecules
+    - q-bio.QM    # Quantitative Methods
+
+  keywords:
+    - biomedical NLP named entity recognition
+    - drug discovery language models
+    - clinical text mining transformer
+    - protein language models
+    - drug-drug interaction extraction
+    - medical question answering
+    - biomedical knowledge graphs
+    - chemical language models SMILES
+    - clinical trial matching NLP
+    - scientific literature mining
+
+  additionalSources:
+    - semantic-scholar
+    - papers-with-code
+
+  maxPapersPerSession: 5
+
+evaluation:
+  primaryMetric: f1_score
+  baselineComparison: true
+  metrics:
+    - id: f1_score
+      name: F1 Score
+      description: Harmonic mean of precision and recall
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: precision
+      name: Precision
+      description: Proportion of correct positive predictions
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: recall
+      name: Recall
+      description: Proportion of actual positives identified
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+    - id: auc_roc
+      name: AUC-ROC
+      description: Area under ROC curve
+      range: [0, 1]
+      higherIsBetter: true
+
+    - id: inference_speed
+      name: Inference Speed
+      description: Documents processed per second
+      range: [0, 1000]
+      higherIsBetter: true
+      unit: "docs/s"
+
+hardware:
+  gpuRequired: false
+  minGpuVram: 8
+  recommendedGpuVram: 16
+  minRam: 16
+  platforms:
+    - darwin
+    - linux
+    - win32
+
+prompts:
+  research: prompts/research.md
+  implementation: prompts/implementation.md
+  evaluation: prompts/evaluation.md
+  preamble: |
+    You are working on a Biotech NLP Research Lab focused on applying
+    natural language processing to drug discovery and biomedical research.
+    Prioritize accuracy, interpretability, and reproducibility.
+
+tags:
+  - nlp
+  - biotech
+  - drug-discovery
+  - text-mining
+  - clinical-ai
+  - protein-language-models
+
+version: "1.0"

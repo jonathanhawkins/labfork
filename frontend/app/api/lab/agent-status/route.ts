@@ -17,9 +17,11 @@ const AGENT_STATE_URL = process.env.AGENT_STATE_URL || '';
 const projectRoot = join(process.cwd(), '..');
 const AGENTS_FILE = join(projectRoot, '.skills', 'research-manager', 'state', 'agents.json');
 
-// Remote 4090 config
-const REMOTE_HOST = 'doc@100.83.78.111';
-const REMOTE_AGENTS_FILE = '~/dev/voice-clone-pipeline/.skills/research-manager/state/agents.json';
+// Remote 4090 config (from environment)
+const REMOTE_GPU_HOST = process.env.REMOTE_GPU_HOST || '';
+const REMOTE_GPU_USER = process.env.REMOTE_GPU_USER || 'doc';
+const REMOTE_HOST = REMOTE_GPU_HOST ? `${REMOTE_GPU_USER}@${REMOTE_GPU_HOST}` : '';
+const REMOTE_AGENTS_FILE = '~/dev/labfork/.skills/research-manager/state/agents.json';
 
 interface AgentInfo {
   name: string;

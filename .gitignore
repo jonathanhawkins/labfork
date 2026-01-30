@@ -1,2 +1,179 @@
-# Generated research artifacts
+# ===================
+# Python
+# ===================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.venv/
+ENV/
+env/
+.conda/
+
+# ===================
+# Node.js / Frontend
+# ===================
+node_modules/
+.next/
+out/
+.nuxt/
+.cache/
+*.tsbuildinfo
+.npm
+.yarn/
+
+# ===================
+# Training Data & Models (LARGE FILES)
+# ===================
+data/
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.h5
+*.pkl
+*.pickle
+
+# Backend checkpoints
+backend/checkpoints/
+
+# ===================
+# Audio & Media Files
+# ===================
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.webm
+*.mp4
+*.avi
+*.mov
+
+# ===================
+# Generated Outputs
+# ===================
+outputs/
+results/
+logs/
+*.log
+wandb/
+runs/
+tensorboard/
+
+# ===================
+# Research Artifacts
+# ===================
 outputs/research/
+.skills/research-manager/state/
+
+# ===================
+# Environment & Secrets
+# ===================
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.yaml
+
+# ===================
+# IDE & Editor
+# ===================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# ===================
+# OS Generated
+# ===================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===================
+# Docker
+# ===================
+*.tar
+docker-compose.override.yml
+
+# ===================
+# Jupyter Notebooks
+# ===================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===================
+# Testing & Coverage
+# ===================
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.nox/
+
+# ===================
+# Misc
+# ===================
+*.bak
+*.tmp
+*.temp
+*.orig
+.cache/
+tmp/
+temp/
+
+# ===================
+# Project-specific ignores
+# ===================
+# Seed-VC model weights
+seed-vc/
+
+# DataSpeech outputs
+dataspeech/
+
+# Evaluation results
+evaluation/
+
+# Promo video assets
+promo-video/
+
+# Ollama shim (local dev only)
+ollama-anthropic-shim/
+.vercel

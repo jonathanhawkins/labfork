@@ -1,0 +1,163 @@
+# EmoSphere++ Configuration
+# Based on arXiv:2411.02625 - Zero-Shot Emotional TTS via Emotion-Adaptive Spherical Vector
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+
+model:
+  # Input dimensions
+  input_dim: 768              # Audio feature dimension (wav2vec2/HuBERT)
+  mel_dim: 80                 # Mel spectrogram dimension
+
+  # Multi-level style encoder
+  global_style_dim: 256       # Global (utterance-level) style
+  local_style_dim: 128        # Local (frame-level) style
+  combined_style_dim: 384     # global + local = 256 + 128
+
+  # Global style encoder (GST-like)
+  gst_num_heads: 4
+  gst_num_tokens: 10          # Learnable style tokens
+  gst_conv_channels: [32, 32, 64, 64, 128, 128]
+  gst_conv_kernel: 3
+
+  # Local style encoder
+  local_conv_channels: [64, 128, 256]
+  local_conv_kernel: 3
+  local_num_layers: 4
+  local_num_heads: 8
+
+  # EASV (Emotion-Adaptive Spherical Vector)
+  vad_dim: 3                  # Valence, Arousal, Dominance
+  emotion_embedding_dim: 256
+  num_emotions: 8             # Core emotion categories
+
+  # CFM decoder
+  cfm_hidden_dim: 512
+  cfm_num_layers: 6
+  cfm_num_heads: 8
+  cfm_sigma_min: 0.001
+  cfm_num_steps_train: 10
+  cfm_num_steps_inference: 8  # Fast inference (4-8 steps)
+  cfm_ode_method: "midpoint"
+
+  # Output
+  output_dim: 2048            # Match CSM prosody hidden dim
+  num_prosody_tokens: 4       # Prefix tokens for conditioning
+
+  # Regularization
+  dropout: 0.1
+  use_layer_norm: true
+
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+
+training:
+  # Batch settings
+  batch_size: 8
+  num_epochs: 100
+  accumulation_steps: 4       # Effective batch size = 32
+
+  # Optimizer
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.99]
+  eps: 1.0e-8
+
+  # Scheduler (Cosine Annealing with Warm Restarts)
+  scheduler_T0: 10
+  scheduler_T_mult: 2
+  scheduler_eta_min: 1.0e-6
+  warmup_steps: 1000
+
+  # Gradient clipping
+  gradient_clip: 1.0
+
+  # Mixed precision
+  use_amp: true
+
+  # Loss weights
+  cfm_loss_weight: 1.0
+  easv_reconstruction_weight: 1.0
+  style_consistency_weight: 0.5
+  emotion_transfer_weight: 0.3
+  speaker_disentangle_weight: 0.2
+  emotion_classification_weight: 0.3
+
+
+# =============================================================================
+# Data Configuration
+# =============================================================================
+
+data:
+  # Paths (set these to your data directories)
+  manifest_path: "../data/emotion_manifest.json"
+  audio_dir: "../data/audio"
+  mel_dir: "../data/mel"
+  feature_dir: "../data/features"
+
+  # Preprocessing
+  sample_rate: 24000
+  hop_length: 256
+  n_mels: 80
+  n_fft: 1024
+
+  # Sequence lengths
+  max_mel_length: 1000        # ~10 seconds at 24kHz
+  max_feature_length: 500     # Audio features
+
+  # Data loading
+  num_workers: 4
+  pin_memory: true
+
+  # Augmentation
+  use_augmentation: false
+  augment_prob: 0.3
+
+
+# =============================================================================
+# Evaluation Configuration
+# =============================================================================
+
+evaluation:
+  # Metrics to compute
+  compute_easv_clustering: true
+  compute_emotion_accuracy: true
+  compute_transfer_quality: true
+
+  # Zero-shot evaluation
+  test_emotions: ["happy", "sad", "angry", "surprised"]
+  test_intensities: [0.5, 0.7, 0.9]
+
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+
+logging:
+  log_interval: 100           # Steps between console logs
+  save_interval: 1000         # Steps between checkpoints
+  eval_interval: 500          # Steps between validations
+  checkpoint_dir: "../checkpoints/emosphere_plus"
+
+  # Weights & Biases (optional)
+  use_wandb: false
+  wandb_project: "emosphere_plus"
+  wandb_entity: null
+
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+
+hardware:
+  device: "cuda"
+  distributed: false
+  world_size: 1
+  local_rank: 0
+
+  # Memory optimization
+  gradient_checkpointing: false
+  empty_cache_interval: 100

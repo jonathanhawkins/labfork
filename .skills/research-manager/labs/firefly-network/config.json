@@ -1,0 +1,15 @@
+{
+  "id": "firefly-network",
+  "name": "The Firefly Network",
+  "description": "Solar-powered mesh lights bringing illumination, power, and connectivity to 1 billion people without electricity",
+  "taskListId": "firefly-network",
+  "active": true,
+  "domain": "firefly-network",
+  "settings": {
+    "maxAgents": 3,
+    "autoSpawn": true,
+    "researchInterval": 30
+  },
+  "createdAt": "2026-01-29T21:18:20.366278",
+  "updatedAt": "2026-01-29T21:18:20.366278"
+}

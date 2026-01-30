@@ -1,0 +1,69 @@
+# UDDETTS ADV-Space Unified Emotion Control Configuration
+# Based on UDDETTS (arXiv:2505.10599)
+
+# Model dimensions
+input_dim: 768          # wav2vec2/HuBERT feature dimension
+embedding_dim: 256      # Emotion embedding dimension
+hidden_dim: 512         # Hidden layer dimension
+output_dim: 2048        # Match CSM prosody encoder
+
+# ADV space settings
+adv_dim: 3              # Arousal-Dominance-Valence
+num_discrete_emotions: 8 # neutral, happy, sad, angry, surprised, calm, fearful, disgusted
+
+# Nonlinear quantization
+num_adv_anchors: 64     # Learnable anchor points in ADV space
+num_anchors_per_dim: 4  # Grid spacing (if uniform)
+use_learnable_anchors: true
+quantization_temperature: 1.0
+
+# Semi-supervised loss weights
+discrete_label_weight: 1.0   # Classification loss
+adv_regression_weight: 1.0   # ADV regression loss
+consistency_weight: 0.5      # Discrete-ADV consistency
+kl_weight: 0.1              # Embedding regularization
+
+# OT-CFM integration
+use_ot_cfm: true
+cfm_hidden_dim: 512
+cfm_num_layers: 4
+cfm_num_heads: 8
+num_ode_steps: 50
+sigma_min: 0.001
+
+# Training settings
+dropout: 0.1
+use_layer_norm: true
+num_prosody_tokens: 4
+
+# Intensity control
+default_intensity: 0.7
+min_intensity: 0.0
+max_intensity: 1.5
+
+# Training hyperparameters
+batch_size: 32
+learning_rate: 0.0001
+weight_decay: 0.01
+max_epochs: 100
+warmup_steps: 1000
+gradient_clip: 1.0
+
+# Scheduler
+scheduler: cosine
+scheduler_T_max: 100
+
+# Data
+data_manifest: ../data/emotion_manifest.json
+train_split: 0.9
+val_split: 0.1
+
+# Checkpointing
+checkpoint_dir: ../checkpoints/uddetts_adv
+save_every_n_epochs: 5
+keep_top_k: 3
+
+# Logging
+log_every_n_steps: 100
+use_wandb: false
+wandb_project: voice-clone-prosody

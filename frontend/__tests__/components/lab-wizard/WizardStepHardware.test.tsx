@@ -240,7 +240,7 @@ describe("WizardStepHardware", () => {
       expect(onConfigChange).toHaveBeenCalledWith(
         expect.objectContaining({
           ssh: expect.objectContaining({
-            host: "100.83.78.111",
+            host: "192.0.2.100",
             user: "doc",
           }),
         })

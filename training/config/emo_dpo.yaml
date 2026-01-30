@@ -1,0 +1,61 @@
+# Emo-DPO: Direct Preference Optimization for Emotional Speech Synthesis
+# Based on arxiv.org/abs/2409.10157
+#
+# This config is used for preference-based fine-tuning after initial prosody training.
+# The model learns to prefer correct emotional expressions over incorrect ones.
+#
+# Usage:
+#   python emo_dpo.py --config config/emo_dpo.yaml \
+#     --checkpoint ../checkpoints/prosody_v6/best.pt \
+#     --manifest ../data/emotion_manifest.json
+
+# DPO hyperparameters
+beta: 0.1                    # KL penalty coefficient (temperature)
+js_alpha: 0.5               # Jensen-Shannon regularization weight
+
+# Loss weights (following Emo-DPO paper: alpha=gamma=theta=1)
+dpo_weight: 1.0             # Weight for DPO loss (preference learning)
+kl_weight: 1.0              # Weight for KL divergence loss (stay close to reference)
+sft_weight: 1.0             # Weight for SFT loss (reconstruction)
+
+# Label smoothing for KL loss stability
+label_smoothing: 0.1
+
+# Preference pair creation settings
+same_speaker_pairs: true    # Prefer pairs from same speaker (better comparison)
+same_text_pairs: true       # Prefer pairs with same text (ideal for DPO)
+
+# Training settings
+learning_rate: 1.0e-5       # Lower LR for DPO fine-tuning (vs 1e-4 for SFT)
+batch_size: 8               # Batch size for training
+num_epochs: 3               # DPO typically needs fewer epochs (paper: 3)
+warmup_steps: 100           # Linear warmup steps
+gradient_accumulation: 2    # Effective batch = batch_size * gradient_accumulation
+max_grad_norm: 1.0          # Gradient clipping
+
+# Model architecture (should match pre-trained checkpoint)
+hidden_size: 2048           # Hidden dimension
+num_prosody_tokens: 4       # Number of prefix tokens
+
+# Reference model settings
+use_reference_model: true   # Keep frozen copy of SFT model for KL computation
+reference_model_update_freq: 0  # 0 = never update (frozen), >0 = update every N steps
+
+# Emotions supported
+num_emotions: 8
+emotion_names:
+  - neutral
+  - happy
+  - sad
+  - angry
+  - fearful
+  - surprised
+  - disgusted
+  - calm
+
+# Output
+output_dir: ../checkpoints/emo_dpo
+
+# Logging
+log_every: 10               # Log every N steps
+save_every_epochs: 1        # Save checkpoint every N epochs

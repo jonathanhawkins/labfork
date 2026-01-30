@@ -1,0 +1,143 @@
+# VEVO: Self-Supervised Disentanglement Configuration
+# Based on ICLR 2025 paper - arXiv:2502.07243
+
+# Model Architecture
+model:
+  # Input dimensions
+  input_dim: 768  # HuBERT/WavLM feature dimension
+  mel_dim: 80
+  sample_rate: 16000
+  hop_length: 320  # 20ms frames
+
+  # VQ Tokenizer (Content Encoder) - Info Bottleneck
+  # Key insight: smaller codebook = more disentangled content
+  content_codebook_size: 1024  # Try 256, 512, 1024, 2048
+  content_code_dim: 256
+  content_num_groups: 1
+  content_ema_decay: 0.99
+  content_commitment_cost: 0.25
+
+  # Style Encoder (how to speak)
+  style_dim: 512
+  style_num_layers: 4
+  style_num_heads: 8
+  style_ffn_dim: 2048
+
+  # Timbre Encoder (who is speaking)
+  timbre_dim: 256
+  timbre_num_layers: 3
+
+  # Content-Style Model (Stage 1: AR Transformer)
+  cs_hidden_dim: 768
+  cs_num_layers: 8
+  cs_num_heads: 12
+  cs_ffn_dim: 3072
+  cs_dropout: 0.1
+  cs_max_len: 2048
+
+  # Acoustic Model (Stage 2: Flow-Matching)
+  acoustic_hidden_dim: 512
+  acoustic_num_layers: 6
+  acoustic_num_heads: 8
+  acoustic_ffn_dim: 2048
+  acoustic_dropout: 0.1
+
+  # Flow matching
+  sigma_min: 0.001
+  num_ode_steps: 50
+  ode_method: "euler"
+
+  # Output for CSM integration
+  output_dim: 2048
+  num_prefix_tokens: 4
+
+# Training Settings
+training:
+  # Optimization
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+
+  # Schedule
+  warmup_steps: 1000
+  max_steps: 100000
+  lr_scheduler: "cosine"
+
+  # Batch settings
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+
+  # Epochs (alternative to max_steps)
+  num_epochs: 50
+
+  # Loss weights
+  commitment_weight: 0.25
+  cs_weight: 1.0  # Content-style AR loss
+  acoustic_weight: 1.0  # Flow matching loss
+  contrastive_weight: 0.1  # Style contrastive loss
+
+  # Regularization
+  dropout: 0.1
+  label_smoothing: 0.0
+
+# Generation Settings
+generation:
+  temperature: 0.8
+  top_k: 0
+  top_p: 0.9
+  num_ode_steps: 50
+
+# Feature Extraction
+features:
+  # HuBERT settings
+  hubert_model: "facebook/hubert-large-ls960-ft"
+  feature_layer: 12  # Which layer to extract features from
+
+  # Mel spectrogram
+  n_fft: 1024
+  win_length: 1024
+  hop_length: 320
+  n_mels: 80
+  f_min: 0
+  f_max: 8000
+
+# Data
+data:
+  manifest_path: "../data/manifest.json"
+  audio_dir: "../data/audio"
+  max_audio_length: 20.0  # seconds
+  min_audio_length: 1.0
+  num_workers: 4
+  pin_memory: true
+
+# Checkpointing
+checkpointing:
+  save_dir: "../checkpoints/vevo"
+  save_every_n_steps: 5000
+  save_total_limit: 5
+  resume_from: null  # Path to resume training
+
+# Logging
+logging:
+  log_every_n_steps: 100
+  wandb_project: "voice-clone-vevo"
+  wandb_run_name: null  # Auto-generated if null
+
+# Hardware
+hardware:
+  # For M4 Pro Mac
+  device: "mps"  # or "cuda" for GPU
+  dtype: "float32"  # float16 for GPU
+  compile_model: false  # torch.compile
+
+# Experiment variations (uncomment to try different bottleneck sizes)
+# experiments:
+#   - name: "small_bottleneck"
+#     content_codebook_size: 256
+#   - name: "medium_bottleneck"
+#     content_codebook_size: 1024
+#   - name: "large_bottleneck"
+#     content_codebook_size: 4096

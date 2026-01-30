@@ -1,0 +1,111 @@
+# MaskGCT Prosody Training Configuration
+# Implements mask-and-predict paradigm from MaskGCT (ICLR 2025) for
+# non-autoregressive prosody-conditioned TTS.
+#
+# Key innovations:
+# 1. Masked prediction: Random tokens masked, predict in parallel
+# 2. Two-stage: Semantic tokens first, then acoustic
+# 3. Cosine mask scheduling: 0.9 → 0.1 during training
+# 4. Parallel decoding: 2x+ inference speedup
+
+# =============================================================================
+# MODEL ARCHITECTURE
+# =============================================================================
+
+# Hidden dimensions (matching CSM backbone)
+hidden_size: 2048
+num_prosody_tokens: 4
+
+# Tokenizer settings
+num_semantic_tokens: 32    # Discrete semantic prosody vocabulary
+num_acoustic_tokens: 128   # Discrete acoustic prosody vocabulary
+
+# Sequence settings
+max_seq_len: 64           # Max prosody tokens per utterance
+
+# Transformer encoder
+num_layers: 6
+num_heads: 8
+feedforward_dim: 4096
+dropout: 0.1
+
+# =============================================================================
+# MASKING CONFIGURATION (Critical for MaskGCT)
+# =============================================================================
+
+# Mask scheduling
+initial_mask_ratio: 0.9    # Start with 90% masked
+final_mask_ratio: 0.1      # End with 10% masked
+mask_schedule: cosine      # cosine | linear | constant
+
+# Two-stage training (semantic → acoustic)
+use_two_stage: true
+predict_semantic_first: true
+
+# =============================================================================
+# TRAINING SETTINGS
+# =============================================================================
+
+# Data paths
+train_manifest: ../data/splits/train.json
+val_manifest: ../data/splits/val.json
+prosody_cache_dir: ../data/prosody_cache
+
+# Output
+output_dir: ../models/checkpoints/maskgct_prosody
+
+# Training hyperparameters
+num_epochs: 30
+batch_size: 8
+learning_rate: 0.0001
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# Prompt conditioning (style from reference)
+use_prompt: true
+prompt_ratio: 0.15         # 15% of sequence used as prompt
+
+# Logging
+log_every: 10
+save_every_epochs: 5
+validate_every_epochs: 1
+
+# =============================================================================
+# INFERENCE SETTINGS
+# =============================================================================
+
+# Parallel decoding
+num_parallel_iterations: 4  # Iterative refinement steps
+temperature: 0.8           # Sampling temperature
+
+# Confidence-based unmasking
+unmask_by_confidence: true  # Unmask high-confidence first
+
+# =============================================================================
+# LOSS WEIGHTS
+# =============================================================================
+
+semantic_loss_weight: 1.0
+acoustic_loss_weight: 1.0
+commitment_loss_weight: 0.25  # VQ-VAE commitment
+
+# =============================================================================
+# SUCCESS CRITERIA (from task definition)
+# =============================================================================
+
+# Training should complete without errors
+# Generated speech should preserve Happy/Sad emotion distinction
+# Inference should be 2x+ faster than autoregressive baseline
+
+# Evaluation metrics to track:
+track_metrics:
+  - masked_prediction_accuracy
+  - semantic_token_accuracy
+  - acoustic_token_accuracy
+  - parallel_generation_time_ms
+  - emotion_preservation_score
+
+# Target benchmarks:
+min_semantic_accuracy: 0.6
+min_acoustic_accuracy: 0.5
+max_generation_time_ms: 50   # Per utterance (should be < autoregressive)

@@ -1,0 +1,93 @@
+# EASPO: Emotion-Aware Stepwise Preference Optimization
+# Based on arXiv:2509.25416 (Sept 2025)
+#
+# Key innovation: Dense supervision at each denoising step instead of
+# sparse utterance-level feedback (Emo-DPO)
+
+# EASPM (Emotion-Aware Stepwise Preference Model) settings
+easpm_hidden_dim: 512
+easpm_num_layers: 4
+easpm_num_heads: 8
+easpm_dropout: 0.1
+
+# Emotion representation
+emotion_dim: 256
+num_emotions: 8
+use_vad: true
+vad_dim: 3
+
+# Stepwise preference settings
+num_denoising_steps: 50         # Total diffusion steps
+num_candidates_per_step: 4      # Candidates to sample at each step
+preference_temperature: 1.0     # Temperature for preference scoring
+
+# DPO-style loss settings
+beta: 0.1                       # KL penalty coefficient
+js_alpha: 0.5                   # Jensen-Shannon regularization
+
+# Stepwise loss weighting
+# "linear": More weight on late steps (fine-grained)
+# "cosine": Smooth transition
+# "uniform": Equal weight for all steps
+step_weight_schedule: "linear"
+early_step_weight: 0.5          # Weight for early steps (t near 0)
+late_step_weight: 1.0           # Weight for late steps (t near 1)
+
+# Multi-scale preference (evaluate both coarse and fine)
+use_multiscale: true
+coarse_step_interval: 10        # Evaluate every 10 steps for coarse
+fine_step_interval: 1           # Evaluate every step for fine-grained
+
+# Training settings
+learning_rate: 1e-5             # Flow model learning rate
+easpm_learning_rate: 1e-4       # EASPM learning rate (higher - learns faster)
+batch_size: 8
+num_epochs: 3
+warmup_steps: 100
+gradient_accumulation: 2
+max_grad_norm: 1.0
+
+# Reference model settings
+use_reference_model: true
+freeze_reference: true
+
+# EASPM pre-training (before EASPO training)
+pretrain_easpm_epochs: 1
+easpm_contrastive_margin: 0.5
+
+# Output settings
+num_prosody_tokens: 4
+
+# Base flow model config (from prosody_flow.yaml)
+base_config:
+  prosody_dim: 2048
+  text_dim: 768
+  use_text_conditioning: true
+  sigma_min: 0.001
+  use_ot_coupling: true
+  ot_reg: 0.05
+  ot_normalize_cost: true
+  variance_scale: 1.0
+  hidden_dim: 512
+  num_layers: 4
+  num_heads: 8
+  dropout: 0.1
+  use_sinusoidal_time_emb: true
+  time_emb_dim: 256
+  num_prosody_tokens: 4
+  num_ode_steps_inference: 50
+  ode_method: "euler"
+
+# Hardware-specific settings (RTX 4090)
+rtx_4090:
+  batch_size: 16
+  gradient_accumulation: 1
+  num_candidates_per_step: 6
+  num_denoising_steps: 50
+
+# Hardware-specific settings (M4 Pro)
+m4_pro:
+  batch_size: 8
+  gradient_accumulation: 2
+  num_candidates_per_step: 4
+  num_denoising_steps: 50

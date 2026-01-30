@@ -1,0 +1,78 @@
+# FACodec Prosody Training Configuration
+# Based on NaturalSpeech3's FACodec for disentangled prosody conditioning
+
+# ==============================================================================
+# DATA
+# ==============================================================================
+manifest_path: ../data/manifest.json
+facodec_features_dir: ../data/facodec_features
+val_split: 0.1
+
+# ==============================================================================
+# MODEL
+# ==============================================================================
+model_path: ../models/sesame-csm-1b
+hidden_size: 2048
+num_prosody_tokens: 4
+freeze_csm: true  # Freeze CSM, train only prosody adapter
+
+# ==============================================================================
+# FACODEC SETTINGS
+# ==============================================================================
+facodec_config:
+  sample_rate: 16000
+  hop_size: 200  # ~12.5ms per frame
+
+  # Encoder
+  encoder_ngf: 32
+  encoder_up_ratios: [2, 4, 5, 5]
+  encoder_out_channels: 256
+
+  # Decoder
+  decoder_in_channels: 256
+  decoder_upsample_initial: 1024
+  decoder_ngf: 32
+  decoder_up_ratios: [5, 5, 4, 2]
+
+  # Vector Quantization
+  vq_num_q_content: 2    # Content codebooks
+  vq_num_q_prosody: 1    # Prosody codebook
+  vq_num_q_residual: 3   # Acoustic detail codebooks
+  vq_dim: 256
+  codebook_dim: 8
+  codebook_size: 10      # 2^10 = 1024 codes
+
+  # HuggingFace model
+  hf_repo: amphion/naturalspeech3_facodec
+  encoder_filename: ns3_facodec_encoder.bin
+  decoder_filename: ns3_facodec_decoder.bin
+
+  # Prosody adapter
+  prosody_embed_dim: 256
+  dropout: 0.1
+
+# ==============================================================================
+# TRAINING
+# ==============================================================================
+batch_size: 4
+learning_rate: 1.0e-4
+weight_decay: 0.01
+warmup_steps: 500
+max_steps: 10000
+gradient_accumulation: 4
+max_grad_norm: 1.0
+
+# ==============================================================================
+# CHECKPOINTING
+# ==============================================================================
+output_dir: ../checkpoints/facodec_prosody
+save_steps: 500
+eval_steps: 250
+log_steps: 50
+
+# ==============================================================================
+# HARDWARE
+# ==============================================================================
+device: cuda
+mixed_precision: true
+num_workers: 4

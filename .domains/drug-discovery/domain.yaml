@@ -1,0 +1,162 @@
+# Drug Discovery Research Lab
+# Research AI-driven drug discovery, molecular generation, and binding prediction
+
+name: "Drug Discovery Lab"
+slug: "drug-discovery"
+description: "Research AI-driven drug discovery, molecular generation, and protein-ligand interactions"
+longDescription: |
+  A research lab at the frontier of AI-driven drug discovery. Focus areas include molecular generation,
+  protein structure prediction, binding affinity estimation, ADMET property prediction, and
+  de novo drug design. Accelerate the discovery of new therapeutics using machine learning.
+difficulty: advanced
+
+branding:
+  primaryColor: "#14b8a6"    # Teal (medical/biotech)
+  accentColor: "#f43f5e"     # Rose (molecules/chemistry)
+  backgroundStyle: "gradient"
+  backgroundColor: "#021014"
+  gradientColors: ["#021014", "#0a1520"]
+
+scene:
+  props:
+    - id: molecule-viewer
+      type: molecule
+      position: [0, 2, -5]
+      scale: 3.0
+      accentColor: 0x14b8a6
+
+    - id: protein-display
+      type: molecule
+      position: [-5, 1, -3]
+      scale: 2.5
+      accentColor: 0xf43f5e
+
+    - id: compound-library
+      type: server
+      position: [5, 0, -3]
+      scale: 1.5
+      accentColor: 0x8b5cf6
+
+    - id: docking-computer
+      type: supercomputer
+      position: [-5, 0, 5]
+      scale: 1.3
+      accentColor: 0x3b82f6
+
+    - id: analysis-terminal
+      type: terminal
+      position: [5, 0, 5]
+      scale: 1.2
+      accentColor: 0x22c55e
+
+  decorations:
+    plants: true
+    floatingCubes: false
+    particles: true
+
+  lighting:
+    ambientIntensity: 0.4
+    mainLightIntensity: 0.6
+    mainLightColor: "#e0ffff"
+
+  fog:
+    enabled: true
+    near: 12
+    far: 35
+
+research:
+  arxivCategories:
+    - q-bio.BM    # Biomolecules
+    - cs.LG       # Machine Learning
+    - physics.chem-ph  # Chemical Physics
+    - q-bio.QM    # Quantitative Methods
+    - cs.AI       # Artificial Intelligence
+
+  keywords:
+    - drug discovery machine learning
+    - molecular generation deep learning
+    - protein structure prediction
+    - binding affinity prediction
+    - ADMET prediction neural network
+    - de novo drug design AI
+    - graph neural networks molecules
+    - AlphaFold protein structure
+    - virtual screening machine learning
+    - molecular property prediction
+
+  additionalSources:
+    - semantic-scholar
+    - github
+    - papers-with-code
+
+  maxPapersPerSession: 6
+
+evaluation:
+  primaryMetric: binding_affinity
+  baselineComparison: true
+  metrics:
+    - id: binding_affinity
+      name: Binding Affinity
+      description: Predicted binding strength (pKd)
+      range: [0, 15]
+      higherIsBetter: true
+      unit: "pKd"
+
+    - id: drug_likeness
+      name: Drug-likeness
+      description: QED score for drug-like properties
+      range: [0, 1]
+      higherIsBetter: true
+
+    - id: synthetic_accessibility
+      name: Synthetic Accessibility
+      description: SAScore for synthesis feasibility
+      range: [1, 10]
+      higherIsBetter: false
+
+    - id: toxicity_score
+      name: Toxicity Score
+      description: Predicted toxicity (lower is safer)
+      range: [0, 1]
+      higherIsBetter: false
+
+    - id: novelty
+      name: Novelty
+      description: Tanimoto distance from known drugs
+      range: [0, 1]
+      higherIsBetter: true
+
+    - id: validity
+      name: Validity
+      description: Percentage of chemically valid molecules
+      range: [0, 100]
+      higherIsBetter: true
+      unit: "%"
+
+hardware:
+  gpuRequired: true
+  minGpuVram: 16
+  recommendedGpuVram: 24
+  minRam: 64
+  platforms:
+    - darwin
+    - linux
+
+prompts:
+  research: prompts/research.md
+  implementation: prompts/implementation.md
+  evaluation: prompts/evaluation.md
+  preamble: |
+    You are working on a Drug Discovery Research Lab focused on AI-driven approaches
+    to accelerate drug discovery. Prioritize safety, novelty, and synthesizability.
+    Always consider ADMET properties and potential toxicity.
+
+tags:
+  - drug-discovery
+  - molecular-generation
+  - protein-structure
+  - graph-neural-networks
+  - cheminformatics
+  - virtual-screening
+
+version: "1.0"

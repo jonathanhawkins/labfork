@@ -1,0 +1,113 @@
+# Intonation Template Clustering Configuration (Into-TTS Approach)
+# Based on: https://arxiv.org/abs/2204.01271
+
+# Paths
+manifest_path: "../data/manifest.json"
+output_dir: "../checkpoints/intonation_templates"
+clustering_path: ""  # Will be auto-detected if empty
+
+# Data settings
+sample_rate: 24000
+max_audio_duration: 10.0  # Max audio duration in seconds
+
+# Training hyperparameters
+batch_size: 32
+num_epochs: 100
+learning_rate: 1e-4
+weight_decay: 1e-5
+warmup_steps: 500
+gradient_clip: 1.0
+
+# Validation
+val_split: 0.1
+val_every: 500  # Validate every N steps
+
+# Checkpointing
+save_every: 1000
+keep_last_n: 3
+
+# Text encoder settings
+text_encoder: "phoneme"  # "phoneme" or "bert"
+text_embed_dim: 256
+
+# Logging
+log_every: 50
+
+# Hardware
+device: "auto"  # "auto", "cuda", "cpu"
+num_workers: 4
+
+# Intonation Template Configuration
+intonation:
+  # F0 extraction settings
+  f0_min: 50.0  # Minimum F0 (Hz) - covers very low voices
+  f0_max: 800.0  # Maximum F0 (Hz) - covers high voices and children
+  hop_length_ms: 10.0  # Frame hop length in milliseconds
+  sample_rate: 24000
+
+  # Contour settings
+  contour_length: 50  # Fixed length for normalized contours
+  use_sentence_final: true  # Use only final portion of utterance
+  final_portion: 0.3  # Use last 30% for sentence-final intonation
+  log_f0: true  # Use log-scale F0 (recommended)
+  normalize_speaker: true  # Speaker-normalize F0 values
+
+  # Clustering settings
+  num_templates: 8  # Number of intonation templates to discover
+  clustering_method: "kmeans"  # "kmeans", "gmm", "minibatch_kmeans"
+  kmeans_init: "k-means++"  # k-means initialization method
+  gmm_covariance: "full"  # GMM covariance type (if using GMM)
+  min_samples_per_template: 10  # Minimum samples to keep template
+
+  # Encoder settings
+  template_embed_dim: 256  # Template embedding dimension
+  hidden_dim: 512  # Hidden layer dimension
+  num_encoder_layers: 2  # Number of encoder layers
+  dropout: 0.1
+
+  # Predictor settings (text → template)
+  use_predictor: true  # Whether to train text-to-template predictor
+  predictor_hidden_dim: 256
+  predictor_num_layers: 2
+  text_embed_dim: 256  # Must match training text_embed_dim
+
+  # Output settings (for prosody pipeline integration)
+  output_dim: 2048  # Output dimension for prosody tokens
+  num_prosody_tokens: 4  # Number of prosody prefix tokens
+
+  # Loss weights
+  reconstruction_weight: 1.0  # Weight for contour reconstruction loss
+  classification_weight: 1.0  # Weight for template classification loss
+  kl_weight: 0.1  # Weight for KL divergence (entropy regularization)
+
+  # Paths
+  template_cache_path: "checkpoints/intonation_templates"
+
+
+# Notes on hyperparameters:
+#
+# num_templates (8 default):
+#   - 4-6: Good for simple datasets, fewer but clearer patterns
+#   - 8-10: Good balance for most datasets
+#   - 12-16: For complex, diverse datasets with many intonation styles
+#
+# contour_length (50 default):
+#   - Lower values (30-40): Faster, captures coarse patterns
+#   - Higher values (60-80): More detail, better for subtle differences
+#
+# final_portion (0.3 default):
+#   - Into-TTS focuses on sentence-final intonation (most distinctive)
+#   - 0.2-0.4: Typical range
+#   - Set to 1.0 to use entire utterance
+#
+# clustering_method:
+#   - "kmeans": Fast, deterministic, good default
+#   - "gmm": Soft assignments, better for overlapping patterns
+#   - "minibatch_kmeans": For very large datasets (100k+ samples)
+#
+# Template discovery tips:
+#   1. Start with more templates (10-12) and reduce if some are sparse
+#   2. Check template counts - very sparse templates may indicate too many
+#   3. Visualize templates to verify they capture meaningful patterns
+#   4. Common patterns: falling (statement), rising (question),
+#      flat (neutral), rise-fall (emphasis), fall-rise (uncertainty)
