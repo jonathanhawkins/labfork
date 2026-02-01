@@ -171,20 +171,27 @@ class ComputeAgent:
         """Poll for available tasks."""
         try:
             async with aiohttp.ClientSession() as session:
+                url = f"{self.workers_url}/api/compute/tasks/pending"
+                params = {"deviceId": self.device_id}
                 async with session.get(
-                    f"{self.workers_url}/api/compute/tasks/pending",
-                    params={"deviceId": self.device_id},
+                    url,
+                    params=params,
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         tasks = data.get("tasks", [])
                         if tasks:
+                            logger.info(f"Found {len(tasks)} task(s)")
                             return tasks[0]  # Get first available task
+                        # No tasks - this is normal, don't log every time
                     elif resp.status == 404:
                         # Device not found, re-register
                         logger.warning("Device not found, re-registering...")
                         await self.register()
+                    else:
+                        error_text = await resp.text()
+                        logger.warning(f"Poll returned {resp.status}: {error_text[:200]}")
         except Exception as e:
             logger.warning(f"Poll failed: {e}")
         return None
@@ -296,13 +303,16 @@ class ComputeAgent:
         self.running = True
         heartbeat_counter = 0
 
+        poll_count = 0
         while self.running:
             try:
+                poll_count += 1
                 # Send heartbeat every 6 polls (30 seconds)
                 heartbeat_counter += 1
                 if heartbeat_counter >= 6:
                     await self.heartbeat()
                     heartbeat_counter = 0
+                    logger.info(f"Heartbeat sent (poll #{poll_count})")
 
                 # Poll for tasks
                 task = await self.poll_tasks()
