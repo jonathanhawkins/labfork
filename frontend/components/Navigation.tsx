@@ -18,6 +18,8 @@ import {
   Bot,
   Cpu,
   BarChart3,
+  Menu,
+  X,
 } from "lucide-react";
 
 // Primary navigation items (always visible)
@@ -75,7 +77,7 @@ function Dropdown({ label, items, isActive }: DropdownProps) {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors rounded-md",
+          "flex items-center gap-1.5 px-3 py-2 text-sm transition-colors rounded-md min-h-[44px]",
           isActive
             ? "text-foreground-bright"
             : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
@@ -83,11 +85,11 @@ function Dropdown({ label, items, isActive }: DropdownProps) {
       >
         {isActive && <span className="w-1.5 h-1.5 rounded-full bg-foreground-bright" />}
         <span>{label}</span>
-        <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", isOpen && "rotate-180")} />
+        <ChevronDown className={cn("w-4 h-4 transition-transform", isOpen && "rotate-180")} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-56 py-2 bg-background-elevated border border-border rounded-lg shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-100">
+        <div className="absolute top-full left-0 mt-1 w-64 py-2 bg-background-elevated border border-border rounded-lg shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-100">
           {items.map((item) => {
             const Icon = item.icon;
             return (
@@ -95,11 +97,11 @@ function Dropdown({ label, items, isActive }: DropdownProps) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
-                className="flex items-start gap-3 px-3 py-2 hover:bg-accent/50 transition-colors"
+                className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors min-h-[48px]"
               >
-                <Icon className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                <Icon className="w-5 h-5 mt-0.5 text-muted-foreground" />
                 <div>
-                  <div className="text-sm text-foreground">{item.label}</div>
+                  <div className="text-sm text-foreground font-medium">{item.label}</div>
                   {item.description && (
                     <div className="text-xs text-muted-foreground">{item.description}</div>
                   )}
@@ -115,19 +117,37 @@ function Dropdown({ label, items, isActive }: DropdownProps) {
 
 export function Navigation() {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Check if any labs dropdown item is active
   const isLabsActive = labsDropdownItems.some(item => pathname.startsWith(item.href));
   // Check if any more dropdown item is active
   const isMoreActive = moreDropdownItems.some(item => pathname.startsWith(item.href));
 
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
   return (
     <nav className="border-b border-border bg-background">
       <div className="max-w-[1400px] mx-auto px-4">
-        <div className="flex items-center justify-between h-12">
+        <div className="flex items-center justify-between h-14">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
               <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <path d="M12 3v10M7 16l5-5 5 5M7 16v4M17 16v4" />
               </svg>
@@ -137,8 +157,8 @@ export function Navigation() {
             </span>
           </Link>
 
-          {/* Navigation Items */}
-          <div className="flex items-center gap-1">
+          {/* Desktop Navigation Items */}
+          <div className="hidden md:flex items-center gap-1">
             {/* Primary nav items */}
             {primaryNavItems.map((item) => {
               const Icon = item.icon;
@@ -150,7 +170,7 @@ export function Navigation() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-sm transition-colors rounded-md",
+                    "flex items-center gap-2 px-3 py-2 text-sm transition-colors rounded-md min-h-[44px]",
                     isFeatured
                       ? "text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"
                       : isActive
@@ -164,14 +184,14 @@ export function Navigation() {
                   {isFeatured && (
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                   )}
-                  <Icon className={cn("w-3.5 h-3.5", isFeatured && "text-amber-400")} />
-                  <span className="hidden md:inline">{item.label}</span>
+                  <Icon className={cn("w-4 h-4", isFeatured && "text-amber-400")} />
+                  <span>{item.label}</span>
                 </Link>
               );
             })}
 
             {/* Separator */}
-            <div className="w-px h-4 bg-border mx-1" />
+            <div className="w-px h-5 bg-border mx-1" />
 
             {/* Labs dropdown */}
             <Dropdown label="Labs" items={labsDropdownItems} isActive={isLabsActive} />
@@ -180,25 +200,155 @@ export function Navigation() {
             <Dropdown label="More" items={moreDropdownItems} isActive={isMoreActive} />
           </div>
 
-          {/* Right side: CTA + Status */}
-          <div className="flex items-center gap-3">
-            {/* Create Lab CTA */}
+          {/* Right side: CTA + Status + Mobile Menu */}
+          <div className="flex items-center gap-2">
+            {/* Create Lab CTA - always visible but responsive */}
             <Link
               href="/lab/new"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-md hover:from-blue-500 hover:to-purple-500 transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-500 hover:to-purple-500 transition-all min-h-[44px]"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create Lab</span>
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Create Lab</span>
             </Link>
 
-            {/* Status indicator */}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="hidden lg:inline">Ready</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            {/* Status indicator - desktop only */}
+            <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground px-2">
+              <span>Ready</span>
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             </div>
+
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden flex items-center justify-center w-11 h-11 rounded-lg hover:bg-accent/50 transition-colors"
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            >
+              {mobileMenuOpen ? (
+                <X className="w-5 h-5 text-foreground" />
+              ) : (
+                <Menu className="w-5 h-5 text-foreground" />
+              )}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 top-14 z-50 bg-background/95 backdrop-blur-sm overflow-y-auto">
+          <div className="px-4 py-6 space-y-6">
+            {/* Primary Navigation */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
+                Navigate
+              </p>
+              {primaryNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                const isFeatured = "featured" in item && item.featured;
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors min-h-[48px]",
+                      isFeatured
+                        ? "text-amber-400 hover:bg-amber-400/10"
+                        : isActive
+                        ? "text-foreground-bright bg-accent/50"
+                        : "text-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    <Icon className={cn("w-5 h-5", isFeatured && "text-amber-400")} />
+                    <div className="flex-1">
+                      <span className="font-medium">{item.label}</span>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                      )}
+                    </div>
+                    {isFeatured && (
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Labs Section */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
+                Labs
+              </p>
+              {labsDropdownItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors min-h-[48px]",
+                      isActive
+                        ? "text-foreground-bright bg-accent/50"
+                        : "text-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    <Icon className="w-5 h-5 text-muted-foreground" />
+                    <div className="flex-1">
+                      <span className="font-medium">{item.label}</span>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* More Section */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
+                More
+              </p>
+              {moreDropdownItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors min-h-[48px]",
+                      isActive
+                        ? "text-foreground-bright bg-accent/50"
+                        : "text-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    <Icon className="w-5 h-5 text-muted-foreground" />
+                    <div className="flex-1">
+                      <span className="font-medium">{item.label}</span>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Status */}
+            <div className="px-3 pt-4 border-t border-border">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span>Network Ready</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

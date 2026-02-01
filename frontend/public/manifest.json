@@ -1,13 +1,17 @@
 {
   "name": "LabFork - Distributed AI Research",
   "short_name": "LabFork",
-  "description": "Fork research labs, contribute compute, and advance AI research from any device",
-  "start_url": "/contribute",
+  "description": "Fork research labs, contribute compute, and advance AI research from any device - even offline",
+  "start_url": "/",
+  "id": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a0a0a",
   "theme_color": "#3b82f6",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icon-192.svg",
@@ -34,12 +38,41 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["education", "productivity", "utilities"],
+  "categories": ["education", "productivity", "utilities", "science"],
+  "screenshots": [
+    {
+      "src": "/screenshots/explore-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Explore research labs from around the world"
+    },
+    {
+      "src": "/screenshots/explore-narrow.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Explore research labs on mobile"
+    }
+  ],
   "shortcuts": [
+    {
+      "name": "Explore Labs",
+      "short_name": "Explore",
+      "description": "Discover and fork research labs",
+      "url": "/explore",
+      "icons": [
+        {
+          "src": "/icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
     {
       "name": "Contribute Compute",
       "short_name": "Contribute",
-      "description": "Start contributing compute power",
+      "description": "Donate spare compute to research",
       "url": "/contribute",
       "icons": [
         {
@@ -50,10 +83,10 @@
       ]
     },
     {
-      "name": "Explore Labs",
-      "short_name": "Labs",
-      "description": "Browse research labs",
-      "url": "/labs",
+      "name": "Watch Agents",
+      "short_name": "Watch",
+      "description": "See AI agents working in real-time",
+      "url": "/watch",
       "icons": [
         {
           "src": "/icon-192.svg",
@@ -73,5 +106,12 @@
       "url": "url"
     }
   },
-  "prefer_related_applications": false
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
 }

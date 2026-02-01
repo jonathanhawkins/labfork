@@ -48,14 +48,20 @@ export async function GET(request: NextRequest) {
     if (search) options.search = search;
 
     const sortBy = searchParams.get("sortBy") || searchParams.get("sort");
-    if (
-      sortBy === "stars" ||
-      sortBy === "forks" ||
-      sortBy === "activity" ||
-      sortBy === "created" ||
-      sortBy === "name"
-    ) {
-      options.sortBy = sortBy;
+    // Map frontend sort options to repository sort options
+    const sortMapping: Record<string, "stars" | "forks" | "activity" | "created" | "name"> = {
+      popular: "stars",
+      trending: "activity",
+      recent: "created",
+      active: "activity",
+      stars: "stars",
+      forks: "forks",
+      activity: "activity",
+      created: "created",
+      name: "name",
+    };
+    if (sortBy && sortMapping[sortBy]) {
+      options.sortBy = sortMapping[sortBy];
     }
 
     const sortDir = searchParams.get("sortDir") || searchParams.get("order");

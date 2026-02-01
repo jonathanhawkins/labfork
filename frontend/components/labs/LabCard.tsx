@@ -20,6 +20,7 @@ import {
   LineChart,
   Bot,
   Dna,
+  Sparkles,
 } from "lucide-react";
 import type { Lab } from "@/lib/labs/types";
 import { getLabPath, formatLabStats } from "@/lib/labs/types";
@@ -56,6 +57,8 @@ function getDomainIcon(domainSlug: string) {
       return Bot;
     case "biotech":
       return Dna;
+    case "firefly-network":
+      return Sparkles;
     default:
       return Layers;
   }
@@ -74,6 +77,8 @@ function getDomainColor(domainSlug: string): string {
       return "text-purple-400 bg-purple-500/10";
     case "biotech":
       return "text-pink-400 bg-pink-500/10";
+    case "firefly-network":
+      return "text-amber-400 bg-amber-500/10";
     default:
       return "text-foreground-muted bg-foreground-muted/10";
   }

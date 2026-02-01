@@ -182,36 +182,48 @@ export function HeroSection({
         </p>
 
         {/* Stats */}
-        <div className="flex items-center justify-center gap-8 mb-10">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-white">{labCount.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">Active Labs</div>
+        <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mb-10 px-4">
+          <div className="text-center min-w-[80px]">
+            <div className="text-2xl sm:text-3xl font-bold text-white">{labCount.toLocaleString()}</div>
+            <div className="text-xs sm:text-sm text-gray-500">Active Labs</div>
           </div>
-          <div className="w-px h-12 bg-gray-700" />
-          <div className="text-center">
-            <div className="text-3xl font-bold text-white">{discoveryCount}</div>
-            <div className="text-sm text-gray-500">Synergies Found</div>
+          <div className="hidden sm:block w-px h-12 bg-gray-700" />
+          <div className="text-center min-w-[80px]">
+            <div className="text-2xl sm:text-3xl font-bold text-white">{discoveryCount}</div>
+            <div className="text-xs sm:text-sm text-gray-500">Synergies Found</div>
           </div>
-          <div className="w-px h-12 bg-gray-700" />
-          <div className="text-center">
-            <div className="text-3xl font-bold text-white">9</div>
-            <div className="text-sm text-gray-500">Domains</div>
+          <div className="hidden sm:block w-px h-12 bg-gray-700" />
+          <div className="text-center min-w-[80px]">
+            <div className="text-2xl sm:text-3xl font-bold text-white">9</div>
+            <div className="text-xs sm:text-sm text-gray-500">Domains</div>
           </div>
         </div>
 
         {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 px-4">
           <Link
             href="/lab/new"
-            className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-purple-500 transition-all shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40"
+            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-purple-500 transition-all shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 text-center min-h-[56px] flex items-center justify-center gap-2"
           >
-            Create Your Lab
+            <span>Fork a Lab</span>
+            <span className="text-blue-200 text-sm font-normal">in 60 seconds</span>
           </Link>
           <Link
             href="/explore"
-            className="px-8 py-4 bg-white/5 text-white font-semibold rounded-xl border border-white/10 hover:bg-white/10 transition-all"
+            className="w-full sm:w-auto px-8 py-4 bg-white/5 text-white font-semibold rounded-xl border border-white/10 hover:bg-white/10 transition-all text-center min-h-[56px] flex items-center justify-center"
           >
             Explore Public Labs
+          </Link>
+        </div>
+
+        {/* Mobile-friendly quick action */}
+        <div className="mt-6 sm:hidden">
+          <Link
+            href="/contribute"
+            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            Or contribute your device's GPU power
           </Link>
         </div>
 

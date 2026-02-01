@@ -3,6 +3,7 @@ import { IBM_Plex_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import { Navigation } from "@/components/Navigation";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import "./globals.css";
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -52,6 +53,7 @@ export default function RootLayout({
       </head>
       <body className={`${ibmPlexMono.variable} font-mono`}>
         <Providers>
+          <ServiceWorkerRegistration />
           <Navigation />
           {children}
           <Toaster position="bottom-right" />
