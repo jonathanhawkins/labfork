@@ -25,8 +25,14 @@ import {
   isStepCompleted,
 } from "@/lib/lab-wizard/types";
 import type { DomainConfig } from "@/lib/domain/types";
+import {
+  type LabTemplate,
+  getLabConfigFromTemplate,
+  getTemplateById,
+} from "@/lib/lab-wizard/templates";
 import { WizardStepWelcome } from "./WizardStepWelcome";
 import { WizardStepDomain } from "./WizardStepDomain";
+import { TemplateSelector } from "./TemplateSelector";
 import { WizardStepHardware } from "./WizardStepHardware";
 import { WizardStepResearch, GoalAnalysisResult } from "./WizardStepResearch";
 import { WizardStepReview } from "./WizardStepReview";
@@ -116,6 +122,8 @@ export function LabWizard({
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<LabTemplate | null>(null);
 
   // Update URL when step changes
   useEffect(() => {
@@ -264,6 +272,27 @@ export function LabWizard({
     goToStep(step);
   }, [goToStep]);
 
+  // Handle template selection
+  const handleTemplateSelect = useCallback((template: LabTemplate) => {
+    setSelectedTemplate(template);
+    const templateConfig = getLabConfigFromTemplate(template);
+    setConfig((prev) => ({
+      ...prev,
+      ...templateConfig,
+      // Preserve hardware config
+      hardware: prev.hardware,
+    }));
+    // Jump to review step
+    setShowTemplates(false);
+    goToStep("review");
+  }, [goToStep]);
+
+  // Handle start from scratch (from template selector)
+  const handleStartFromScratch = useCallback(() => {
+    setShowTemplates(false);
+    goNext();
+  }, [goNext]);
+
   // Create lab
   const handleCreateLab = useCallback(async () => {
     // Validate all steps
@@ -395,31 +424,20 @@ export function LabWizard({
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-8">
         {/* Welcome step */}
-        {currentStep === "welcome" && (
+        {currentStep === "welcome" && !showTemplates && (
           <WizardStepWelcome
             onGetStarted={goNext}
-            onQuickSetup={() => {
-              // Quick setup: jump to review with defaults
-              setConfig({
-                ...config,
-                createNewDomain: true,
-                domain: {
-                  name: "Voice Cloning",
-                  slug: "voice-clone",
-                  description: "Speech synthesis and prosody control research",
-                  research: {
-                    arxivCategories: ["cs.SD", "eess.AS", "cs.CL"],
-                    keywords: ["TTS", "prosody", "emotion"],
-                  },
-                  branding: {
-                    primaryColor: "#3b82f6",
-                    accentColor: "#22c55e",
-                    backgroundStyle: "sky",
-                  },
-                },
-              });
-              goToStep("review");
-            }}
+            onQuickSetup={() => setShowTemplates(true)}
+          />
+        )}
+
+        {/* Template selection mode */}
+        {currentStep === "welcome" && showTemplates && (
+          <TemplateSelector
+            onSelect={handleTemplateSelect}
+            onStartFromScratch={handleStartFromScratch}
+            selectedTemplateId={selectedTemplate?.id}
+            availableVram={hardwareVram}
           />
         )}
 

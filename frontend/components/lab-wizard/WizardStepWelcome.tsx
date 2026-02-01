@@ -169,7 +169,7 @@ export function WizardStepWelcome({
             )}
           >
             <Zap className="w-4 h-4" />
-            Quick Setup
+            Use Template
           </button>
         )}
       </div>
