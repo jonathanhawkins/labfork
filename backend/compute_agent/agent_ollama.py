@@ -101,17 +101,17 @@ class ComputeAgent:
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{self.workers_url}/api/compute/devices/register",
+                    f"{self.workers_url}/api/compute/devices",
                     json={
                         "id": self.device_id,
                         "name": DEVICE_NAME,
                         "tier": "power",
                         "platform": "cuda",
-                        "capabilities": {
+                        "capabilities": json.dumps({
                             "compute": 82.6,  # RTX 4090 TFLOPS
                             "memory": 24,     # GB VRAM
-                            "models": ["qwen3:8b", "llama3.1:8b", "mistral:7b"]
-                        }
+                            "models": ["llama3:latest", "qwen3-coder:30b", "mistral:latest"]
+                        })
                     },
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as resp:
@@ -152,13 +152,10 @@ class ComputeAgent:
         try:
             gpu_info = self._get_gpu_info()
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.workers_url}/api/compute/devices/{self.device_id}/heartbeat",
+                async with session.patch(
+                    f"{self.workers_url}/api/compute/devices/{self.device_id}",
                     json={
-                        "status": "online",
-                        "gpuUtilization": gpu_info.get("utilization", 0),
-                        "memoryUsed": gpu_info.get("memory_used", 0),
-                        "memoryTotal": gpu_info.get("memory_total", 24576)
+                        "status": "online"
                     },
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as resp:
@@ -173,7 +170,7 @@ class ComputeAgent:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     f"{self.workers_url}/api/compute/tasks/pending",
-                    params={"deviceId": self.device_id, "tier": "power"},
+                    params={"deviceId": self.device_id},
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as resp:
                     if resp.status == 200:
@@ -181,6 +178,10 @@ class ComputeAgent:
                         tasks = data.get("tasks", [])
                         if tasks:
                             return tasks[0]  # Get first available task
+                    elif resp.status == 404:
+                        # Device not found, re-register
+                        logger.warning("Device not found, re-registering...")
+                        await self.register()
         except Exception as e:
             logger.warning(f"Poll failed: {e}")
         return None
@@ -198,17 +199,25 @@ class ComputeAgent:
         except:
             return False
 
-    async def complete_task(self, task_id: str, output: Any, error: str = None) -> bool:
+    async def complete_task(self, task_id: str, output: Any, error: str = None, compute_time: float = 0) -> bool:
         """Report task completion."""
         try:
             async with aiohttp.ClientSession() as session:
+                payload = {
+                    "deviceId": self.device_id,
+                    "success": error is None,
+                }
+                if error:
+                    payload["error"] = error
+                else:
+                    payload["result"] = {
+                        "output": output,
+                        "metrics": {"computeTime": compute_time}
+                    }
+
                 async with session.post(
                     f"{self.workers_url}/api/compute/tasks/{task_id}/complete",
-                    json={
-                        "deviceId": self.device_id,
-                        "output": output,
-                        "error": error
-                    },
+                    json=payload,
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as resp:
                     return resp.status == 200
@@ -304,15 +313,17 @@ class ComputeAgent:
                     if await self.claim_task(task_id):
                         logger.info(f"Claimed task {task_id}, executing...")
 
-                        # Execute
+                        # Execute with timing
+                        start_time = time.time()
                         output, error = await self.execute_task(task)
+                        compute_time = time.time() - start_time
 
                         # Report completion
-                        if await self.complete_task(task_id, output, error):
+                        if await self.complete_task(task_id, output, error, compute_time):
                             if error:
                                 logger.warning(f"Task {task_id} failed: {error}")
                             else:
-                                logger.info(f"Task {task_id} completed successfully")
+                                logger.info(f"Task {task_id} completed in {compute_time:.2f}s")
                         else:
                             logger.error(f"Failed to report completion for {task_id}")
                     else:
