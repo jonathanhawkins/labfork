@@ -2,12 +2,14 @@
  * HeroSection
  *
  * Landing page hero with animated background, headline, and CTAs.
+ * Fully internationalized for global accessibility.
  */
 
 "use client";
 
 import React, { useEffect, useRef } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 interface HeroSectionProps {
   labCount?: number;
@@ -18,6 +20,7 @@ export function HeroSection({
   labCount = 1247,
   discoveryCount = 89,
 }: HeroSectionProps) {
+  const t = useTranslations("hero");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Animated particle background
@@ -136,13 +139,13 @@ export function HeroSection({
         >
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
           <span className="text-sm text-amber-300">
-            Featured Project: The Firefly Network
+            {t("featuredProject")}
           </span>
           <span className="text-amber-400/60 group-hover:text-amber-400 transition-colors">
-            - Bringing light to 1B people
+            - {t("fireflyTagline")}
           </span>
           <svg
-            className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform"
+            className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform rtl:rotate-180 rtl:group-hover:-translate-x-1"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -157,10 +160,10 @@ export function HeroSection({
         </Link>
 
         {/* Active Labs Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8 ml-3">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8 ms-3">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
           <span className="text-sm text-gray-300">
-            {labCount.toLocaleString()} labs actively researching
+            {t("labsResearching", { count: labCount.toLocaleString() })}
           </span>
         </div>
 
@@ -171,31 +174,30 @@ export function HeroSection({
           </span>
           <br />
           <span className="text-3xl md:text-5xl text-gray-300">
-            Fork. Watch. Discover.
+            {t("headline")}
           </span>
         </h1>
 
         {/* Subheadline */}
         <p className="text-xl md:text-2xl text-gray-400 mb-10 max-w-3xl mx-auto leading-relaxed">
-          Fork research labs. Watch AI agents implement papers in real-time.
-          Discover synergies across domains. Collaborate globally.
+          {t("subheadline")}
         </p>
 
         {/* Stats */}
         <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mb-10 px-4">
           <div className="text-center min-w-[80px]">
             <div className="text-2xl sm:text-3xl font-bold text-white">{labCount.toLocaleString()}</div>
-            <div className="text-xs sm:text-sm text-gray-500">Active Labs</div>
+            <div className="text-xs sm:text-sm text-gray-500">{t("activeLabs")}</div>
           </div>
           <div className="hidden sm:block w-px h-12 bg-gray-700" />
           <div className="text-center min-w-[80px]">
             <div className="text-2xl sm:text-3xl font-bold text-white">{discoveryCount}</div>
-            <div className="text-xs sm:text-sm text-gray-500">Synergies Found</div>
+            <div className="text-xs sm:text-sm text-gray-500">{t("synergiesFound")}</div>
           </div>
           <div className="hidden sm:block w-px h-12 bg-gray-700" />
           <div className="text-center min-w-[80px]">
             <div className="text-2xl sm:text-3xl font-bold text-white">9</div>
-            <div className="text-xs sm:text-sm text-gray-500">Domains</div>
+            <div className="text-xs sm:text-sm text-gray-500">{t("domains")}</div>
           </div>
         </div>
 
@@ -205,14 +207,14 @@ export function HeroSection({
             href="/lab/new"
             className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-purple-500 transition-all shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 text-center min-h-[56px] flex items-center justify-center gap-2"
           >
-            <span>Fork a Lab</span>
-            <span className="text-blue-200 text-sm font-normal">in 60 seconds</span>
+            <span>{t("forkLab")}</span>
+            <span className="text-blue-200 text-sm font-normal">{t("inSeconds")}</span>
           </Link>
           <Link
             href="/explore"
             className="w-full sm:w-auto px-8 py-4 bg-white/5 text-white font-semibold rounded-xl border border-white/10 hover:bg-white/10 transition-all text-center min-h-[56px] flex items-center justify-center"
           >
-            Explore Public Labs
+            {t("explorePublicLabs")}
           </Link>
         </div>
 
@@ -223,7 +225,7 @@ export function HeroSection({
             className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
           >
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            Or contribute your device's GPU power
+            {t("contributeGPU")}
           </Link>
         </div>
 

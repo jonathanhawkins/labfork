@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import { Navigation } from "@/components/Navigation";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { isRtlLocale, type Locale } from "@/i18n/config";
 import "./globals.css";
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -36,13 +39,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = await getLocale() as Locale;
+  const messages = await getMessages();
+  const isRtl = isRtlLocale(locale);
+
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html
+      lang={locale}
+      dir={isRtl ? "rtl" : "ltr"}
+      className="dark"
+      suppressHydrationWarning
+    >
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#3b82f6" />
@@ -52,12 +64,14 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="LabFork" />
       </head>
       <body className={`${ibmPlexMono.variable} font-mono`}>
-        <Providers>
-          <ServiceWorkerRegistration />
-          <Navigation />
-          {children}
-          <Toaster position="bottom-right" />
-        </Providers>
+        <NextIntlClientProvider messages={messages}>
+          <Providers>
+            <ServiceWorkerRegistration />
+            <Navigation />
+            {children}
+            <Toaster position={isRtl ? "bottom-left" : "bottom-right"} />
+          </Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -3,17 +3,19 @@
  *
  * Grid display of all available research domains with
  * animated cards and live agent counts.
+ * Fully internationalized for global accessibility.
  */
 
 "use client";
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 export interface DomainInfo {
   slug: string;
-  name: string;
-  description: string;
+  nameKey: string;
+  descKey: string;
   primaryColor: string;
   accentColor: string;
   icon: React.ReactNode;
@@ -80,8 +82,8 @@ const domainIcons: Record<string, React.ReactNode> = {
 export const defaultDomains: DomainInfo[] = [
   {
     slug: "voice-clone",
-    name: "Voice Clone Lab",
-    description: "Prosody and emotion conditioning in TTS systems",
+    nameKey: "voiceClone",
+    descKey: "voiceCloneDesc",
     primaryColor: "#4ecdc4",
     accentColor: "#66ffaa",
     icon: domainIcons["voice-clone"],
@@ -92,8 +94,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "quant-trading",
-    name: "Quant Trading Lab",
-    description: "Algorithmic trading and portfolio optimization",
+    nameKey: "quantTrading",
+    descKey: "quantTradingDesc",
     primaryColor: "#10b981",
     accentColor: "#f59e0b",
     icon: domainIcons["quant-trading"],
@@ -104,8 +106,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "game-ai",
-    name: "Game AI Lab",
-    description: "Reinforcement learning for game playing agents",
+    nameKey: "gameAI",
+    descKey: "gameAIDesc",
     primaryColor: "#ec4899",
     accentColor: "#8b5cf6",
     icon: domainIcons["game-ai"],
@@ -116,8 +118,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "robotics-ml",
-    name: "Robotics ML Lab",
-    description: "Robot learning and embodied AI systems",
+    nameKey: "roboticsML",
+    descKey: "roboticsMLDesc",
     primaryColor: "#f97316",
     accentColor: "#06b6d4",
     icon: domainIcons["robotics-ml"],
@@ -128,8 +130,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "drug-discovery",
-    name: "Drug Discovery Lab",
-    description: "AI-driven molecular generation and binding prediction",
+    nameKey: "drugDiscovery",
+    descKey: "drugDiscoveryDesc",
     primaryColor: "#14b8a6",
     accentColor: "#f43f5e",
     icon: domainIcons["drug-discovery"],
@@ -140,8 +142,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "climate-modeling",
-    name: "Climate Modeling Lab",
-    description: "Weather forecasting and Earth system modeling",
+    nameKey: "climateModeling",
+    descKey: "climateModelingDesc",
     primaryColor: "#0ea5e9",
     accentColor: "#22c55e",
     icon: domainIcons["climate-modeling"],
@@ -152,8 +154,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "nlp-research",
-    name: "NLP Research Lab",
-    description: "Language models and text understanding",
+    nameKey: "nlpResearch",
+    descKey: "nlpResearchDesc",
     primaryColor: "#6366f1",
     accentColor: "#f59e0b",
     icon: domainIcons["nlp-research"],
@@ -164,8 +166,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "computer-vision",
-    name: "Computer Vision Lab",
-    description: "Image understanding and visual reasoning",
+    nameKey: "computerVision",
+    descKey: "computerVisionDesc",
     primaryColor: "#ef4444",
     accentColor: "#3b82f6",
     icon: domainIcons["computer-vision"],
@@ -176,8 +178,8 @@ export const defaultDomains: DomainInfo[] = [
   },
   {
     slug: "biotech-nlp",
-    name: "Biotech NLP Lab",
-    description: "NLP for drug discovery and biomedical research",
+    nameKey: "biotechNLP",
+    descKey: "biotechNLPDesc",
     primaryColor: "#8b5cf6",
     accentColor: "#22c55e",
     icon: domainIcons["biotech-nlp"],
@@ -189,6 +191,7 @@ export const defaultDomains: DomainInfo[] = [
 ];
 
 function DomainCard({ domain }: { domain: DomainInfo }) {
+  const t = useTranslations("domains");
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -225,22 +228,22 @@ function DomainCard({ domain }: { domain: DomainInfo }) {
             </div>
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-400 text-xs">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              {domain.activeAgents} agents
+              {domain.activeAgents} {t("agents")}
             </div>
           </div>
 
           {/* Title & Description */}
           <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition-colors">
-            {domain.name}
+            {t(domain.nameKey)}
           </h3>
           <p className="text-sm text-gray-400 mb-4 line-clamp-2">
-            {domain.description}
+            {t(domain.descKey)}
           </p>
 
           {/* Breakthrough */}
           {domain.recentBreakthrough && (
             <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/5">
-              <div className="text-xs text-gray-500 mb-1">Latest Breakthrough</div>
+              <div className="text-xs text-gray-500 mb-1">{t("latestBreakthrough")}</div>
               <div className="text-sm text-gray-300 line-clamp-1">
                 {domain.recentBreakthrough}
               </div>
@@ -262,13 +265,13 @@ function DomainCard({ domain }: { domain: DomainInfo }) {
           {/* Footer */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-500">
-              {domain.papersProcessed} papers
+              {domain.papersProcessed} {t("papers")}
             </span>
             <span
               className="font-medium transition-colors"
               style={{ color: isHovered ? domain.primaryColor : "#9ca3af" }}
             >
-              View Lab &rarr;
+              {t("viewLab")} &rarr;
             </span>
           </div>
         </div>
@@ -278,17 +281,18 @@ function DomainCard({ domain }: { domain: DomainInfo }) {
 }
 
 export function DomainShowcase({ domains = defaultDomains }: DomainShowcaseProps) {
+  const t = useTranslations("domains");
+
   return (
     <section className="py-24 bg-slate-950">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Choose Your Research Domain
+            {t("title")}
           </h2>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            9 specialized labs with pre-configured tools, metrics, and paper sources.
-            Start researching in minutes.
+            {t("subtitle")}
           </p>
         </div>
 
@@ -302,7 +306,7 @@ export function DomainShowcase({ domains = defaultDomains }: DomainShowcaseProps
         {/* Custom Domain CTA */}
         <div className="mt-12 text-center">
           <p className="text-gray-500 mb-4">
-            Don&apos;t see your domain? Create a custom one.
+            {t("customDomainCTA")}
           </p>
           <Link
             href="/domains/new"
@@ -321,7 +325,7 @@ export function DomainShowcase({ domains = defaultDomains }: DomainShowcaseProps
                 d="M12 6v6m0 0v6m0-6h6m-6 0H6"
               />
             </svg>
-            Create Custom Domain
+            {t("createCustomDomain")}
           </Link>
         </div>
       </div>

@@ -2,76 +2,64 @@
  * HowItWorks
  *
  * Three-step process explanation with auto-advancing carousel.
+ * Fully internationalized for global accessibility.
  */
 
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 interface Step {
   number: number;
-  title: string;
-  description: string;
+  titleKey: string;
+  descKey: string;
   icon: React.ReactNode;
   color: string;
-  details: string[];
+  detailKeys: string[];
 }
 
 const steps: Step[] = [
   {
     number: 1,
-    title: "Choose Your Domain",
-    description: "Select from 9 pre-configured research domains or create your own",
+    titleKey: "step1Title",
+    descKey: "step1Desc",
     icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
       </svg>
     ),
     color: "#3b82f6",
-    details: [
-      "Voice Cloning, Quant Trading, Game AI, Robotics...",
-      "Pre-configured arXiv categories and keywords",
-      "Domain-specific evaluation metrics",
-      "Custom 3D visualization for each domain",
-    ],
+    detailKeys: ["step1Detail1", "step1Detail2", "step1Detail3", "step1Detail4"],
   },
   {
     number: 2,
-    title: "Add Research Papers",
-    description: "Import papers from arXiv, Semantic Scholar, GitHub, or PDF uploads",
+    titleKey: "step2Title",
+    descKey: "step2Desc",
     icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
     color: "#8b5cf6",
-    details: [
-      "Automatic technique extraction with AI",
-      "Citation network building",
-      "Related paper recommendations",
-      "Batch import from multiple sources",
-    ],
+    detailKeys: ["step2Detail1", "step2Detail2", "step2Detail3", "step2Detail4"],
   },
   {
     number: 3,
-    title: "Watch AI Agents Work",
-    description: "Agents analyze papers, implement techniques, and discover synergies",
+    titleKey: "step3Title",
+    descKey: "step3Desc",
     icon: (
       <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     ),
     color: "#10b981",
-    details: [
-      "5 meta-agents working together",
-      "Real-time progress visualization in 3D",
-      "Automatic synergy detection across techniques",
-      "Genetic evolution of promising approaches",
-    ],
+    detailKeys: ["step3Detail1", "step3Detail2", "step3Detail3", "step3Detail4"],
   },
 ];
 
 export function HowItWorks() {
+  const t = useTranslations("howItWorks");
   const [activeStep, setActiveStep] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
@@ -92,10 +80,10 @@ export function HowItWorks() {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            How It Works
+            {t("title")}
           </h2>
           <p className="text-xl text-gray-400">
-            From paper to breakthrough in three simple steps
+            {t("subtitle")}
           </p>
         </div>
 
@@ -113,7 +101,7 @@ export function HowItWorks() {
                   ? "bg-white/10 border border-white/20"
                   : "bg-transparent border border-transparent hover:bg-white/5 active:bg-white/10"
               }`}
-              aria-label={`Step ${step.number}: ${step.title}`}
+              aria-label={t("goToStep", { number: step.number })}
             >
               <span
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
@@ -133,7 +121,7 @@ export function HowItWorks() {
                   activeStep === idx ? "text-white" : "text-gray-500"
                 }`}
               >
-                {step.title}
+                {t(step.titleKey)}
               </span>
             </button>
           ))}
@@ -179,11 +167,11 @@ export function HowItWorks() {
                 </div>
 
                 <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
-                  {steps[activeStep].title}
+                  {t(steps[activeStep].titleKey)}
                 </h3>
 
                 <p className="text-lg text-gray-400 mb-6">
-                  {steps[activeStep].description}
+                  {t(steps[activeStep].descKey)}
                 </p>
 
                 {/* Step indicator dots - with 44px touch targets */}
@@ -196,7 +184,7 @@ export function HowItWorks() {
                         setIsPaused(true);
                       }}
                       className="min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-95"
-                      aria-label={`Go to step ${idx + 1}`}
+                      aria-label={t("goToStep", { number: idx + 1 })}
                     >
                       <span
                         className={`h-2 rounded-full transition-all ${
@@ -213,8 +201,8 @@ export function HowItWorks() {
                   {/* Play/Pause button for mobile */}
                   <button
                     onClick={() => setIsPaused(!isPaused)}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center ml-2 text-gray-500 hover:text-white active:scale-95"
-                    aria-label={isPaused ? "Resume auto-advance" : "Pause auto-advance"}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center ms-2 text-gray-500 hover:text-white active:scale-95"
+                    aria-label={isPaused ? t("resumeAutoAdvance") : t("pauseAutoAdvance")}
                   >
                     {isPaused ? (
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -231,7 +219,7 @@ export function HowItWorks() {
 
               {/* Right: Details */}
               <div className="space-y-4">
-                {steps[activeStep].details.map((detail, idx) => (
+                {steps[activeStep].detailKeys.map((detailKey, idx) => (
                   <div
                     key={idx}
                     className="flex items-start gap-3 p-4 rounded-xl bg-white/5"
@@ -257,7 +245,7 @@ export function HowItWorks() {
                         />
                       </svg>
                     </div>
-                    <span className="text-gray-300">{detail}</span>
+                    <span className="text-gray-300">{t(detailKey)}</span>
                   </div>
                 ))}
               </div>

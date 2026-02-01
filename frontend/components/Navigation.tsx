@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import {
   Compass,
@@ -21,43 +22,48 @@ import {
   Menu,
   X,
 } from "lucide-react";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+
+interface NavItem {
+  href: string;
+  labelKey: string;
+  descKey: string;
+  icon: React.ComponentType<{ className?: string }>;
+  featured?: boolean;
+}
 
 // Primary navigation items (always visible)
-const primaryNavItems = [
-  { href: "/explore", label: "Explore", icon: Compass, description: "Browse public labs" },
-  { href: "/watch", label: "Watch", icon: Eye, description: "Live agent view" },
-  { href: "/contribute", label: "Contribute", icon: Cpu, description: "Donate compute power" },
-  { href: "/projects/firefly-network", label: "Firefly", icon: Lightbulb, featured: true, description: "Featured project" },
+const primaryNavItems: NavItem[] = [
+  { href: "/explore", labelKey: "explore", descKey: "exploreDesc", icon: Compass },
+  { href: "/watch", labelKey: "watch", descKey: "watchDesc", icon: Eye },
+  { href: "/contribute", labelKey: "contribute", descKey: "contributeDesc", icon: Cpu },
+  { href: "/projects/firefly-network", labelKey: "firefly", descKey: "fireflyDesc", icon: Lightbulb, featured: true },
 ];
 
 // Labs dropdown items
-const labsDropdownItems = [
-  { href: "/lab/new", label: "Create Lab", icon: Plus, description: "Start a new research lab" },
-  { href: "/lab", label: "My Lab", icon: Bot, description: "Admin dashboard" },
-  { href: "/labs", label: "Browse Labs", icon: FlaskConical, description: "Explore all labs" },
+const labsDropdownItems: NavItem[] = [
+  { href: "/lab/new", labelKey: "createLab", descKey: "createLabDesc", icon: Plus },
+  { href: "/lab", labelKey: "myLab", descKey: "myLabDesc", icon: Bot },
+  { href: "/labs", labelKey: "browseLabs", descKey: "browseLabsDesc", icon: FlaskConical },
 ];
 
 // More dropdown items
-const moreDropdownItems = [
-  { href: "/analytics", label: "Analytics", icon: BarChart3, description: "Network health & stats" },
-  { href: "/demos", label: "Demos", icon: Sliders, description: "Research technique demos" },
-  { href: "/feed", label: "Feed", icon: Rss, description: "Activity feed" },
-  { href: "/research", label: "Research", icon: Target, description: "Research dashboard" },
-  { href: "/domains", label: "Domains", icon: Layers, description: "Browse domains" },
+const moreDropdownItems: NavItem[] = [
+  { href: "/analytics", labelKey: "analytics", descKey: "analyticsDesc", icon: BarChart3 },
+  { href: "/demos", labelKey: "demos", descKey: "demosDesc", icon: Sliders },
+  { href: "/feed", labelKey: "feed", descKey: "feedDesc", icon: Rss },
+  { href: "/research", labelKey: "research", descKey: "researchDesc", icon: Target },
+  { href: "/domains", labelKey: "domains", descKey: "domainsDesc", icon: Layers },
 ];
 
 interface DropdownProps {
   label: string;
-  items: Array<{
-    href: string;
-    label: string;
-    icon: React.ComponentType<{ className?: string }>;
-    description?: string;
-  }>;
+  items: NavItem[];
   isActive: boolean;
+  t: (key: string) => string;
 }
 
-function Dropdown({ label, items, isActive }: DropdownProps) {
+function Dropdown({ label, items, isActive, t }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -101,10 +107,8 @@ function Dropdown({ label, items, isActive }: DropdownProps) {
               >
                 <Icon className="w-5 h-5 mt-0.5 text-muted-foreground" />
                 <div>
-                  <div className="text-sm text-foreground font-medium">{item.label}</div>
-                  {item.description && (
-                    <div className="text-xs text-muted-foreground">{item.description}</div>
-                  )}
+                  <div className="text-sm text-foreground font-medium">{t(item.labelKey)}</div>
+                  <div className="text-xs text-muted-foreground">{t(item.descKey)}</div>
                 </div>
               </Link>
             );
@@ -117,6 +121,7 @@ function Dropdown({ label, items, isActive }: DropdownProps) {
 
 export function Navigation() {
   const pathname = usePathname();
+  const t = useTranslations("nav");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Check if any labs dropdown item is active
@@ -163,7 +168,7 @@ export function Navigation() {
             {primaryNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-              const isFeatured = "featured" in item && item.featured;
+              const isFeatured = item.featured;
 
               return (
                 <Link
@@ -185,7 +190,7 @@ export function Navigation() {
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                   )}
                   <Icon className={cn("w-4 h-4", isFeatured && "text-amber-400")} />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </Link>
               );
             })}
@@ -194,10 +199,14 @@ export function Navigation() {
             <div className="w-px h-5 bg-border mx-1" />
 
             {/* Labs dropdown */}
-            <Dropdown label="Labs" items={labsDropdownItems} isActive={isLabsActive} />
+            <Dropdown label={t("labs")} items={labsDropdownItems} isActive={isLabsActive} t={t} />
 
             {/* More dropdown */}
-            <Dropdown label="More" items={moreDropdownItems} isActive={isMoreActive} />
+            <Dropdown label={t("more")} items={moreDropdownItems} isActive={isMoreActive} t={t} />
+
+            {/* Language Switcher - Desktop */}
+            <div className="w-px h-5 bg-border mx-1" />
+            <LanguageSwitcher variant="dropdown" />
           </div>
 
           {/* Right side: CTA + Status + Mobile Menu */}
@@ -208,20 +217,25 @@ export function Navigation() {
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-500 hover:to-purple-500 transition-all min-h-[44px]"
             >
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Create Lab</span>
+              <span className="hidden sm:inline">{t("createLab")}</span>
             </Link>
 
             {/* Status indicator - desktop only */}
             <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground px-2">
-              <span>Ready</span>
+              <span>{t("ready")}</span>
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            </div>
+
+            {/* Language Switcher - Mobile (compact) */}
+            <div className="md:hidden">
+              <LanguageSwitcher variant="compact" />
             </div>
 
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden flex items-center justify-center w-11 h-11 rounded-lg hover:bg-accent/50 transition-colors"
-              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-label={mobileMenuOpen ? t("closeMenu") : t("openMenu")}
             >
               {mobileMenuOpen ? (
                 <X className="w-5 h-5 text-foreground" />
@@ -240,12 +254,12 @@ export function Navigation() {
             {/* Primary Navigation */}
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
-                Navigate
+                {t("navigate")}
               </p>
               {primaryNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                const isFeatured = "featured" in item && item.featured;
+                const isFeatured = item.featured;
 
                 return (
                   <Link
@@ -262,10 +276,8 @@ export function Navigation() {
                   >
                     <Icon className={cn("w-5 h-5", isFeatured && "text-amber-400")} />
                     <div className="flex-1">
-                      <span className="font-medium">{item.label}</span>
-                      {item.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
-                      )}
+                      <span className="font-medium">{t(item.labelKey)}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t(item.descKey)}</p>
                     </div>
                     {isFeatured && (
                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -278,7 +290,7 @@ export function Navigation() {
             {/* Labs Section */}
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
-                Labs
+                {t("labs")}
               </p>
               {labsDropdownItems.map((item) => {
                 const Icon = item.icon;
@@ -297,10 +309,8 @@ export function Navigation() {
                   >
                     <Icon className="w-5 h-5 text-muted-foreground" />
                     <div className="flex-1">
-                      <span className="font-medium">{item.label}</span>
-                      {item.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
-                      )}
+                      <span className="font-medium">{t(item.labelKey)}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t(item.descKey)}</p>
                     </div>
                   </Link>
                 );
@@ -310,7 +320,7 @@ export function Navigation() {
             {/* More Section */}
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">
-                More
+                {t("more")}
               </p>
               {moreDropdownItems.map((item) => {
                 const Icon = item.icon;
@@ -329,10 +339,8 @@ export function Navigation() {
                   >
                     <Icon className="w-5 h-5 text-muted-foreground" />
                     <div className="flex-1">
-                      <span className="font-medium">{item.label}</span>
-                      {item.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
-                      )}
+                      <span className="font-medium">{t(item.labelKey)}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t(item.descKey)}</p>
                     </div>
                   </Link>
                 );
@@ -343,7 +351,7 @@ export function Navigation() {
             <div className="px-3 pt-4 border-t border-border">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span>Network Ready</span>
+                <span>{t("networkReady")}</span>
               </div>
             </div>
           </div>

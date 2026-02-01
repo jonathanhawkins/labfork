@@ -203,3 +203,35 @@
     font-family: var(--font-mono), "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SF Mono", ui-monospace, monospace;
   }
 }
+
+/* RTL Support for Arabic and other RTL languages */
+[dir="rtl"] {
+  /* Flip icons that indicate direction */
+  .rtl\:rotate-180 {
+    transform: rotate(180deg);
+  }
+
+  /* Adjust text alignment */
+  .text-left {
+    text-align: right;
+  }
+
+  .text-right {
+    text-align: left;
+  }
+
+  /* Margin/padding adjustments using logical properties are handled by Tailwind's ms-/me- classes */
+}
+
+/* Ensure proper font rendering for different scripts */
+html[lang="ar"] body {
+  font-family: "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif;
+}
+
+html[lang="zh"] body {
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+html[lang="hi"] body {
+  font-family: "Noto Sans Devanagari", "Mangal", system-ui, sans-serif;
+}
