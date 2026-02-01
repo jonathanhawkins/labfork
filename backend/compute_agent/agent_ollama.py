@@ -103,21 +103,24 @@ class ComputeAgent:
                 async with session.post(
                     f"{self.workers_url}/api/compute/devices",
                     json={
-                        "id": self.device_id,
                         "name": DEVICE_NAME,
-                        "tier": "power",
                         "platform": "cuda",
-                        "capabilities": json.dumps({
+                        "capabilities": {
                             "compute": 82.6,  # RTX 4090 TFLOPS
                             "memory": 24,     # GB VRAM
                             "models": ["llama3:latest", "qwen3-coder:30b", "mistral:latest"]
-                        })
+                        }
                     },
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
+                        # Use server-assigned device ID
+                        server_id = data.get("device", {}).get("id")
+                        if server_id:
+                            self.device_id = server_id
                         logger.info(f"Registered with Workers: {data}")
+                        logger.info(f"Using device ID: {self.device_id}")
                         return True
                     else:
                         error = await resp.text()
