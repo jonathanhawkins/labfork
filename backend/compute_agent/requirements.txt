@@ -1,0 +1,15 @@
+# Compute Agent Dependencies
+
+# HTTP client
+aiohttp>=3.9.0
+
+# PyTorch and Transformers
+torch>=2.1.0
+transformers>=4.36.0
+accelerate>=0.25.0
+
+# For optimized inference (optional)
+# vllm>=0.2.7
+
+# Utilities
+python-dotenv>=1.0.0

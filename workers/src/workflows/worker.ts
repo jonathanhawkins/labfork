@@ -35,7 +35,7 @@ export interface WorkerPayload {
  */
 export interface Env {
   DB: D1Database;
-  AI: Ai;
+  // AI binding removed - using distributed compute network instead
 }
 
 /**
@@ -727,11 +727,81 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
   }
 
   // ==========================================================================
-  // AI Operations
+  // Compute Network Operations (replaces Workers AI)
   // ==========================================================================
 
   /**
-   * Uses AI to plan the work for a task
+   * Dispatches a compute task to the distributed network and waits for result.
+   * This replaces direct Workers AI calls with compute network dispatch.
+   */
+  private async dispatchComputeTask(
+    type: 'planning' | 'execution',
+    systemPrompt: string,
+    prompt: string,
+    maxTokens: number = 2000,
+    timeout: number = 120000
+  ): Promise<string | null> {
+    const computeTaskId = `ctask_${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`;
+    const now = new Date().toISOString();
+
+    try {
+      // Create compute task
+      await this.env.DB
+        .prepare(`
+          INSERT INTO compute_tasks (
+            id, type, input, config, status, priority, min_tier, created_at
+          ) VALUES (?, ?, ?, ?, 'pending', 8, 'standard', ?)
+        `)
+        .bind(
+          computeTaskId,
+          type,
+          JSON.stringify({ systemPrompt, prompt }),
+          JSON.stringify({ maxTokens, temperature: 0.3 }),
+          now
+        )
+        .run();
+
+      console.log(`Created compute task ${computeTaskId} (${type})`);
+
+      // Wait for completion
+      const pollInterval = 1000;
+      let elapsed = 0;
+
+      while (elapsed < timeout) {
+        const task = await this.env.DB
+          .prepare('SELECT status, result, error FROM compute_tasks WHERE id = ?')
+          .bind(computeTaskId)
+          .first<{ status: string; result: string | null; error: string | null }>();
+
+        if (!task) {
+          throw new Error('Compute task disappeared');
+        }
+
+        if (task.status === 'completed' && task.result) {
+          const result = JSON.parse(task.result);
+          return result.output || null;
+        }
+
+        if (task.status === 'failed') {
+          throw new Error(task.error || 'Compute task failed');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        elapsed += pollInterval;
+      }
+
+      console.warn(`Compute task ${computeTaskId} timed out`);
+      return null;
+
+    } catch (error) {
+      console.error(`Compute dispatch failed: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Uses the compute network to plan the work for a task.
+   * Falls back to a simple plan if no compute devices are available.
    */
   private async planWork(context: SerializableContext): Promise<ExecutionPlan | null> {
     try {
@@ -742,38 +812,19 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
         taskDescription: context.task.description || 'No description provided',
       });
 
-      const response = await this.env.AI.run(
-        '@cf/meta/llama-3.1-70b-instruct' as Parameters<Ai['run']>[0],
-        {
-          messages: [
-            { role: 'system', content: context.persona.system_prompt },
-            { role: 'user', content: prompt },
-          ],
-          max_tokens: 2000,
-        }
-      );
+      // Check for available compute devices
+      const devicesResult = await this.env.DB
+        .prepare(`
+          SELECT COUNT(*) as count FROM compute_devices
+          WHERE status IN ('online', 'busy')
+        `)
+        .first<{ count: number }>();
 
-      // Handle response type
-      const responseText =
-        typeof response === 'object' && 'response' in response
-          ? String((response as { response: string }).response)
-          : String(response);
+      const hasComputeDevices = (devicesResult?.count || 0) > 0;
 
-      const plan = safeParseJson<{
-        steps: Array<{
-          id: string;
-          action: string;
-          description: string;
-          inputs?: string | object;
-          expectedOutput: string;
-        }>;
-        estimatedDuration: string;
-        physicalStepsIdentified?: string[];
-      }>(responseText);
-
-      if (!plan) {
-        console.error('Failed to parse execution plan from AI response');
-        // Return a default single-step plan
+      if (!hasComputeDevices) {
+        // No compute devices - return simple plan
+        console.log('No compute devices available, using simple plan');
         return {
           steps: [
             {
@@ -788,7 +839,58 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
         };
       }
 
-      // Convert to our ExecutionPlan format with serializable inputs
+      // Dispatch to compute network
+      const responseText = await this.dispatchComputeTask(
+        'planning',
+        context.persona.system_prompt,
+        prompt,
+        2000
+      );
+
+      if (!responseText) {
+        // Timeout or error - return default plan
+        return {
+          steps: [
+            {
+              id: 'step_1',
+              action: 'analyze',
+              description: context.task.description || context.task.title,
+              inputs: '{}',
+              expectedOutput: 'Task completion',
+            },
+          ],
+          estimatedDuration: '15 minutes',
+        };
+      }
+
+      const plan = safeParseJson<{
+        steps: Array<{
+          id: string;
+          action: string;
+          description: string;
+          inputs?: string | object;
+          expectedOutput: string;
+        }>;
+        estimatedDuration: string;
+        physicalStepsIdentified?: string[];
+      }>(responseText);
+
+      if (!plan) {
+        console.error('Failed to parse execution plan');
+        return {
+          steps: [
+            {
+              id: 'step_1',
+              action: 'analyze',
+              description: context.task.description || context.task.title,
+              inputs: '{}',
+              expectedOutput: 'Task completion',
+            },
+          ],
+          estimatedDuration: '15 minutes',
+        };
+      }
+
       return {
         steps: plan.steps.map((s, i) => ({
           id: s.id || `step_${i + 1}`,
@@ -806,7 +908,7 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
   }
 
   /**
-   * Executes a single step using AI
+   * Executes a single step using the compute network.
    */
   private async executeStep(
     planStep: PlanStep,
@@ -826,24 +928,27 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
         agentMemory: context.memory.learnings.slice(-5).join('\n') || 'No previous learnings',
       });
 
-      const response = await this.env.AI.run(
-        '@cf/meta/llama-3.1-70b-instruct' as Parameters<Ai['run']>[0],
-        {
-          messages: [
-            { role: 'system', content: context.persona.system_prompt },
-            { role: 'user', content: prompt },
-          ],
-          max_tokens: 4000,
-        }
+      // Dispatch to compute network
+      const responseText = await this.dispatchComputeTask(
+        'execution',
+        context.persona.system_prompt,
+        prompt,
+        4000
       );
 
       const durationMs = Date.now() - startTime;
 
-      // Handle response type
-      const responseText =
-        typeof response === 'object' && 'response' in response
-          ? String((response as { response: string }).response)
-          : String(response);
+      if (!responseText) {
+        // Compute task failed or timed out
+        return {
+          success: false,
+          output: JSON.stringify({ error: 'Compute task failed or timed out' }),
+          needsPhysical: false,
+          blockReason: 'No compute resources available',
+          tokensUsed: 0,
+          durationMs,
+        };
+      }
 
       const result = safeParseJson<{
         success: boolean;
@@ -859,7 +964,7 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
       }>(responseText);
 
       if (!result) {
-        // If we can't parse the result, return the raw text as output
+        // Return raw text as output
         return {
           success: true,
           output: responseText,
@@ -870,7 +975,7 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
         };
       }
 
-      // Check for physical barriers in the result
+      // Check for physical barriers
       const physicalCheck = detectPhysicalBarrier(
         result.blockReason || planStep.description
       );

@@ -81,3 +81,57 @@ CREATE INDEX idx_work_log_task_id ON work_log(task_id);
 CREATE INDEX idx_artifacts_task_id ON artifacts(task_id);
 CREATE INDEX idx_artifacts_type ON artifacts(type);
 CREATE INDEX idx_projects_slug ON projects(slug);
+
+-- ============================================================================
+-- DISTRIBUTED COMPUTE NETWORK TABLES
+-- These tables support the compute network where inference runs on registered
+-- devices (4090 GPU, contributors, WebGPU) instead of Workers AI
+-- ============================================================================
+
+-- Compute devices table: registered compute resources
+CREATE TABLE compute_devices (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  tier TEXT NOT NULL CHECK(tier IN ('power', 'standard', 'crowd')),
+  platform TEXT NOT NULL CHECK(platform IN ('cuda', 'metal', 'webgpu', 'cpu')),
+  capabilities TEXT NOT NULL, -- JSON: {compute: TFLOPS, memory: GB, models: []}
+  endpoint_url TEXT, -- Where to send tasks (null for polling devices)
+  status TEXT DEFAULT 'offline' CHECK(status IN ('online', 'busy', 'offline', 'paused')),
+  current_task_id TEXT,
+  last_heartbeat TEXT,
+  stats TEXT, -- JSON: {tasksCompleted, creditsEarned, totalComputeTime}
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Compute tasks table: inference tasks dispatched to compute network
+CREATE TABLE compute_tasks (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK(type IN (
+    'inference', 'embedding', 'assessment', 'planning', 'execution',
+    'draft_generation', 'draft_verification', 'summarization', 'classification'
+  )),
+  input TEXT NOT NULL, -- JSON: prompt, model_id, config
+  config TEXT NOT NULL, -- JSON: maxTokens, temperature, minTier
+  status TEXT DEFAULT 'pending' CHECK(status IN (
+    'pending', 'assigned', 'processing', 'completed', 'failed', 'timeout'
+  )),
+  priority INTEGER DEFAULT 5,
+  min_tier TEXT CHECK(min_tier IN ('power', 'standard', 'crowd')),
+  assigned_device_id TEXT,
+  result TEXT, -- JSON: output, metrics
+  error TEXT,
+  parent_task_id TEXT, -- Links to tasks table for workflow integration
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  assigned_at TEXT,
+  completed_at TEXT,
+  FOREIGN KEY (assigned_device_id) REFERENCES compute_devices(id) ON DELETE SET NULL,
+  FOREIGN KEY (parent_task_id) REFERENCES tasks(id) ON DELETE SET NULL
+);
+
+-- Indexes for compute tables
+CREATE INDEX idx_compute_devices_tier_status ON compute_devices(tier, status);
+CREATE INDEX idx_compute_devices_last_heartbeat ON compute_devices(last_heartbeat);
+CREATE INDEX idx_compute_tasks_status_priority ON compute_tasks(status, priority DESC);
+CREATE INDEX idx_compute_tasks_assigned_device ON compute_tasks(assigned_device_id);
+CREATE INDEX idx_compute_tasks_parent_task ON compute_tasks(parent_task_id);

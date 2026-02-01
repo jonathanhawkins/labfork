@@ -5,7 +5,7 @@ import api from './api/routes';
 // Types for Cloudflare bindings
 export interface Env {
   DB: D1Database;
-  AI: Ai;
+  // AI binding removed - using distributed compute network instead
   MANAGER_WORKFLOW: Workflow;
   WORKER_WORKFLOW: Workflow;
   ENVIRONMENT: string;

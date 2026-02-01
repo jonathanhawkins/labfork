@@ -17,7 +17,7 @@ import {
 
 export interface Env {
   DB: D1Database;
-  AI: Ai;
+  // AI binding removed - using compute network instead
   WORKER_WORKFLOW: Workflow;
 }
 
@@ -507,7 +507,9 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
   }
 
   /**
-   * Assess a project's state using Workers AI
+   * Assess a project's state using the distributed compute network.
+   * This dispatches an 'assessment' task to available compute devices (4090, etc.)
+   * instead of using Workers AI.
    */
   private async assessProject(
     project: Project,
@@ -521,7 +523,7 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
     const blockedTasks = tasks.filter((t) => t.status === 'blocked').length;
     const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length;
 
-    // Prepare context for AI
+    // Prepare context for assessment
     const projectContext = {
       project: {
         id: project.id,
@@ -545,92 +547,159 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
     };
 
     try {
-      // Use Workers AI to analyze project state
-      const response = await this.env.AI.run(
-        '@cf/meta/llama-3.1-8b-instruct' as any,
-        {
-          messages: [
-            { role: 'system', content: PROJECT_ASSESSMENT_PROMPT },
-            { role: 'user', content: JSON.stringify(projectContext) },
-          ],
-          max_tokens: 1024,
-        }
-      );
+      // Check if any compute devices are available
+      const devicesResult = await this.env.DB
+        .prepare(`
+          SELECT COUNT(*) as count FROM compute_devices
+          WHERE status IN ('online', 'busy')
+        `)
+        .first<{ count: number }>();
 
-      const responseText = typeof response === 'object' && 'response' in response
-        ? (response as { response: string }).response
-        : String(response);
+      const hasComputeDevices = (devicesResult?.count || 0) > 0;
 
-      // Parse AI response
-      let aiAssessment: {
-        summary?: string;
-        newTasksNeeded?: boolean;
-        suggestedTasks?: SuggestedTask[];
-        priorities?: string[];
-        bottlenecks?: string[];
-      };
+      if (!hasComputeDevices) {
+        // No compute devices available - use simple heuristic assessment
+        console.log(`No compute devices available for project ${project.id}, using heuristic assessment`);
 
-      try {
-        // Try to extract JSON from response (in case there's extra text)
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          aiAssessment = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found in response');
-        }
-      } catch (parseError) {
-        console.error('Failed to parse AI assessment:', parseError);
-        // Return default assessment if AI response is invalid
-        aiAssessment = {
-          summary: 'Unable to parse AI assessment',
+        return {
+          projectId: project.id,
+          summary: `Project ${project.name}: ${completedTasks}/${tasks.length} tasks completed`,
+          completedTasks,
+          pendingTasks,
+          blockedTasks,
+          inProgressTasks,
+          // Simple heuristic: need new tasks if queue is empty and not everything is done
           newTasksNeeded: pendingTasks === 0 && completedTasks < tasks.length,
           suggestedTasks: [],
-          priorities: [],
-          bottlenecks: [],
+          priorities: pendingTasks > 0 ? ['Complete pending tasks'] : [],
+          bottlenecks: blockedTasks > 0 ? [`${blockedTasks} tasks blocked`] : [],
         };
       }
 
-      const durationMs = Date.now() - startTime;
+      // Create a compute task for assessment
+      const computeTaskId = generateId('ctask');
+      const now = new Date().toISOString();
 
-      // Log the assessment
-      await logWork(
-        this.env.DB,
-        'manager',
-        null,
-        'project_assessment',
-        projectContext,
-        aiAssessment,
-        durationMs,
-        0 // Token count not available from Workers AI
-      );
+      await this.env.DB
+        .prepare(`
+          INSERT INTO compute_tasks (
+            id, type, input, config, status, priority, min_tier, created_at
+          ) VALUES (?, 'assessment', ?, ?, 'pending', 7, 'standard', ?)
+        `)
+        .bind(
+          computeTaskId,
+          JSON.stringify({
+            systemPrompt: PROJECT_ASSESSMENT_PROMPT,
+            prompt: JSON.stringify(projectContext),
+          }),
+          JSON.stringify({ maxTokens: 1024, temperature: 0.3 }),
+          now
+        )
+        .run();
 
-      return {
-        projectId: project.id,
-        summary: aiAssessment.summary || 'No summary available',
-        completedTasks,
-        pendingTasks,
-        blockedTasks,
-        inProgressTasks,
-        newTasksNeeded: aiAssessment.newTasksNeeded ?? false,
-        suggestedTasks: aiAssessment.suggestedTasks || [],
-        priorities: aiAssessment.priorities || [],
-        bottlenecks: aiAssessment.bottlenecks || [],
-      };
+      console.log(`Created assessment compute task ${computeTaskId} for project ${project.id}`);
+
+      // Wait for the compute task to complete (with timeout)
+      const timeout = 60000; // 60 seconds
+      const pollInterval = 1000; // 1 second
+      let elapsed = 0;
+
+      while (elapsed < timeout) {
+        const task = await this.env.DB
+          .prepare('SELECT status, result, error FROM compute_tasks WHERE id = ?')
+          .bind(computeTaskId)
+          .first<{ status: string; result: string | null; error: string | null }>();
+
+        if (!task) {
+          throw new Error('Compute task not found');
+        }
+
+        if (task.status === 'completed' && task.result) {
+          const result = JSON.parse(task.result);
+          const responseText = result.output || '';
+
+          // Parse the response
+          let aiAssessment: {
+            summary?: string;
+            newTasksNeeded?: boolean;
+            suggestedTasks?: SuggestedTask[];
+            priorities?: string[];
+            bottlenecks?: string[];
+          };
+
+          try {
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              aiAssessment = JSON.parse(jsonMatch[0]);
+            } else {
+              throw new Error('No JSON found in response');
+            }
+          } catch (parseError) {
+            console.error('Failed to parse compute assessment:', parseError);
+            aiAssessment = {
+              summary: 'Unable to parse assessment',
+              newTasksNeeded: pendingTasks === 0 && completedTasks < tasks.length,
+              suggestedTasks: [],
+              priorities: [],
+              bottlenecks: [],
+            };
+          }
+
+          const durationMs = Date.now() - startTime;
+
+          await logWork(
+            this.env.DB,
+            'manager',
+            null,
+            'project_assessment',
+            projectContext,
+            aiAssessment,
+            durationMs,
+            0
+          );
+
+          return {
+            projectId: project.id,
+            summary: aiAssessment.summary || 'No summary available',
+            completedTasks,
+            pendingTasks,
+            blockedTasks,
+            inProgressTasks,
+            newTasksNeeded: aiAssessment.newTasksNeeded ?? false,
+            suggestedTasks: aiAssessment.suggestedTasks || [],
+            priorities: aiAssessment.priorities || [],
+            bottlenecks: aiAssessment.bottlenecks || [],
+          };
+        }
+
+        if (task.status === 'failed') {
+          throw new Error(task.error || 'Compute task failed');
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        elapsed += pollInterval;
+      }
+
+      // Timeout - use fallback
+      console.warn(`Assessment compute task timed out for project ${project.id}`);
+      throw new Error('Assessment timeout');
+
     } catch (error) {
-      console.error(`AI assessment failed for project ${project.id}:`, error);
+      console.error(`Assessment failed for project ${project.id}:`, error);
 
       // Return fallback assessment
       return {
         projectId: project.id,
-        summary: `Assessment failed: ${error}`,
+        summary: `Assessment completed (fallback): ${completedTasks}/${tasks.length} tasks done`,
         completedTasks,
         pendingTasks,
         blockedTasks,
         inProgressTasks,
-        newTasksNeeded: false,
+        newTasksNeeded: pendingTasks === 0 && completedTasks < tasks.length,
         suggestedTasks: [],
         priorities: [],
-        bottlenecks: [`AI assessment error: ${error}`],
+        bottlenecks: error instanceof Error ? [error.message] : [],
       };
     }
   }

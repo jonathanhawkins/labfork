@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import compute from './compute';
 
 // ============================================================================
 // Types
@@ -7,7 +8,7 @@ import { cors } from 'hono/cors';
 
 interface Env {
   DB: D1Database;
-  AI: Ai;
+  // AI binding removed - using distributed compute network
 }
 
 // Response types
@@ -716,5 +717,8 @@ api.post('/workflows/worker/trigger', async (c) => {
     );
   }
 });
+
+// Mount compute network routes under /compute
+api.route('/compute', compute);
 
 export default api;

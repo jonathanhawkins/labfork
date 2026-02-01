@@ -8,9 +8,11 @@ binding = "DB"
 database_name = "labfork-agents-db"
 database_id = "966bc5ec-afda-4499-ad4c-5548d1a8ec79"
 
-# Workers AI binding
-[ai]
-binding = "AI"
+# Workers AI binding - REMOVED
+# We now use the distributed compute network (4090 GPU, contributors, WebGPU)
+# instead of Workers AI to avoid credit costs.
+# [ai]
+# binding = "AI"
 
 # Workflows configuration
 [[workflows]]
@@ -24,7 +26,7 @@ binding = "WORKER_WORKFLOW"
 class_name = "WorkerWorkflow"
 
 # Cron Triggers for autonomous agent scheduling
-# This uses Workers AI (free tier) for DECISIONS, not training
+# This is now FREE - no Workers AI used, all inference on compute network
 [triggers]
 crons = ["*/15 * * * *"]  # Every 15 minutes - orchestration only
 
