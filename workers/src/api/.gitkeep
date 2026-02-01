@@ -1,0 +1,5 @@
+# API route files will be added here
+# - projects.ts: Project CRUD operations
+# - agents.ts: Agent status and management
+# - tasks.ts: Task management
+# - work-log.ts: Activity logging

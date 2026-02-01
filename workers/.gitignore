@@ -1,0 +1,13 @@
+# Wrangler local state
+.wrangler/
+
+# Node modules
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.local
+.dev.vars

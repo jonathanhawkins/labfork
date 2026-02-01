@@ -1,0 +1,31 @@
+{
+  "name": "labfork-agents",
+  "version": "1.0.0",
+  "description": "Autonomous agent system for LabFork using Cloudflare Workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:create": "wrangler d1 create labfork-agents-db",
+    "db:migrate": "wrangler d1 execute labfork-agents-db --file=./migrations/001_initial.sql",
+    "db:migrate:local": "wrangler d1 execute labfork-agents-db --local --file=./migrations/001_initial.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "typescript": "^5.3.0",
+    "wrangler": "^3.22.0"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "agents",
+    "ai",
+    "labfork"
+  ],
+  "license": "MIT"
+}
