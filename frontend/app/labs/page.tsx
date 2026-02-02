@@ -3,8 +3,8 @@
 /**
  * Labs Overview Page
  *
- * Displays all research labs from the research manager with live status.
- * Auto-refreshes every 30 seconds to show real-time progress.
+ * Displays all public research labs.
+ * Shows DB-backed labs (works on production) with fallback to research manager labs.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -13,67 +13,30 @@ import { cn } from "@/lib/utils";
 import {
   Activity,
   Bot,
-  CheckCircle2,
   Clock,
   FileText,
   Loader2,
-  PlayCircle,
-  Settings,
-  Zap,
+  Star,
+  GitFork,
+  Eye,
+  Plus,
 } from "lucide-react";
-
-interface LabAgent {
-  id: string;
-  name?: string;
-  displayName?: string;
-  type?: string;
-  status: string;
-  currentTask?: string;
-  progress?: number;
-}
-
-interface LabStatus {
-  id: string;
-  name: string;
-  description: string;
-  active: boolean;
-  domain?: string;
-  settings?: {
-    maxAgents?: number;
-    autoSpawn?: boolean;
-    researchInterval?: number;
-  };
-  agents: {
-    running: number;
-    total: number;
-    list: LabAgent[];
-  };
-  tasks: {
-    total: number;
-    pending: number;
-    in_progress: number;
-    completed: number;
-  };
-  proposals: {
-    total: number;
-    pending: number;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
+import type { Lab } from "@/lib/labs/types";
 
 export default function LabsOverviewPage() {
-  const [labs, setLabs] = useState<LabStatus[]>([]);
+  const [labs, setLabs] = useState<Lab[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isSeeding, setIsSeeding] = useState(false);
 
   const fetchLabs = useCallback(async () => {
     try {
-      const response = await fetch("/api/labs/research");
+      // Fetch from DB-backed API (works on production)
+      const response = await fetch("/api/labs?visibility=public&sortBy=stars&limit=50");
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.labs) {
         setLabs(data.labs);
         setError(null);
         setLastUpdated(new Date());
@@ -87,12 +50,23 @@ export default function LabsOverviewPage() {
     }
   }, []);
 
+  const seedLabs = async () => {
+    setIsSeeding(true);
+    try {
+      const response = await fetch("/api/labs/seed", { method: "POST" });
+      const data = await response.json();
+      if (data.success) {
+        await fetchLabs();
+      }
+    } catch (err) {
+      console.error("Failed to seed labs:", err);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
   useEffect(() => {
     fetchLabs();
-
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchLabs, 30000);
-    return () => clearInterval(interval);
   }, [fetchLabs]);
 
   if (isLoading) {
@@ -151,12 +125,33 @@ export default function LabsOverviewPage() {
             <h2 className="text-xl font-medium text-foreground-bright mb-2">
               No Research Labs Found
             </h2>
-            <p className="text-foreground-muted">
-              Research labs will appear here when created via the research manager.
+            <p className="text-foreground-muted mb-6">
+              Create your first lab or seed demo labs to get started.
             </p>
+            <div className="flex gap-4 justify-center">
+              <Link
+                href="/lab/new"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create Lab
+              </Link>
+              <button
+                onClick={seedLabs}
+                disabled={isSeeding}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isSeeding ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Activity className="w-4 h-4" />
+                )}
+                {isSeeding ? "Seeding..." : "Seed Demo Labs"}
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {labs.map((lab) => (
               <LabCard key={lab.id} lab={lab} />
             ))}
@@ -167,163 +162,77 @@ export default function LabsOverviewPage() {
   );
 }
 
-function LabCard({ lab }: { lab: LabStatus }) {
-  const hasActiveAgents = lab.agents.running > 0;
-  const hasPendingProposals = lab.proposals.pending > 0;
-  const completionRate =
-    lab.tasks.total > 0
-      ? Math.round((lab.tasks.completed / lab.tasks.total) * 100)
-      : 0;
-
+function LabCard({ lab }: { lab: Lab }) {
   return (
     <Link
-      href={`/labs/research/${lab.id}`}
-      className={cn(
-        "block p-6 rounded-lg border transition-colors hover:border-foreground-muted",
-        hasActiveAgents
-          ? "border-green-500/30 bg-green-500/5"
-          : "border-border"
-      )}
+      href={`/labs/${lab.owner.username}/${lab.slug}`}
+      className="block p-6 rounded-lg border border-border transition-colors hover:border-foreground-muted hover:bg-muted/50"
     >
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground-bright">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold text-foreground-bright truncate">
             {lab.name}
           </h2>
           <p className="text-sm text-foreground-muted mt-1 line-clamp-2">
             {lab.description}
           </p>
         </div>
-
-        {lab.active ? (
-          hasActiveAgents ? (
-            <span className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-500/20 text-green-400">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              Active
-            </span>
-          ) : (
-            <span className="px-2 py-1 rounded text-xs bg-foreground-subtle/20 text-foreground-muted">
-              Idle
-            </span>
-          )
-        ) : (
-          <span className="px-2 py-1 rounded text-xs bg-amber-500/20 text-amber-400">
-            Paused
+        {lab.status === "active" && (
+          <span className="ml-2 flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-500/20 text-green-400 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-green-400" />
+            Active
           </span>
         )}
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div>
-          <div className="flex items-center gap-1 text-xs text-foreground-muted mb-1">
-            <Bot className="w-3 h-3" />
-            Agents
-          </div>
-          <div className="text-lg font-semibold text-foreground-bright">
-            {lab.agents.running}
-            <span className="text-foreground-subtle text-sm">
-              /{lab.agents.total}
+      {/* Tags */}
+      {lab.tags && lab.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-4">
+          {lab.tags.slice(0, 4).map((tag) => (
+            <span
+              key={tag}
+              className="px-2 py-0.5 text-xs rounded bg-muted text-foreground-muted"
+            >
+              {tag}
             </span>
-          </div>
+          ))}
         </div>
+      )}
 
-        <div>
-          <div className="flex items-center gap-1 text-xs text-foreground-muted mb-1">
-            <Activity className="w-3 h-3" />
-            Tasks
-          </div>
-          <div className="text-lg font-semibold text-foreground-bright">
-            {lab.tasks.in_progress > 0 && (
-              <span className="text-blue-400 mr-1">{lab.tasks.in_progress}</span>
-            )}
-            {lab.tasks.completed}
-            <span className="text-foreground-subtle text-sm">
-              /{lab.tasks.total}
-            </span>
-          </div>
+      {/* Stats */}
+      <div className="flex items-center gap-4 text-sm text-foreground-muted">
+        <div className="flex items-center gap-1">
+          <Star className="w-4 h-4" />
+          <span>{lab.stats?.stars || 0}</span>
         </div>
-
-        <div>
-          <div className="flex items-center gap-1 text-xs text-foreground-muted mb-1">
-            <FileText className="w-3 h-3" />
-            Proposals
-          </div>
-          <div className="text-lg font-semibold text-foreground-bright">
-            {hasPendingProposals ? (
-              <span className="text-amber-400">{lab.proposals.pending}</span>
-            ) : (
-              lab.proposals.total
-            )}
-          </div>
+        <div className="flex items-center gap-1">
+          <GitFork className="w-4 h-4" />
+          <span>{lab.stats?.forks || 0}</span>
         </div>
+        <div className="flex items-center gap-1">
+          <FileText className="w-4 h-4" />
+          <span>{lab.stats?.papers || 0} papers</span>
+        </div>
+        {(lab.stats?.viewers ?? 0) > 0 && (
+          <div className="flex items-center gap-1 text-green-400">
+            <Eye className="w-4 h-4" />
+            <span>{lab.stats?.viewers} watching</span>
+          </div>
+        )}
       </div>
-
-      {/* Progress Bar */}
-      {lab.tasks.total > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-xs text-foreground-muted mb-1">
-            <span>Progress</span>
-            <span>{completionRate}% complete</span>
-          </div>
-          <div className="h-2 bg-foreground-subtle/20 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all"
-              style={{ width: `${completionRate}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Active Agents */}
-      {hasActiveAgents && (
-        <div className="pt-4 border-t border-border">
-          <div className="text-xs text-foreground-muted mb-2">
-            Active Agents
-          </div>
-          <div className="space-y-2">
-            {lab.agents.list
-              .filter((a) => a.status === "running" || a.status === "working")
-              .slice(0, 2)
-              .map((agent) => (
-                <div
-                  key={agent.id}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <Zap className="w-3 h-3 text-amber-400" />
-                  <span className="text-foreground">
-                    {agent.displayName || agent.name || agent.id}
-                  </span>
-                  {agent.currentTask && (
-                    <span className="text-foreground-subtle text-xs truncate flex-1">
-                      - {agent.currentTask}
-                    </span>
-                  )}
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Pending Proposals Alert */}
-      {hasPendingProposals && (
-        <div className="mt-4 p-3 rounded bg-amber-500/10 border border-amber-500/20">
-          <div className="flex items-center gap-2 text-sm text-amber-400">
-            <FileText className="w-4 h-4" />
-            {lab.proposals.pending} proposal{lab.proposals.pending > 1 ? "s" : ""}{" "}
-            pending review
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-xs text-foreground-subtle">
-        <span>
-          Domain: {lab.domain || "N/A"}
+        <span className="flex items-center gap-1">
+          <span
+            className="w-3 h-3 rounded-full"
+            style={{ backgroundColor: lab.primaryColor || "#6366f1" }}
+          />
+          {lab.domainName || lab.domainSlug}
         </span>
         <span>
-          Updated {new Date(lab.updatedAt).toLocaleDateString()}
+          by {lab.owner.displayName || lab.owner.username}
         </span>
       </div>
     </Link>
