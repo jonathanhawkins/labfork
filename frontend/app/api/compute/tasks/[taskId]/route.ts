@@ -1,13 +1,13 @@
 /**
  * Task-specific API
  *
- * GET /api/compute/tasks/[taskId] - Get task info
- * POST /api/compute/tasks/[taskId]/complete - Complete a task
+ * GET /api/compute/tasks/[taskId] - Get task info (proxies to Workers)
+ * POST /api/compute/tasks/[taskId] - Complete a task (proxies to Workers)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getOrchestrator } from "@/lib/compute/orchestrator";
-import type { CompleteTaskRequest } from "@/lib/compute/types";
+
+const WORKERS_API = "https://labfork-agents.jonathan-hawkins.workers.dev/api/compute";
 
 interface RouteParams {
   params: {
@@ -22,36 +22,25 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { taskId } = params;
-    const orchestrator = getOrchestrator();
-    const task = orchestrator.getTask(taskId);
 
-    if (!task) {
-      return NextResponse.json(
-        { success: false, error: "Task not found" },
-        { status: 404 }
-      );
+    const response = await fetch(`${WORKERS_API}/tasks/${taskId}`, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
     }
 
-    return NextResponse.json({
-      success: true,
-      task: {
-        id: task.id,
-        type: task.type,
-        status: task.status,
-        priority: task.priority,
-        reward: task.reward,
-        input: task.input,
-        config: task.config,
-        createdAt: task.createdAt,
-        assignedAt: task.assignedAt,
-        completedAt: task.completedAt,
-        assignedDeviceId: task.assignedDeviceId,
-      },
-    });
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Get task error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to get task" },
+      { error: "Failed to get task" },
       { status: 500 }
     );
   }
@@ -65,49 +54,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { taskId } = params;
     const body = await request.json();
+    const authHeader = request.headers.get("Authorization");
 
-    // Validate required fields
-    if (!body.deviceId) {
-      return NextResponse.json(
-        { success: false, error: "Missing deviceId" },
-        { status: 400 }
-      );
-    }
-
-    if (typeof body.success !== "boolean") {
-      return NextResponse.json(
-        { success: false, error: "Missing success status" },
-        { status: 400 }
-      );
-    }
-
-    const orchestrator = getOrchestrator();
-
-    const completeRequest: CompleteTaskRequest = {
-      taskId,
-      deviceId: body.deviceId,
-      success: body.success,
-      result: body.result,
-      error: body.error,
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
     };
 
-    const result = orchestrator.completeTask(completeRequest);
-
-    if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: "Failed to complete task" },
-        { status: 400 }
-      );
+    // Forward auth token if present
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
     }
 
-    return NextResponse.json({
-      success: true,
-      creditsAwarded: result.credits || 0,
+    const response = await fetch(`${WORKERS_API}/tasks/${taskId}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
     });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Complete task error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to complete task" },
+      { error: "Failed to complete task" },
       { status: 500 }
     );
   }

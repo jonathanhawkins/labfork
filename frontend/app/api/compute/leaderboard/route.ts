@@ -1,11 +1,12 @@
 /**
  * Compute Leaderboard API
  *
- * GET /api/compute/leaderboard - Get top contributors
+ * GET /api/compute/leaderboard - Get top contributors (proxies to Workers)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getOrchestrator } from "@/lib/compute/orchestrator";
+
+const WORKERS_API = "https://labfork-agents.jonathan-hawkins.workers.dev/api/compute";
 
 /**
  * GET /api/compute/leaderboard
@@ -14,21 +15,27 @@ import { getOrchestrator } from "@/lib/compute/orchestrator";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const limitParam = searchParams.get("limit");
-    const limit = limitParam ? parseInt(limitParam, 10) : 10;
+    const limit = searchParams.get("limit") || "20";
 
-    const orchestrator = getOrchestrator();
-    const leaderboard = orchestrator.getLeaderboard(limit);
-
-    return NextResponse.json({
-      success: true,
-      leaderboard,
-      count: leaderboard.length,
+    const response = await fetch(`${WORKERS_API}/leaderboard?limit=${limit}`, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
     });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    // Workers returns array directly, wrap for frontend compatibility
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Get leaderboard error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to get leaderboard" },
+      { error: "Failed to get leaderboard" },
       { status: 500 }
     );
   }

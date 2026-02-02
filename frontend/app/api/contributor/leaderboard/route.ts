@@ -1,29 +1,31 @@
 /**
  * Leaderboard API
  *
- * GET /api/contributor/leaderboard - Get top contributors
+ * GET /api/contributor/leaderboard - Get top contributors (proxies to Workers)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getLeaderboard } from "@/lib/supabase/contributors";
+
+const WORKERS_API = "https://labfork-agents.jonathan-hawkins.workers.dev/api/compute";
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const limitParam = searchParams.get("limit");
-    const limit = limitParam ? parseInt(limitParam, 10) : 10;
+    const limit = searchParams.get("limit") || "10";
 
-    // Validate limit
-    if (limit < 1 || limit > 100) {
-      return NextResponse.json(
-        { error: "Limit must be between 1 and 100" },
-        { status: 400 }
-      );
+    const response = await fetch(`${WORKERS_API}/leaderboard?limit=${limit}`, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Workers API error: ${response.status}`);
     }
 
-    const leaders = await getLeaderboard(limit);
-
-    return NextResponse.json(leaders);
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
     console.error("Error fetching leaderboard:", error);
     return NextResponse.json(
