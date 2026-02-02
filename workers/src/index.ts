@@ -45,8 +45,42 @@ export { WorkerWorkflow } from './workflows/worker';
 export const scheduled: ExportedHandlerScheduledHandler<Env> = async (event, env, ctx) => {
   console.log(`Cron trigger fired at ${new Date().toISOString()}`);
 
+  // 1. Run compute network cleanup (mark stale devices offline)
   try {
-    // Trigger manager workflow on schedule
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const now = new Date().toISOString();
+
+    // Mark devices offline if no heartbeat in 5 minutes
+    const offlineResult = await env.DB.prepare(`
+      UPDATE compute_devices
+      SET status = 'offline', updated_at = ?
+      WHERE status IN ('online', 'busy')
+        AND last_heartbeat < ?
+    `).bind(now, fiveMinutesAgo).run();
+
+    // Reset tasks that were assigned but device went offline
+    const resetResult = await env.DB.prepare(`
+      UPDATE compute_tasks
+      SET status = 'pending', assigned_device_id = NULL, assigned_at = NULL
+      WHERE status = 'assigned'
+        AND assigned_at < ?
+    `).bind(oneHourAgo).run();
+
+    // Clear current_task_id for offline devices
+    await env.DB.prepare(`
+      UPDATE compute_devices
+      SET current_task_id = NULL
+      WHERE status = 'offline' AND current_task_id IS NOT NULL
+    `).run();
+
+    console.log(`[Cleanup] ${offlineResult.meta?.changes || 0} devices offline, ${resetResult.meta?.changes || 0} tasks reset`);
+  } catch (error) {
+    console.error('[Cleanup] Failed:', error);
+  }
+
+  // 2. Trigger manager workflow
+  try {
     const instance = await env.MANAGER_WORKFLOW.create();
     console.log(`Started manager workflow: ${instance.id}`);
   } catch (error) {

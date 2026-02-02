@@ -342,11 +342,19 @@ compute.patch('/devices/:id', async (c) => {
 
 /**
  * GET /devices - List all compute devices
+ *
+ * Query params:
+ *   tier: 'power' | 'standard' | 'crowd' (optional filter)
+ *   status: 'online' | 'busy' | 'offline' | 'paused' (optional filter)
+ *   activeOnly: 'true' to only show devices with recent heartbeat (5 min)
  */
 compute.get('/devices', async (c) => {
   try {
     const tier = c.req.query('tier');
     const status = c.req.query('status');
+    const activeOnly = c.req.query('activeOnly') === 'true';
+
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
     let query = 'SELECT * FROM compute_devices WHERE 1=1';
     const params: (string | null)[] = [];
@@ -361,35 +369,47 @@ compute.get('/devices', async (c) => {
       params.push(status);
     }
 
+    if (activeOnly) {
+      query += ' AND last_heartbeat > ?';
+      params.push(fiveMinutesAgo);
+    }
+
     query += ' ORDER BY tier DESC, last_heartbeat DESC';
 
     const result = await c.env.DB.prepare(query).bind(...params).all<ComputeDevice>();
 
-    const devices = (result.results || []).map((d) => ({
-      id: d.id,
-      name: d.name,
-      tier: d.tier,
-      platform: d.platform,
-      capabilities: parseJson<DeviceCapabilities>(d.capabilities, { compute: 0, memory: 0, models: [] }),
-      status: d.status,
-      currentTaskId: d.current_task_id,
-      lastHeartbeat: d.last_heartbeat,
-      stats: parseJson(d.stats, { tasksCompleted: 0, creditsEarned: 0, totalComputeTime: 0 }),
-    }));
+    const devices = (result.results || []).map((d) => {
+      const lastHeartbeat = d.last_heartbeat ? new Date(d.last_heartbeat) : null;
+      const isRecentlyActive = lastHeartbeat && lastHeartbeat > new Date(fiveMinutesAgo);
 
-    // Calculate network stats
-    const online = devices.filter((d) => d.status === 'online' || d.status === 'busy');
-    const totalCompute = online.reduce((sum, d) => sum + d.capabilities.compute, 0);
+      return {
+        id: d.id,
+        name: d.name,
+        tier: d.tier,
+        platform: d.platform,
+        capabilities: parseJson<DeviceCapabilities>(d.capabilities, { compute: 0, memory: 0, models: [] }),
+        status: d.status,
+        // Add computed "actuallyOnline" field based on heartbeat
+        actuallyOnline: isRecentlyActive && (d.status === 'online' || d.status === 'busy'),
+        currentTaskId: d.current_task_id,
+        lastHeartbeat: d.last_heartbeat,
+        stats: parseJson(d.stats, { tasksCompleted: 0, creditsEarned: 0, totalComputeTime: 0 }),
+      };
+    });
+
+    // Calculate network stats - only count truly active devices
+    const actuallyOnline = devices.filter((d) => d.actuallyOnline);
+    const totalCompute = actuallyOnline.reduce((sum, d) => sum + d.capabilities.compute, 0);
 
     return c.json({
       devices,
       count: devices.length,
-      online: online.length,
+      online: actuallyOnline.length,
       totalCompute: Math.round(totalCompute * 10) / 10,
       byTier: {
-        power: devices.filter((d) => d.tier === 'power').length,
-        standard: devices.filter((d) => d.tier === 'standard').length,
-        crowd: devices.filter((d) => d.tier === 'crowd').length,
+        power: actuallyOnline.filter((d) => d.tier === 'power').length,
+        standard: actuallyOnline.filter((d) => d.tier === 'standard').length,
+        crowd: actuallyOnline.filter((d) => d.tier === 'crowd').length,
       },
     });
   } catch (error) {
@@ -1100,20 +1120,102 @@ compute.get('/tasks/:id/wait', async (c) => {
 });
 
 /**
+ * POST /cleanup - Mark stale devices as offline and clean up
+ *
+ * This should be called periodically (e.g., every 5 minutes) to:
+ * - Mark devices offline if no heartbeat in 5+ minutes
+ * - Reset stuck tasks that were assigned but never completed
+ * - Delete very old offline devices (optional)
+ */
+compute.post('/cleanup', async (c) => {
+  try {
+    const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+
+    // Mark devices offline if no heartbeat in 5 minutes
+    const offlineResult = await c.env.DB.prepare(`
+      UPDATE compute_devices
+      SET status = 'offline', updated_at = ?
+      WHERE status IN ('online', 'busy')
+        AND last_heartbeat < ?
+    `).bind(now.toISOString(), fiveMinutesAgo).run();
+
+    // Reset tasks that were assigned but device went offline
+    const resetResult = await c.env.DB.prepare(`
+      UPDATE compute_tasks
+      SET status = 'pending', assigned_device_id = NULL, assigned_at = NULL
+      WHERE status = 'assigned'
+        AND assigned_at < ?
+    `).bind(oneHourAgo).run();
+
+    // Clear current_task_id for offline devices
+    await c.env.DB.prepare(`
+      UPDATE compute_devices
+      SET current_task_id = NULL
+      WHERE status = 'offline' AND current_task_id IS NOT NULL
+    `).run();
+
+    console.log(`[Compute] Cleanup: ${offlineResult.meta?.changes || 0} devices marked offline, ${resetResult.meta?.changes || 0} tasks reset`);
+
+    return c.json({
+      success: true,
+      devicesMarkedOffline: offlineResult.meta?.changes || 0,
+      tasksReset: resetResult.meta?.changes || 0,
+      timestamp: now.toISOString(),
+    });
+  } catch (error) {
+    console.error('[Compute] Cleanup error:', error);
+    return c.json({ error: 'Failed to run cleanup' }, 500);
+  }
+});
+
+/**
+ * DELETE /devices/stale - Delete devices that have been offline for 24+ hours
+ */
+compute.delete('/devices/stale', async (c) => {
+  try {
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+    const result = await c.env.DB.prepare(`
+      DELETE FROM compute_devices
+      WHERE status = 'offline'
+        AND last_heartbeat < ?
+        AND json_extract(stats, '$.tasksCompleted') = 0
+    `).bind(oneDayAgo).run();
+
+    console.log(`[Compute] Deleted ${result.meta?.changes || 0} stale devices`);
+
+    return c.json({
+      success: true,
+      devicesDeleted: result.meta?.changes || 0,
+      timestamp: now.toISOString(),
+    });
+  } catch (error) {
+    console.error('[Compute] Delete stale error:', error);
+    return c.json({ error: 'Failed to delete stale devices' }, 500);
+  }
+});
+
+/**
  * GET /stats - Get compute network statistics
  */
 compute.get('/stats', async (c) => {
   try {
-    // Device stats
+    // Only count devices with recent heartbeat as "online"
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    // Device stats - only count actually online devices
     const deviceStats = await c.env.DB.prepare(`
       SELECT
         COUNT(*) as total,
-        SUM(CASE WHEN status IN ('online', 'busy') THEN 1 ELSE 0 END) as online,
+        SUM(CASE WHEN status IN ('online', 'busy') AND last_heartbeat > ? THEN 1 ELSE 0 END) as online,
         SUM(CASE WHEN tier = 'power' THEN 1 ELSE 0 END) as power,
         SUM(CASE WHEN tier = 'standard' THEN 1 ELSE 0 END) as standard,
         SUM(CASE WHEN tier = 'crowd' THEN 1 ELSE 0 END) as crowd
       FROM compute_devices
-    `).first();
+    `).bind(fiveMinutesAgo).first();
 
     // Task stats
     const taskStats = await c.env.DB.prepare(`
@@ -1126,12 +1228,13 @@ compute.get('/stats', async (c) => {
       FROM compute_tasks
     `).first();
 
-    // Total compute power (from online devices)
+    // Total compute power (from actually online devices with recent heartbeat)
     const computeResult = await c.env.DB.prepare(`
       SELECT SUM(json_extract(capabilities, '$.compute')) as total_compute
       FROM compute_devices
       WHERE status IN ('online', 'busy')
-    `).first<{ total_compute: number }>();
+        AND last_heartbeat > ?
+    `).bind(fiveMinutesAgo).first<{ total_compute: number }>();
 
     return c.json({
       devices: {
