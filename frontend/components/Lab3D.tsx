@@ -1915,24 +1915,29 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     };
   }, [renderMonitorTexture]);
 
-  // Fetch contributor devices from compute network API
+  // Fetch contributor devices from Workers compute network API
   useEffect(() => {
     if (!showContributors) return;
 
     const abortController = new AbortController();
+    const WORKERS_API_BASE = process.env.NEXT_PUBLIC_WORKERS_API_URL ||
+      "https://labfork-agents.jonathan-hawkins.workers.dev/api";
 
     const fetchContributorDevices = async () => {
       try {
-        const response = await fetch('/api/compute/devices', { signal: abortController.signal });
+        const response = await fetch(`${WORKERS_API_BASE}/compute/devices`, { signal: abortController.signal });
         const data = await response.json();
 
-        if (data.success && data.devices) {
-          // Map API response to our ContributorDevice format
+        if (data.devices) {
+          // Map Workers API response to ContributorDevice format
+          // Workers API: { capabilities: { compute }, stats, ... }
+          // ContributorDevice: { compute, stats, ... }
           const devices: ContributorDevice[] = data.devices.map((d: {
             id: string;
             name: string;
             tier: 'power' | 'standard' | 'crowd';
             status: 'online' | 'busy' | 'offline' | 'paused';
+            capabilities?: { compute?: number; memory?: number };
             compute?: number;
             platform?: string;
             stats?: {
@@ -1945,7 +1950,8 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
             name: d.name,
             tier: d.tier,
             status: d.status,
-            compute: d.compute,
+            // Workers API has capabilities.compute, local API has compute directly
+            compute: d.capabilities?.compute ?? d.compute,
             platform: d.platform,
             stats: d.stats,
           }));

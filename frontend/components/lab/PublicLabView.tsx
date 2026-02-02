@@ -826,14 +826,14 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
           </button>
           <button
             onClick={() => setMobileTab('agents')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+            className={`relative flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
               mobileTab === 'agents' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
             }`}
           >
             <Brain className="w-5 h-5 mb-0.5" />
             <span className="text-[10px]">Agents</span>
             {activeCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center">
+              <span className="absolute top-1 right-1/4 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center font-medium">
                 {activeCount}
               </span>
             )}
@@ -849,14 +849,14 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
           </button>
           <button
             onClick={() => setMobileTab('tasks')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+            className={`relative flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
               mobileTab === 'tasks' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
             }`}
           >
             <CheckCircle2 className="w-5 h-5 mb-0.5" />
             <span className="text-[10px]">Tasks</span>
             {taskSummary && taskSummary.completed > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center">
+              <span className="absolute top-1 right-1/4 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center font-medium">
                 {taskSummary.completed}
               </span>
             )}

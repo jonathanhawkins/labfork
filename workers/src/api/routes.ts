@@ -227,12 +227,12 @@ async function unblockDependentTasks(
 
 const api = new Hono<{ Bindings: Env }>();
 
-// Enable CORS for frontend
+// Enable CORS for frontend - allow all origins for public API
 api.use(
   '/*',
   cors({
-    origin: ['http://localhost:3003', 'http://localhost:3000', '*'],
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   })
 );
