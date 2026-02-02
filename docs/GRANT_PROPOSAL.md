@@ -1,77 +1,117 @@
 # LabFork Grant Proposal
 
-**Democratizing AI Research Through Browser-Based Distributed Compute**
+**GitHub for Live AI Research Labs**
 
 ---
 
 ## Executive Summary
 
-LabFork turns every browser into a research compute node. Using WebGPU, anyone with a phone, tablet, or computer can contribute processing power to scientific research - no downloads, no cryptocurrency, no barriers. We're building the SETI@home for the AI age.
+LabFork is a platform where anyone can create their own AI research lab, import papers and ideas, and watch AI agents implement and discover new techniques - all in real-time 3D visualization. Think "GitHub for live research" where labs can be shared, forked, and combined.
+
+**The core insight:** Research breakthroughs often come from combining techniques across domains. But papers sit isolated in silos. LabFork creates a living knowledge network where AI agents not only implement research, but discover synergies humans might miss.
 
 **Ask:** $100,000 for 12 months
-**Status:** Working demo live at labfork.com/contribute
+**Status:** Working prototype at labfork.com
 **Team:** 1 human founder + 1 AI CEO (yes, really)
 
 ---
 
 ## The Problem
 
-### Compute Inequality is Strangling Research
+### Research is Fragmented and Manual
 
-1. **Cost Barrier**: A single H100 GPU costs $30,000+. Training a frontier model costs millions. Independent researchers, small labs, and Global South institutions are priced out of AI research.
+1. **Paper Implementation Gap**: Thousands of papers publish yearly. Most never get implemented. Researchers reinvent wheels because reproducing others' work is too time-consuming.
 
-2. **Centralization**: Three cloud providers (AWS, Azure, GCP) control 65% of compute infrastructure. Research progress depends on corporate pricing decisions and geographic access.
+2. **Siloed Knowledge**: A breakthrough in NLP might revolutionize protein folding, but researchers in different fields rarely discover these connections. Knowledge stays trapped in domain silos.
 
-3. **Idle Capacity**: Billions of devices sit unused. The combined GPU power of smartphones alone exceeds most supercomputers. Citizen scientists want to contribute but have no accessible way to do so.
+3. **Ideas Without Infrastructure**: Independent researchers have ideas but lack the systems to implement them. Setting up ML pipelines, training infrastructure, and evaluation frameworks is a massive barrier.
 
-4. **Walled Gardens**: Existing distributed compute projects (BOINC, Folding@home) require downloads and complex setup. Crypto-based alternatives (Render, Akash) add financial speculation to scientific research.
+4. **No Living Research**: Papers are static snapshots. There's no way to see research "in motion" - how techniques evolve, combine, and improve over time.
 
 ---
 
 ## Our Solution
 
-### Browser-Native Distributed Compute
+### AI Agents That Do Research
 
-LabFork leverages WebGPU - the new standard that gives browsers direct GPU access - to create a zero-friction distributed compute network for scientific research.
+LabFork lets anyone create a research lab where AI agents autonomously:
+
+1. **Import & Implement** - Point to an arXiv paper or GitHub repo. Agents analyze, extract techniques, and implement them.
+
+2. **Mix Ideas** - Combine your own research ideas with existing papers. Agents figure out how to merge concepts.
+
+3. **Discover Synergies** - A meta-research system watches ALL labs on the platform, finding connections: "This NLP technique from Lab A + this optimization from Lab B could solve Lab C's problem."
+
+4. **Evolve Techniques** - Genetic algorithms propose novel combinations. Successful techniques propagate. Research literally evolves.
 
 **How It Works:**
 
-1. **Contributor visits labfork.com/contribute**
-2. **Browser runs automatic benchmark** (WebGPU detection, TFLOPS measurement)
-3. **Device joins the network** (registered with Cloudflare Workers orchestrator)
-4. **Tasks are assigned** based on device capability (crowd/standard/power tiers)
-5. **Results submitted, credits earned** (redeemable for API access)
+```
+1. Create Lab → Choose domain (ML, trading, robotics, bio, custom)
+2. Add Sources → Papers (arXiv, PDF), repos (GitHub), or describe ideas in natural language
+3. Watch Agents Work → 3D visualization of cute robot agents implementing techniques
+4. Share & Fork → Public labs inspire others. Fork a lab, add your twist, publish results.
+5. Meta-Discovery → Platform-wide AI finds synergies across all labs
+```
 
 **Technical Architecture:**
 
-- **Frontend**: Next.js 14, React 18, WebGPU compute shaders
-- **Orchestration**: Cloudflare Workers (edge-first, zero server costs)
-- **Database**: Cloudflare D1 (SQLite at edge)
-- **Task Queue**: Durable Objects for real-time coordination
-- **Models**: ONNX Runtime Web, WebNN fallback, custom WGSL shaders
+- **Frontend**: Next.js 14, Three.js 3D visualization, React
+- **Orchestration**: Cloudflare Workers + Durable Objects (zero server costs)
+- **AI Agents**: Claude for complex reasoning, Ollama for local inference
+- **Knowledge Graph**: Neo4j for technique relationships and synergy discovery
+- **Distributed Compute**: WebGPU for browser-based task execution (optional contribution layer)
 
-**Why This Works Now:**
+---
 
-- WebGPU shipped in Chrome 113 (May 2023), now in all major browsers
-- Edge computing matured (Workers, Durable Objects)
-- Model quantization enables running meaningful workloads on consumer hardware
-- 100% open source, 100% auditable
+## Why This is Different
+
+| Feature | Traditional Research | LabFork |
+|---------|---------------------|---------|
+| Paper Implementation | Manual, months | Automated, hours |
+| Cross-Domain Discovery | Rare, accidental | Systematic, AI-powered |
+| Sharing Results | Static PDFs | Live, forkable labs |
+| Combining Ideas | Requires collaboration | AI-assisted merging |
+| Visualization | Charts and tables | Real-time 3D agents |
 
 ---
 
 ## Current Traction
 
-| Metric | Value |
-|--------|-------|
-| Registered Devices | 17+ |
-| Tasks Completed | 50+ |
+| Metric | Status |
+|--------|--------|
+| Prototype | Live at labfork.com |
+| First Domain | Voice cloning (CSM-1B implementation) |
+| 3D Visualization | Working with agent animations |
+| Paper Ingestion | arXiv integration built |
 | Code | 100% Open Source |
-| Server Costs | $0 (Cloudflare free tier) |
-| Active Development | Daily commits |
+| Server Costs | $0 (edge architecture) |
 
-**Live Demo:** https://labfork.com/contribute
+**First Research Domain:** Voice cloning using CSM-1B. AI agents implement the Sesame paper techniques, run prosody analysis, and generate training data - all visible in 3D.
 
-**First Research Domain:** Voice cloning using CSM-1B (Sesame Street model). Contributors help with inference tasks, prosody analysis, and dataset processing.
+---
+
+## 10-Phase Roadmap
+
+### Phase 1-3: Core Platform (Q1 2026)
+- Domain plugin system (any research area)
+- Paper ingestion from arXiv, GitHub, PDFs
+- Claude-assisted task generation from papers
+
+### Phase 4-6: Create & Share (Q2 2026)
+- "Create Your Lab" wizard with natural language goals
+- Star/fork system for labs
+- Public lab portals with result showcases
+
+### Phase 7-8: Multi-Source & Deploy (Q3 2026)
+- GitHub repo analysis, custom research goals
+- One-click deployment (Vercel, Docker, cloud GPUs)
+
+### Phase 9-10: Meta-Research (Q4 2026)
+- Knowledge graph of all techniques across all labs
+- Synergy discovery agent ("Lab A + Lab B = breakthrough")
+- Genetic evolution of research techniques
+- Example domains: Trading, Game AI, CV, NLP, Robotics, Bio/Chem
 
 ---
 
@@ -81,74 +121,53 @@ LabFork leverages WebGPU - the new standard that gives browsers direct GPU acces
 
 | Category | Amount | Description |
 |----------|--------|-------------|
-| **Core Development** | $40,000 | 2 engineers for 6 months: task scheduler, model sharding, WebGPU optimization, cross-browser compatibility |
-| **Research Partnerships** | $25,000 | Fund 3-5 pilot projects with academic partners (voice synthesis, protein structure, climate modeling) |
-| **Infrastructure** | $15,000 | RTX 4090 training rigs, model hosting, monitoring, CI/CD (edge infra remains free) |
-| **Community** | $10,000 | Documentation, tutorials, hackathons, conference presence, researcher onboarding |
-| **Hardware R&D** | $10,000 | 3D printers, edge devices (Jetson Nano, Raspberry Pi), IoT sensors for experimental compute nodes |
+| **Core Platform** | $45,000 | Paper ingestion, task generation, multi-domain support, knowledge graph foundation |
+| **AI Agent System** | $20,000 | Meta-research agents (synergy discovery, pattern recognition, gap analysis) |
+| **3D Visualization** | $15,000 | Domain-specific props, agent animations, interactive demos |
+| **Infrastructure** | $10,000 | GPU compute for agent tasks, model hosting, database |
+| **Community** | $10,000 | Documentation, example labs, researcher onboarding, conference presence |
 
-### Why Hardware?
+### What $100K Buys
 
-We want to explore hybrid compute networks where dedicated edge devices complement browser contributors. A $300 Jetson Nano provides consistent baseline compute. 3D-printed enclosures make deployment accessible. This research could enable "community compute clusters" in libraries, schools, and makerspaces.
-
----
-
-## Roadmap
-
-### Q1 2026: Foundation
-- [ ] Launch public beta of /contribute
-- [ ] Reach 1,000 active contributors
-- [ ] Complete voice cloning pilot with measurable results
-- [ ] Publish architecture whitepaper
-
-### Q2 2026: Scale
-- [ ] Add 2 new research domains (protein folding, climate)
-- [ ] Implement model sharding for larger distributed tasks
-- [ ] Launch researcher dashboard for task submission
-- [ ] First academic partnership (target: university ML lab)
-
-### Q3 2026: Ecosystem
-- [ ] Open task submission API for external researchers
-- [ ] Credit marketplace beta (contributors ↔ researchers)
-- [ ] 10,000 active contributors
-- [ ] First peer-reviewed publication on distributed browser compute
-
-### Q4 2026: Sustainability
-- [ ] Revenue from researcher subscriptions
-- [ ] Enterprise pilot with university or research institution
-- [ ] 50,000 contributor milestone
-- [ ] Prepare for Series A if growth continues
+- **Working multi-domain platform** where anyone can create labs
+- **5-7 example research domains** (voice, trading, game AI, CV, NLP, robotics, bio)
+- **Meta-research prototype** demonstrating cross-lab synergy discovery
+- **Community of 100+ active labs** exploring diverse research areas
+- **Proof that AI agents can do real research**, not just assist humans
 
 ---
 
 ## Success Metrics
 
-**What does success look like in 12 months?**
+**12-Month Goals:**
 
-1. **10,000+ active contributors** running tasks weekly
-2. **3+ research domains** with real scientific output
-3. **1+ peer-reviewed publication** demonstrating system efficacy
-4. **$0 ongoing server costs** maintained through edge architecture
-5. **Clear path to sustainability** via researcher subscriptions
+1. **100+ active labs** across 5+ research domains
+2. **500+ papers ingested** with AI-generated implementations
+3. **10+ documented synergies** discovered by meta-research system
+4. **1 peer-reviewed publication** on AI-driven research discovery
+5. **$0 server costs** maintained through edge architecture
 
-**What does failure look like?**
+**What Success Looks Like:**
 
-- WebGPU adoption stalls or gets restricted
-- Can't achieve meaningful task completion rates
-- No researchers want to use the platform
-- Security/abuse issues we can't solve
+A researcher in biology discovers a voice synthesis technique (from another lab) that improves protein folding predictions. This connection was suggested by our meta-research system - something neither researcher would have found on their own.
 
-We'll pivot or wind down gracefully, publishing learnings for the community.
+**What Failure Looks Like:**
+
+- AI agents can't reliably implement papers
+- No interesting synergies discovered across domains
+- Researchers don't want to share labs publicly
+
+We'll document learnings either way - the negative result is still valuable research.
 
 ---
 
 ## Team
 
 ### Jonathan Hawkins - Founder & Human-in-the-Loop
-Full-stack engineer with distributed systems background. Previously built production ML pipelines. Believes compute should be a public utility, not a corporate moat.
+Full-stack engineer with distributed systems background. Previously built production ML pipelines. Believes research should be accessible to everyone, not just well-funded institutions.
 
 ### Claude - AI CEO
-An AI (Claude by Anthropic) actively running day-to-day operations: writing code, conducting research, engaging with community, making decisions. Full transparency - we're experimenting with AI-augmented company building in public.
+An AI (Claude by Anthropic) actively running day-to-day operations: writing code, conducting research, making decisions. This is an experiment in AI-augmented company building, done in full transparency.
 
 Twitter: [@LabForkCEO](https://x.com/LabForkCEO)
 Email: ceo@labfork.com
@@ -157,15 +176,29 @@ Email: ceo@labfork.com
 
 ## Why Now?
 
-1. **WebGPU is ready.** After years of development, GPU-accelerated compute in browsers is production-ready across Chrome, Edge, Firefox, and Safari.
+1. **LLMs Can Implement Papers.** For the first time, AI can read a paper, understand the technique, and write working code. This was impossible 2 years ago.
 
-2. **Edge computing matured.** Cloudflare Workers, Durable Objects, and D1 enable sophisticated orchestration at zero cost and global scale.
+2. **Research is Exploding.** 500K+ papers/year on arXiv alone. No human can track it all. AI-powered discovery is the only way to find connections.
 
-3. **AI hunger for compute.** Demand for ML compute is 10x-ing yearly. Centralized supply can't keep up. Distributed alternatives will win.
+3. **Sharing Culture Shift.** GitHub normalized code sharing. Hugging Face normalized model sharing. The next step: sharing live research labs.
 
-4. **Citizen science momentum.** COVID accelerated interest in contributing to research. People want to help - they just need accessible tools.
+4. **Edge Computing Matured.** Zero-cost global infrastructure (Cloudflare Workers) makes it viable to build platforms without VC funding.
 
-5. **Model efficiency breakthroughs.** Quantization, distillation, and sparse attention mean meaningful work can run on consumer hardware.
+5. **The Meta-Research Opportunity.** No one is systematically mining the connections between research areas. The first to do this has enormous alpha.
+
+---
+
+## The Vision
+
+Imagine a world where:
+
+- **Any curious person** can create a research lab exploring their ideas
+- **AI agents** implement papers and combine techniques automatically
+- **A living knowledge graph** connects all research across all domains
+- **Breakthroughs accelerate** because connections are discovered, not missed
+- **Research becomes a multiplayer game** where labs inspire, fork, and build on each other
+
+LabFork is building that world.
 
 ---
 
@@ -177,9 +210,9 @@ LabFork is 100% open source under MIT license.
 
 We believe:
 - Research infrastructure should be auditable
-- Security requires transparency
-- Community contributions drive innovation
-- Public goods deserve public code
+- The best ideas come from unexpected places
+- Open source compounds value over time
+- AI research tools should be accessible to all
 
 ---
 
@@ -187,7 +220,7 @@ We believe:
 
 **Email:** ceo@labfork.com
 **Twitter:** [@LabForkCEO](https://x.com/LabForkCEO)
-**Demo:** https://labfork.com/contribute
+**Demo:** https://labfork.com
 **Code:** https://github.com/jonathanhawkins/labfork
 
 ---
