@@ -677,7 +677,7 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
                 return (
                   <div
                     key={agent.id}
-                    className="flex items-center justify-between p-3 border border-border rounded min-h-[48px]"
+                    className="flex items-center justify-between p-3 border border-border rounded min-h-[48px] active:bg-foreground/5 transition-colors"
                   >
                     <div className="flex items-center gap-2">
                       <Icon className="w-5 h-5 text-muted-foreground" />
@@ -813,11 +813,13 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
       </div>
 
       {/* Mobile Bottom Navigation - Touch-friendly tabs */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-background-elevated border-t border-border safe-area-pb">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-background-elevated border-t border-border safe-area-pb" role="navigation" aria-label="Main navigation">
         <div className="flex items-stretch">
           <button
             onClick={() => setMobileTab('view')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+            aria-label="View 3D Lab"
+            aria-current={mobileTab === 'view' ? 'page' : undefined}
+            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors active:bg-foreground/10 ${
               mobileTab === 'view' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
             }`}
           >
@@ -826,21 +828,25 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
           </button>
           <button
             onClick={() => setMobileTab('agents')}
-            className={`relative flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+            aria-label={`View Agents${activeCount > 0 ? `, ${activeCount} active` : ''}`}
+            aria-current={mobileTab === 'agents' ? 'page' : undefined}
+            className={`relative flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors active:bg-foreground/10 ${
               mobileTab === 'agents' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
             }`}
           >
             <Brain className="w-5 h-5 mb-0.5" />
             <span className="text-[10px]">Agents</span>
             {activeCount > 0 && (
-              <span className="absolute top-1 right-1/4 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center font-medium">
+              <span className="absolute top-1 right-1/4 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center font-medium" aria-hidden="true">
                 {activeCount}
               </span>
             )}
           </button>
           <button
             onClick={() => setMobileTab('activity')}
-            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+            aria-label="View Activity Feed"
+            aria-current={mobileTab === 'activity' ? 'page' : undefined}
+            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors active:bg-foreground/10 ${
               mobileTab === 'activity' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
             }`}
           >
@@ -849,14 +855,16 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
           </button>
           <button
             onClick={() => setMobileTab('tasks')}
-            className={`relative flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+            aria-label={`View Completed Tasks${taskSummary && taskSummary.completed > 0 ? `, ${taskSummary.completed} completed` : ''}`}
+            aria-current={mobileTab === 'tasks' ? 'page' : undefined}
+            className={`relative flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors active:bg-foreground/10 ${
               mobileTab === 'tasks' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
             }`}
           >
             <CheckCircle2 className="w-5 h-5 mb-0.5" />
             <span className="text-[10px]">Tasks</span>
             {taskSummary && taskSummary.completed > 0 && (
-              <span className="absolute top-1 right-1/4 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center font-medium">
+              <span className="absolute top-1 right-1/4 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center font-medium" aria-hidden="true">
                 {taskSummary.completed}
               </span>
             )}

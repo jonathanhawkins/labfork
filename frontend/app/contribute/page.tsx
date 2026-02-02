@@ -269,7 +269,7 @@ export default function ContributePage() {
           <div className="flex justify-center mt-4">
             <button
               onClick={handleReplayOnboarding}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-foreground-muted/10 transition-colors text-sm text-foreground-muted min-h-[44px]"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors text-sm text-foreground-muted min-h-[44px]"
             >
               <Settings className="w-4 h-4" />
               <span>Replay Tutorial</span>
@@ -384,7 +384,7 @@ export default function ContributePage() {
                   {benchmarkState === 'idle' && (
                     <button
                       onClick={handleRunBenchmark}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-foreground-bright text-background hover:bg-white transition-colors min-h-[44px]"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors min-h-[44px]"
                     >
                       <Play className="w-4 h-4" />
                       Run Benchmark (~5 seconds)
@@ -430,7 +430,7 @@ export default function ContributePage() {
 
                       <button
                         onClick={handleRunBenchmark}
-                        className="text-sm text-foreground-muted hover:text-foreground transition-colors min-h-[44px]"
+                        className="text-sm text-foreground-muted hover:text-foreground active:text-foreground-bright transition-colors min-h-[44px] px-3 py-2 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20"
                       >
                         Run again
                       </button>
@@ -581,7 +581,7 @@ export default function ContributePage() {
                       className={cn(
                         "w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium min-h-[44px] transition-colors",
                         tier
-                          ? "bg-foreground-bright text-background hover:bg-white"
+                          ? "bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted"
                           : "bg-foreground-muted/20 text-foreground-muted cursor-not-allowed"
                       )}
                     >
@@ -602,7 +602,7 @@ export default function ContributePage() {
                       {isPaused ? (
                         <button
                           onClick={handleResumeContributing}
-                          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors font-medium min-h-[44px]"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 active:bg-green-500/30 transition-colors font-medium min-h-[44px]"
                         >
                           <Play className="w-4 h-4" />
                           Resume
@@ -610,7 +610,7 @@ export default function ContributePage() {
                       ) : (
                         <button
                           onClick={handlePauseContributing}
-                          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors font-medium min-h-[44px]"
+                          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 hover:bg-yellow-500/20 active:bg-yellow-500/30 transition-colors font-medium min-h-[44px]"
                         >
                           <Pause className="w-4 h-4" />
                           Pause
@@ -618,7 +618,7 @@ export default function ContributePage() {
                       )}
                       <button
                         onClick={handleStopContributing}
-                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors font-medium min-h-[44px]"
+                        className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 active:bg-red-500/30 transition-colors font-medium min-h-[44px]"
                       >
                         <Square className="w-4 h-4" />
                         Stop
@@ -772,7 +772,7 @@ export default function ContributePage() {
                 >
                   <button
                     onClick={() => setFaqOpen(faqOpen === index ? null : index)}
-                    className="w-full flex items-center justify-between gap-4 p-4 text-left hover:bg-foreground-muted/5 transition-colors min-h-[44px]"
+                    className="w-full flex items-center justify-between gap-4 p-4 text-left hover:bg-foreground-muted/5 active:bg-foreground-muted/10 transition-colors min-h-[44px]"
                   >
                     <span className="text-sm font-medium text-foreground">
                       {faq.question}

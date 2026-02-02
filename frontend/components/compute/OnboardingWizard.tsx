@@ -287,7 +287,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
       <div className="flex justify-end pt-4">
         <button
           onClick={onNext}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-foreground-bright text-background hover:bg-white transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors font-medium min-h-[44px]"
         >
           Next
           <ArrowRight className="w-4 h-4" />
@@ -379,14 +379,14 @@ function StepCredits({ onNext, onBack }: { onNext: () => void; onBack: () => voi
       <div className="flex items-center justify-between pt-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
         <button
           onClick={onNext}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-foreground-bright text-background hover:bg-white transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors font-medium min-h-[44px]"
         >
           Next
           <ArrowRight className="w-4 h-4" />
@@ -558,7 +558,7 @@ function StepDetection({
                 <p className="text-sm text-yellow-400 mb-2">{error}</p>
                 <button
                   onClick={onRetry}
-                  className="text-xs text-yellow-400 hover:text-yellow-300 underline min-h-[44px]"
+                  className="text-xs text-yellow-400 hover:text-yellow-300 active:text-yellow-200 underline min-h-[44px] px-2 py-2 -ml-2 rounded-lg hover:bg-yellow-500/10 active:bg-yellow-500/20"
                 >
                   Try again
                 </button>
@@ -571,7 +571,7 @@ function StepDetection({
       <div className="flex items-center justify-between pt-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
@@ -676,14 +676,14 @@ function StepReady({ tier, onComplete, onBack }: StepReadyProps) {
       <div className="flex items-center justify-between pt-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
         <button
           onClick={onComplete}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 active:from-blue-700 active:to-purple-700 transition-all font-medium min-h-[44px]"
         >
           <Rocket className="w-4 h-4" />
           Start Contributing

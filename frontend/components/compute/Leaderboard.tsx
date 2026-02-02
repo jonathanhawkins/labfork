@@ -100,8 +100,9 @@ export default function Leaderboard({ limit = 10, className }: LeaderboardProps)
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2, delay: index * 0.05 }}
               whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               className={cn(
-                "flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg transition-colors",
+                "flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg transition-colors active:bg-foreground/5",
                 isTopThree
                   ? "bg-gradient-to-r from-yellow-500/10 to-background-card border-2 border-yellow-500/20"
                   : "bg-background-card border border-border hover:border-foreground-muted/30"

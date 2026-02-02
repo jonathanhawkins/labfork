@@ -188,7 +188,7 @@ export function InstallPrompt({
                   <button
                     onClick={handleInstallClick}
                     disabled={isInstalling}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-foreground-bright text-background hover:bg-white transition-colors font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isInstalling ? (
                       <>
@@ -207,10 +207,10 @@ export function InstallPrompt({
 
               <button
                 onClick={handleDismiss}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-foreground-muted/10 transition-colors flex-shrink-0"
-                aria-label="Dismiss"
+                className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors flex-shrink-0"
+                aria-label="Dismiss install prompt"
               >
-                <X className="w-4 h-4 text-foreground-muted" />
+                <X className="w-5 h-5 text-foreground-muted" />
               </button>
             </div>
           </div>
@@ -263,7 +263,7 @@ export function InstallPrompt({
                 <button
                   onClick={handleInstallClick}
                   disabled={isInstalling}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-foreground-bright text-background hover:bg-white transition-colors font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors font-medium min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isInstalling ? (
                     <>
@@ -280,7 +280,7 @@ export function InstallPrompt({
 
                 <button
                   onClick={handleDismiss}
-                  className="px-4 py-2.5 rounded-lg border border-border hover:bg-foreground-muted/10 transition-colors text-foreground-muted text-sm font-medium min-h-[44px]"
+                  className="px-4 py-2.5 rounded-lg border border-border hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors text-foreground-muted text-sm font-medium min-h-[44px]"
                 >
                   Not Now
                 </button>
