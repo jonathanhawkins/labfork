@@ -106,11 +106,13 @@ describe("DomainShowcase", () => {
 
   describe("Custom Domains", () => {
     it("should render custom domains when provided", () => {
+      // Note: DomainInfo interface uses nameKey and descKey for translation lookup
+      // If the key doesn't exist in translations, it returns the key itself
       const customDomains = [
         {
           slug: "custom-domain",
-          name: "Custom Domain",
-          description: "A custom research domain",
+          nameKey: "customDomainName",
+          descKey: "customDomainDesc",
           primaryColor: "#ff0000",
           accentColor: "#00ff00",
           icon: null,
@@ -122,8 +124,9 @@ describe("DomainShowcase", () => {
 
       render(<DomainShowcase domains={customDomains} />);
 
-      expect(screen.getByText("Custom Domain")).toBeInTheDocument();
-      expect(screen.getByText("A custom research domain")).toBeInTheDocument();
+      // When translation key doesn't exist, it falls back to the key name
+      expect(screen.getByText("customDomainName")).toBeInTheDocument();
+      expect(screen.getByText("customDomainDesc")).toBeInTheDocument();
       expect(screen.getByText("2 agents")).toBeInTheDocument();
       expect(screen.getByText("50 papers")).toBeInTheDocument();
     });

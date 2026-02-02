@@ -75,21 +75,21 @@ describe("WizardStepWelcome", () => {
       expect(onGetStarted).toHaveBeenCalledTimes(1);
     });
 
-    it("does not render Quick Setup button when onQuickSetup is not provided", () => {
+    it("does not render Use Template button when onQuickSetup is not provided", () => {
       render(<WizardStepWelcome {...defaultProps} />);
-      expect(screen.queryByText("Quick Setup")).toBeNull();
+      expect(screen.queryByText("Use Template")).toBeNull();
     });
 
-    it("renders Quick Setup button when onQuickSetup is provided", () => {
+    it("renders Use Template button when onQuickSetup is provided", () => {
       render(<WizardStepWelcome {...defaultProps} onQuickSetup={vi.fn()} />);
-      expect(screen.getByText("Quick Setup")).toBeDefined();
+      expect(screen.getByText("Use Template")).toBeDefined();
     });
 
-    it("calls onQuickSetup when Quick Setup button is clicked", () => {
+    it("calls onQuickSetup when Use Template button is clicked", () => {
       const onQuickSetup = vi.fn();
       render(<WizardStepWelcome {...defaultProps} onQuickSetup={onQuickSetup} />);
 
-      const button = screen.getByText("Quick Setup");
+      const button = screen.getByText("Use Template");
       fireEvent.click(button);
 
       expect(onQuickSetup).toHaveBeenCalledTimes(1);

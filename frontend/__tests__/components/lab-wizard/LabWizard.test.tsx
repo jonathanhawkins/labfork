@@ -205,25 +205,25 @@ describe("LabWizard", () => {
   });
 
   describe("quick setup", () => {
-    it("has Quick Setup button on welcome step", () => {
+    it("has Use Template button on welcome step", () => {
       render(<LabWizard />);
-      expect(screen.getByText("Quick Setup")).toBeDefined();
+      expect(screen.getByText("Use Template")).toBeDefined();
     });
 
-    it("jumps to review step when Quick Setup is clicked", async () => {
+    it("jumps to review step when Use Template is clicked", async () => {
       render(<LabWizard />);
 
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Review Your Lab Configuration")).toBeDefined();
       });
     });
 
-    it("populates voice-clone defaults on Quick Setup", async () => {
+    it("populates voice-clone defaults on Use Template", async () => {
       render(<LabWizard />);
 
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         // Should see Voice Cloning domain in review
@@ -360,7 +360,7 @@ describe("LabWizard", () => {
       render(<LabWizard />);
 
       // Quick setup to get to review
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Launch Lab")).toBeDefined();
@@ -392,7 +392,7 @@ describe("LabWizard", () => {
 
       render(<LabWizard />);
 
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Launch Lab")).toBeDefined();
@@ -417,7 +417,7 @@ describe("LabWizard", () => {
 
       render(<LabWizard />);
 
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Launch Lab")).toBeDefined();

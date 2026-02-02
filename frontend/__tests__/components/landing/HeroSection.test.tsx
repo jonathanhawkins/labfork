@@ -26,7 +26,7 @@ describe("HeroSection", () => {
     it("should render CTA buttons", () => {
       render(<HeroSection />);
 
-      expect(screen.getByText("Create Your Lab")).toBeInTheDocument();
+      expect(screen.getByText("Fork a Lab")).toBeInTheDocument();
       expect(screen.getByText("Explore Public Labs")).toBeInTheDocument();
     });
 
@@ -68,10 +68,10 @@ describe("HeroSection", () => {
   });
 
   describe("Links", () => {
-    it("should have correct href for Create Your Lab", () => {
+    it("should have correct href for Fork a Lab", () => {
       render(<HeroSection />);
 
-      const createLabLink = screen.getByText("Create Your Lab").closest("a");
+      const createLabLink = screen.getByText("Fork a Lab").closest("a");
       expect(createLabLink).toHaveAttribute("href", "/lab/new");
     });
 

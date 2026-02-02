@@ -121,8 +121,8 @@ describe("Lab Wizard Integration Flow", () => {
 
       render(<LabWizard />);
 
-      // Click Quick Setup
-      fireEvent.click(screen.getByText("Quick Setup"));
+      // Click Use Template
+      fireEvent.click(screen.getByText("Use Template"));
 
       // Should jump directly to review
       await waitFor(() => {
@@ -224,7 +224,7 @@ describe("Lab Wizard Integration Flow", () => {
       render(<LabWizard />);
 
       // Use quick setup to get to review
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Review Your Lab Configuration")).toBeDefined();
@@ -249,7 +249,7 @@ describe("Lab Wizard Integration Flow", () => {
       render(<LabWizard />);
 
       // Quick setup to review
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Launch Lab")).toBeDefined();
@@ -275,7 +275,7 @@ describe("Lab Wizard Integration Flow", () => {
       render(<LabWizard />);
 
       // Quick setup to review
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Launch Lab")).toBeDefined();
@@ -465,7 +465,7 @@ describe("Lab Wizard Integration Flow", () => {
       render(<LabWizard />);
 
       // Quick setup to review
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Review Your Lab Configuration")).toBeDefined();
@@ -491,7 +491,7 @@ describe("Lab Wizard Integration Flow", () => {
       render(<LabWizard />);
 
       // Quick setup to review
-      fireEvent.click(screen.getByText("Quick Setup"));
+      fireEvent.click(screen.getByText("Use Template"));
 
       await waitFor(() => {
         expect(screen.getByText("Review Your Lab Configuration")).toBeDefined();
