@@ -510,62 +510,58 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
     }
   };
 
+  // Mobile tab state for bottom navigation
+  const [mobileTab, setMobileTab] = useState<'view' | 'agents' | 'activity' | 'tasks'>('view');
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
+      {/* Compact Status Bar - Mobile optimized */}
       <div className="border-b border-border bg-background-elevated">
-        <div className="max-w-[1400px] mx-auto px-3 sm:px-4 py-2 sm:py-3">
+        <div className="max-w-[1400px] mx-auto px-3 py-2">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-base sm:text-lg text-foreground-bright">AI Research Lab</h1>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">
-                Watch AI agents collaborate in real-time
-              </p>
-            </div>
-              <div className="flex items-center gap-2 sm:gap-3">
-                {/* Demo mode indicator */}
-                {isWorkersDemo && (
-                  <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[10px]">
-                    <AlertCircle className="w-3 h-3" />
-                    <span>Demo</span>
-                  </div>
-                )}
-                {/* GPU stats - hide on mobile, show condensed on tablet */}
-                {gpuStats?.connected && gpuStats.gpu && (
-                <div className="hidden sm:flex items-center gap-2 md:gap-4 text-xs text-muted-foreground">
-                  <div className="hidden md:flex items-center gap-1">
-                    <Server className="w-3 h-3" />
-                    <span>{gpuStats.clusterName}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Activity className="w-3 h-3" />
-                    <span>{gpuStats.gpu.utilization}%</span>
-                  </div>
-                  <div className="hidden md:flex items-center gap-1">
-                    <ThermometerSun className="w-3 h-3" />
-                    <span>{gpuStats.gpu.temperature}C</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <HardDrive className="w-3 h-3" />
-                    <span>{gpuStats.gpu.memoryPercent}%</span>
-                  </div>
+            {/* Left: Quick stats */}
+            <div className="flex items-center gap-3">
+              {/* Active agents indicator */}
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${isWorkersDemo ? 'bg-amber-500' : 'bg-green-500'} animate-pulse`} />
+                <span className="text-xs text-foreground-bright font-medium">
+                  {activeCount} agents
+                </span>
+              </div>
+
+              {/* Compute network - condensed on mobile */}
+              {computeNetworkStats && (
+                <div className="hidden xs:flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  <span>{computeNetworkStats.totalCompute.toFixed(0)} TF</span>
                 </div>
-                )}
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <span className="text-[10px] sm:text-xs text-muted-foreground">
-                    {activeCount} active
-                  </span>
-                  <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isWorkersDemo ? 'bg-amber-500' : 'bg-green-500'} animate-pulse`} />
-                </div>
+              )}
             </div>
+
+            {/* Right: Task progress */}
+            {taskSummary && (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                  <span>{taskSummary.completed}/{taskSummary.total}</span>
+                </div>
+                {/* Mini progress bar - always visible */}
+                <div className="w-16 sm:w-24 h-1.5 bg-background rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 transition-all"
+                    style={{ width: `${(taskSummary.completed / taskSummary.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Main Content - stack on mobile, side-by-side on desktop */}
-      <div className="flex-1 flex flex-col lg:flex-row">
-        {/* 3D View */}
-        <div className="flex-1 relative min-h-[50vh] lg:min-h-0">
+      {/* Main Content - Tab-based on mobile, side-by-side on desktop */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        {/* 3D View - Full height on mobile when 'view' tab active */}
+        <div className={`flex-1 relative ${mobileTab !== 'view' ? 'hidden lg:block' : ''} min-h-0`}>
           <Lab3D
             agents={agents}
             activities={activities}
@@ -573,20 +569,19 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
             showDemoProps={true}
           />
 
-          {/* Controls hint - simpler on mobile */}
-          <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-10">
-            <div className="px-2 sm:px-4 py-1.5 sm:py-2 bg-background/80 backdrop-blur rounded border border-border text-[10px] sm:text-xs text-muted-foreground">
-              <span className="hidden sm:inline">Drag to rotate | Scroll to zoom | Click agents to view status</span>
-              <span className="sm:hidden">Drag to rotate | Pinch to zoom</span>
+          {/* Controls hint - hide on mobile to maximize view */}
+          <div className="absolute bottom-16 lg:bottom-4 left-1/2 -translate-x-1/2 z-10 hidden sm:block">
+            <div className="px-4 py-2 bg-background/80 backdrop-blur rounded border border-border text-xs text-muted-foreground">
+              Drag to rotate | Scroll to zoom | Click agents to view status
             </div>
           </div>
         </div>
 
-        {/* Right Sidebar - full width on mobile, fixed width on desktop */}
-        <aside className="w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-l border-border bg-background-elevated overflow-y-auto max-h-[50vh] lg:max-h-none">
-          {/* GPU Status Card */}
+        {/* Right Sidebar - Tab content on mobile, always visible on desktop */}
+        <aside className={`w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-l border-border bg-background-elevated overflow-y-auto ${mobileTab === 'view' ? 'hidden lg:block' : ''} flex-1 lg:flex-none pb-16 lg:pb-0`}>
+          {/* GPU Status Card - Show on agents tab on mobile, always on desktop */}
           {gpuStats?.connected && gpuStats.gpu && (
-            <div className="border-b border-border p-4">
+            <div className={`border-b border-border p-4 ${mobileTab !== 'agents' ? 'hidden lg:block' : ''}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm text-foreground-bright">
                   {gpuStats.clusterName}
@@ -594,25 +589,25 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
                 <span className="w-2 h-2 rounded-full bg-foreground animate-pulse" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-2 bg-background rounded border border-border">
+                <div className="p-3 bg-background rounded border border-border">
                   <div className="text-xs text-muted-foreground">GPU</div>
-                  <div className="text-sm text-foreground">{gpuStats.gpu.utilization}%</div>
+                  <div className="text-lg text-foreground font-medium">{gpuStats.gpu.utilization}%</div>
                 </div>
-                <div className="p-2 bg-background rounded border border-border">
+                <div className="p-3 bg-background rounded border border-border">
                   <div className="text-xs text-muted-foreground">VRAM</div>
-                  <div className="text-sm text-foreground">{gpuStats.gpu.memoryPercent}%</div>
+                  <div className="text-lg text-foreground font-medium">{gpuStats.gpu.memoryPercent}%</div>
                 </div>
-                <div className="p-2 bg-background rounded border border-border">
+                <div className="p-3 bg-background rounded border border-border">
                   <div className="text-xs text-muted-foreground">Temp</div>
-                  <div className="text-sm text-foreground">{gpuStats.gpu.temperature}C</div>
+                  <div className="text-lg text-foreground font-medium">{gpuStats.gpu.temperature}C</div>
                 </div>
-                <div className="p-2 bg-background rounded border border-border">
+                <div className="p-3 bg-background rounded border border-border">
                   <div className="text-xs text-muted-foreground">Power</div>
-                  <div className="text-sm text-foreground">{gpuStats.gpu.powerPercent}%</div>
+                  <div className="text-lg text-foreground font-medium">{gpuStats.gpu.powerPercent}%</div>
                 </div>
               </div>
               {gpuStats.hasActiveTraining && gpuStats.trainingStatus && (
-                <div className="mt-3 p-2 bg-background rounded border border-border">
+                <div className="mt-3 p-3 bg-background rounded border border-border">
                   <div className="text-xs text-muted-foreground">Training</div>
                   <div className="text-sm text-foreground-bright">
                     {gpuStats.trainingStatus}
@@ -622,8 +617,8 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
             </div>
           )}
 
-          {/* Compute Network Stats */}
-          <div className="border-b border-border p-4">
+          {/* Compute Network Stats - Show on agents tab on mobile */}
+          <div className={`border-b border-border p-4 ${mobileTab !== 'agents' ? 'hidden lg:block' : ''}`}>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Monitor className="w-4 h-4 text-green-500" />
@@ -634,19 +629,19 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-2 bg-background rounded border border-border">
+              <div className="p-3 bg-background rounded border border-border">
                 <div className="text-xs text-muted-foreground">Devices</div>
-                <div className="text-sm text-foreground flex items-center gap-1">
+                <div className="text-lg text-foreground flex items-center gap-1">
                   <span className="text-green-400 font-medium">
                     {computeNetworkStats?.totalDevices || '...'}
                   </span>
                   <span className="text-xs text-muted-foreground">online</span>
                 </div>
               </div>
-              <div className="p-2 bg-background rounded border border-border">
+              <div className="p-3 bg-background rounded border border-border">
                 <div className="text-xs text-muted-foreground">Active</div>
-                <div className="text-sm text-foreground flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-amber-400" />
+                <div className="text-lg text-foreground flex items-center gap-1">
+                  <Zap className="w-4 h-4 text-amber-400" />
                   <span className="text-amber-400 font-medium">
                     {computeNetworkStats?.busyDevices || '...'}
                   </span>
@@ -654,39 +649,46 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
               </div>
             </div>
             {computeNetworkStats && (
-              <div className="mt-3 flex items-center gap-2 text-[10px]">
-                <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span className="px-2 py-1 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
                   {computeNetworkStats.tierCounts.power} power
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                <span className="px-2 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
                   {computeNetworkStats.tierCounts.standard} standard
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">
+                <span className="px-2 py-1 rounded bg-green-500/20 text-green-400 border border-green-500/30">
                   {computeNetworkStats.tierCounts.crowd} crowd
                 </span>
               </div>
             )}
             {computeNetworkStats && computeNetworkStats.totalCompute > 0 && (
-              <div className="mt-2 text-xs text-muted-foreground">
-                {computeNetworkStats.totalCompute.toFixed(1)} TFLOPS total compute
+              <div className="mt-3 text-sm text-muted-foreground">
+                <span className="text-foreground-bright font-medium">{computeNetworkStats.totalCompute.toFixed(1)}</span> TFLOPS total compute
               </div>
             )}
           </div>
 
-          {/* Agent List - horizontal scroll on mobile, vertical on desktop */}
-          <div className="p-3 sm:p-4 border-b border-border">
-            <h3 className="text-xs sm:text-sm text-foreground-bright mb-2 sm:mb-3">Agents</h3>
-            <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0">
+          {/* Agent List - Show on agents tab on mobile */}
+          <div className={`p-4 border-b border-border ${mobileTab !== 'agents' ? 'hidden lg:block' : ''}`}>
+            <h3 className="text-sm text-foreground-bright mb-3">Agents</h3>
+            <div className="flex flex-col gap-2">
               {agents.map((agent) => {
                 const Icon = AGENT_ICONS[agent.id] || Brain;
                 return (
                   <div
                     key={agent.id}
-                    className="flex items-center justify-between p-1.5 sm:p-2 border border-border rounded min-w-[140px] lg:min-w-0 flex-shrink-0 lg:flex-shrink"
+                    className="flex items-center justify-between p-3 border border-border rounded min-h-[48px]"
                   >
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <Icon className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
-                      <span className="text-xs sm:text-sm text-foreground">{agent.name}</span>
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <span className="text-sm text-foreground font-medium">{agent.name}</span>
+                        {agent.task && (
+                          <p className="text-xs text-muted-foreground truncate max-w-[150px]">
+                            {agent.task}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     {getStatusBadge(agent.status)}
                   </div>
@@ -695,49 +697,49 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
             </div>
           </div>
 
-          {/* Activity Log */}
-          <div className="p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-2 sm:mb-3">
-              <h3 className="text-xs sm:text-sm text-foreground-bright">Activity</h3>
-              <div className="flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${isWorkLogDemo ? 'bg-amber-500' : 'bg-green-500'} animate-pulse`} />
-                <span className="text-[10px] sm:text-xs text-muted-foreground">
+          {/* Activity Log - Show on activity tab on mobile */}
+          <div className={`p-4 border-b border-border ${mobileTab !== 'activity' ? 'hidden lg:block' : ''}`}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm text-foreground-bright">Activity</h3>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${isWorkLogDemo ? 'bg-amber-500' : 'bg-green-500'} animate-pulse`} />
+                <span className="text-xs text-muted-foreground">
                   {isWorkLogDemo ? 'Demo' : 'Live'}
                 </span>
               </div>
             </div>
-            <div className="space-y-1.5 sm:space-y-2 max-h-[200px] lg:max-h-[300px] overflow-y-auto">
+            <div className="space-y-2 max-h-[400px] lg:max-h-[300px] overflow-y-auto">
               {activityLog.length > 0 ? (
-                activityLog.slice(0, 8).map((entry, idx) => (
+                activityLog.slice(0, 12).map((entry, idx) => (
                   <div
                     key={idx}
-                    className="text-[10px] sm:text-xs p-1.5 sm:p-2 border-l-2 border-foreground/30 bg-foreground/5"
+                    className="text-xs p-3 border-l-2 border-foreground/30 bg-foreground/5 rounded-r"
                   >
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground">
+                    <div className="flex items-center gap-2 text-muted-foreground">
                       <span suppressHydrationWarning>{entry.time.toLocaleTimeString()}</span>
-                      <span className="hidden sm:inline">|</span>
-                      <span className="text-foreground">{entry.agent}</span>
+                      <span>|</span>
+                      <span className="text-foreground font-medium">{entry.agent}</span>
                     </div>
-                    <div className="text-foreground truncate mt-0.5 sm:mt-1">
+                    <div className="text-foreground mt-1">
                       {entry.action}
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-muted-foreground text-center py-3 sm:py-4 text-[10px] sm:text-xs">
+                <div className="text-muted-foreground text-center py-8 text-sm">
                   Waiting for activity...
                 </div>
               )}
             </div>
             {(workersLastUpdated || lastUpdated) && (
-              <div className="text-[10px] sm:text-xs text-foreground-subtle text-center mt-2 sm:mt-3" suppressHydrationWarning>
+              <div className="text-xs text-foreground-subtle text-center mt-3" suppressHydrationWarning>
                 Updated {(workersLastUpdated || lastUpdated)?.toLocaleTimeString()}
               </div>
             )}
           </div>
 
-          {/* Completed Tasks - Firefly Network Progress */}
-          <div className="p-3 sm:p-4 border-t border-border">
+          {/* Completed Tasks - Show on tasks tab on mobile */}
+          <div className={`p-4 ${mobileTab !== 'tasks' ? 'hidden lg:block' : ''}`}>
             <div className="flex items-center justify-between mb-2 sm:mb-3">
               <h3 className="text-xs sm:text-sm text-foreground-bright flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
@@ -752,14 +754,14 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
 
             {/* Task Progress Bar */}
             {taskSummary && taskSummary.total > 0 && (
-              <div className="mb-3">
-                <div className="h-1.5 bg-background rounded-full overflow-hidden">
+              <div className="mb-4">
+                <div className="h-2 bg-background rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-500"
                     style={{ width: `${(taskSummary.completed / taskSummary.total) * 100}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                <div className="flex justify-between text-xs text-muted-foreground mt-2">
                   <span>{taskSummary.pending} pending</span>
                   <span>{taskSummary.in_progress} active</span>
                 </div>
@@ -767,21 +769,21 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
             )}
 
             {/* Recent Completed Tasks List */}
-            <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
+            <div className="space-y-2 max-h-[400px] lg:max-h-[180px] overflow-y-auto">
               {completedTasks.length > 0 ? (
-                completedTasks.slice(0, 5).map((task) => (
+                completedTasks.slice(0, 10).map((task) => (
                   <div
                     key={task.id}
-                    className="text-[10px] sm:text-xs p-1.5 sm:p-2 bg-green-500/5 border border-green-500/20 rounded"
+                    className="text-xs p-3 bg-green-500/5 border border-green-500/20 rounded min-h-[56px]"
                   >
-                    <div className="flex items-start gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <div className="text-foreground font-medium truncate">
+                        <div className="text-foreground font-medium">
                           {task.title}
                         </div>
-                        <div className="flex items-center gap-1.5 text-muted-foreground mt-0.5">
-                          <Clock className="w-2.5 h-2.5" />
+                        <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                          <Clock className="w-3 h-3" />
                           <span suppressHydrationWarning>
                             {new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -797,11 +799,11 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
                   </div>
                 ))
               ) : tasksLoading ? (
-                <div className="text-muted-foreground text-center py-3 text-[10px] sm:text-xs">
+                <div className="text-muted-foreground text-center py-8 text-sm">
                   Loading tasks...
                 </div>
               ) : (
-                <div className="text-muted-foreground text-center py-3 text-[10px] sm:text-xs">
+                <div className="text-muted-foreground text-center py-8 text-sm">
                   No completed tasks yet
                 </div>
               )}
@@ -809,6 +811,61 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
           </div>
         </aside>
       </div>
+
+      {/* Mobile Bottom Navigation - Touch-friendly tabs */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-background-elevated border-t border-border safe-area-pb">
+        <div className="flex items-stretch">
+          <button
+            onClick={() => setMobileTab('view')}
+            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+              mobileTab === 'view' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
+            }`}
+          >
+            <Monitor className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Lab</span>
+          </button>
+          <button
+            onClick={() => setMobileTab('agents')}
+            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+              mobileTab === 'agents' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
+            }`}
+          >
+            <Brain className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Agents</span>
+            {activeCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center">
+                {activeCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setMobileTab('activity')}
+            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+              mobileTab === 'activity' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
+            }`}
+          >
+            <Activity className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Activity</span>
+          </button>
+          <button
+            onClick={() => setMobileTab('tasks')}
+            className={`flex-1 flex flex-col items-center justify-center py-3 min-h-[56px] transition-colors ${
+              mobileTab === 'tasks' ? 'text-foreground-bright bg-foreground/5' : 'text-muted-foreground'
+            }`}
+          >
+            <CheckCircle2 className="w-5 h-5 mb-0.5" />
+            <span className="text-[10px]">Tasks</span>
+            {taskSummary && taskSummary.completed > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full text-[9px] text-white flex items-center justify-center">
+                {taskSummary.completed}
+              </span>
+            )}
+          </button>
+        </div>
+      </nav>
+
+      {/* Spacer for mobile bottom nav */}
+      <div className="h-14 lg:hidden" />
     </div>
   );
 }

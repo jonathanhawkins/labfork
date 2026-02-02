@@ -71,6 +71,13 @@ module.exports = {
         '18': '4.5rem',
         '88': '22rem',
         '128': '32rem',
+        'safe-area-b': 'env(safe-area-inset-bottom)',
+      },
+      screens: {
+        'xs': '375px',
+      },
+      padding: {
+        'safe-b': 'env(safe-area-inset-bottom)',
       },
       transitionDuration: {
         '150': '150ms',

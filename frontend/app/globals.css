@@ -202,6 +202,21 @@
   .font-mono {
     font-family: var(--font-mono), "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SF Mono", ui-monospace, monospace;
   }
+
+  /* Safe area padding for notched phones (iPhone X+) */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Touch-friendly minimum tap targets (44x44px per Apple HIG) */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* RTL Support for Arabic and other RTL languages */
