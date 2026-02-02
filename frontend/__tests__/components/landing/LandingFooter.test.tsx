@@ -4,12 +4,54 @@
 
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { LandingFooter } from "@/components/landing/LandingFooter";
+
+const messages = {
+  footer: {
+    finalCTA: "Ready to Fork Your First Lab?",
+    finalCTADesc: "Join 1,000+ researchers using LabFork to discover breakthroughs faster.",
+    createLabFree: "Create Your Lab Free",
+    viewExampleLabs: "View Example Labs",
+    product: "Product",
+    features: "Features",
+    domains: "Domains",
+    pricing: "Pricing",
+    changelog: "Changelog",
+    resources: "Resources",
+    documentation: "Documentation",
+    apiReference: "API Reference",
+    tutorials: "Tutorials",
+    blog: "Blog",
+    community: "Community",
+    discord: "Discord",
+    github: "GitHub",
+    twitter: "Twitter",
+    newsletter: "Newsletter",
+    company: "Company",
+    about: "About",
+    contact: "Contact",
+    privacy: "Privacy",
+    terms: "Terms",
+    tagline: "Fork research labs. Watch AI agents work. Collaborate globally.",
+    copyright: "LabFork. Open source under MIT license.",
+    builtWith: "Built with Next.js, Three.js, Claude",
+    starOnGitHub: "Star on GitHub",
+  },
+};
+
+function renderWithIntl(component: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      {component}
+    </NextIntlClientProvider>
+  );
+}
 
 describe("LandingFooter", () => {
   describe("Final CTA", () => {
     it("should render final CTA headline", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(
         screen.getByText("Ready to Fork Your First Lab?")
@@ -17,7 +59,7 @@ describe("LandingFooter", () => {
     });
 
     it("should render final CTA description", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(
         screen.getByText(/Join 1,000\+ researchers using LabFork/i)
@@ -25,13 +67,13 @@ describe("LandingFooter", () => {
     });
 
     it("should render Create Your Lab Free button", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("Create Your Lab Free")).toBeInTheDocument();
     });
 
     it("should render View Example Labs link", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText(/View Example Labs/i)).toBeInTheDocument();
     });
@@ -39,7 +81,7 @@ describe("LandingFooter", () => {
 
   describe("Domain Quick Links", () => {
     it("should render all 9 domain links", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("Voice Clone")).toBeInTheDocument();
       expect(screen.getByText("Quant Trading")).toBeInTheDocument();
@@ -53,7 +95,7 @@ describe("LandingFooter", () => {
     });
 
     it("should have correct href for domain links", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       const voiceCloneLink = screen.getByText("Voice Clone").closest("a");
       expect(voiceCloneLink).toHaveAttribute("href", "/lab?domain=voice-clone");
@@ -65,7 +107,7 @@ describe("LandingFooter", () => {
 
   describe("Footer Sections", () => {
     it("should render Product section", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByText("Features")).toBeInTheDocument();
@@ -75,7 +117,7 @@ describe("LandingFooter", () => {
     });
 
     it("should render Resources section", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("Resources")).toBeInTheDocument();
       expect(screen.getByText("Documentation")).toBeInTheDocument();
@@ -85,7 +127,7 @@ describe("LandingFooter", () => {
     });
 
     it("should render Community section", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("Community")).toBeInTheDocument();
       expect(screen.getByText("Discord")).toBeInTheDocument();
@@ -95,7 +137,7 @@ describe("LandingFooter", () => {
     });
 
     it("should render Company section", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("Company")).toBeInTheDocument();
       expect(screen.getByText("About")).toBeInTheDocument();
@@ -107,13 +149,13 @@ describe("LandingFooter", () => {
 
   describe("Brand Section", () => {
     it("should render brand name", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("LabFork")).toBeInTheDocument();
     });
 
     it("should render brand tagline", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(
         screen.getByText("Fork research labs. Watch AI agents work. Collaborate globally.")
@@ -123,7 +165,7 @@ describe("LandingFooter", () => {
 
   describe("Social Links", () => {
     it("should have GitHub social link", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       const githubLinks = screen.getAllByRole("link").filter((link) =>
         link.getAttribute("href")?.includes("github.com")
@@ -132,7 +174,7 @@ describe("LandingFooter", () => {
     });
 
     it("should have Discord social link", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       const discordLinks = screen.getAllByRole("link").filter((link) =>
         link.getAttribute("href")?.includes("discord")
@@ -141,7 +183,7 @@ describe("LandingFooter", () => {
     });
 
     it("should have Twitter social link", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       const twitterLinks = screen.getAllByRole("link").filter((link) =>
         link.getAttribute("href")?.includes("twitter")
@@ -152,19 +194,19 @@ describe("LandingFooter", () => {
 
   describe("Bottom Bar", () => {
     it("should render copyright", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText(/2026 LabFork/i)).toBeInTheDocument();
     });
 
     it("should render tech stack mention", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText(/Built with Next\.js, Three\.js, Claude/i)).toBeInTheDocument();
     });
 
     it("should render Star on GitHub link", () => {
-      render(<LandingFooter />);
+      renderWithIntl(<LandingFooter />);
 
       expect(screen.getByText("Star on GitHub")).toBeInTheDocument();
     });
