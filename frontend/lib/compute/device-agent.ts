@@ -584,7 +584,20 @@ export class DeviceAgent {
       });
 
       if (!response.ok) {
-        throw new Error(`Heartbeat failed: ${response.statusText}`);
+        // Try to get error message from response body
+        let errorMessage = `Heartbeat failed (${response.status})`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = `Heartbeat failed: ${errorData.error}`;
+          }
+        } catch {
+          // If we can't parse the body, use status text as fallback
+          if (response.statusText) {
+            errorMessage = `Heartbeat failed: ${response.statusText}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -927,7 +940,19 @@ export class DeviceAgent {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to complete task: ${response.statusText}`);
+        // Try to get error message from response body
+        let errorMessage = `Failed to complete task (${response.status})`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = `Failed to complete task: ${errorData.error}`;
+          }
+        } catch {
+          if (response.statusText) {
+            errorMessage = `Failed to complete task: ${response.statusText}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
