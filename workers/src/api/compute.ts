@@ -183,6 +183,9 @@ function deviceCanHandleTask(deviceTier: DeviceTier, minTier: DeviceTier | null)
 
 const compute = new Hono<{ Bindings: Env }>();
 
+// CORS is handled by the parent router (routes.ts)
+// Sub-routers don't need their own CORS middleware
+
 /**
  * POST /devices - Register a new compute device
  *

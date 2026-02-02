@@ -14,10 +14,10 @@ export interface Env {
 // Create Hono app
 const app = new Hono<{ Bindings: Env }>();
 
-// Enable CORS for frontend integration
+// Enable CORS for all origins (public API)
 app.use('*', cors({
-  origin: ['http://localhost:3003', 'https://labfork.com'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
 

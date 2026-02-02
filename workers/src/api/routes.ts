@@ -227,15 +227,8 @@ async function unblockDependentTasks(
 
 const api = new Hono<{ Bindings: Env }>();
 
-// Enable CORS for frontend - allow all origins for public API
-api.use(
-  '/*',
-  cors({
-    origin: '*',
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  })
-);
+// CORS is handled at app level in index.ts
+// No additional CORS middleware needed here
 
 // GET /api/health - Health check
 api.get('/health', (c) => {
