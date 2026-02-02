@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""
+xAI Grok Live Search CLI
+
+Search X (Twitter) and the web using Grok's real-time search capabilities.
+
+Usage:
+    xai-search "What's trending in AI?"
+    xai-search --x "voice cloning news"
+    xai-search --web "Next.js 15 documentation"
+    xai-search --x --handles "@elonmusk,@xai" "latest announcements"
+"""
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime
+
+try:
+    import requests
+except ImportError:
+    print("Error: requests library required. Install with: pip install requests")
+    sys.exit(1)
+
+
+def get_api_key() -> str:
+    """Get xAI API key from environment."""
+    key = os.getenv("XAI_API_KEY")
+    if not key:
+        print("Error: XAI_API_KEY environment variable not set")
+        print("\nTo set it:")
+        print("  export XAI_API_KEY='xai-YOUR_KEY_HERE'")
+        print("\nGet your key at: https://console.x.ai/team/default/api-keys")
+        sys.exit(1)
+    return key
+
+
+def search(
+    query: str,
+    use_x: bool = True,
+    use_web: bool = True,
+    handles: list[str] = None,
+    from_date: str = None,
+    to_date: str = None,
+    domains: list[str] = None,
+    model: str = "grok-4-1-fast",
+    verbose: bool = False,
+) -> dict:
+    """
+    Execute search using xAI Grok Live Search.
+
+    Args:
+        query: Search query
+        use_x: Include X (Twitter) search
+        use_web: Include web search
+        handles: List of X handles to filter (e.g., ["@elonmusk"])
+        from_date: Start date for X search (YYYY-MM-DD)
+        to_date: End date for X search (YYYY-MM-DD)
+        domains: List of domains to filter web search
+        model: Grok model to use
+        verbose: Print debug info
+
+    Returns:
+        API response dict
+    """
+    api_key = get_api_key()
+
+    tools = []
+
+    # Add X search tool
+    if use_x:
+        x_tool = {
+            "type": "x_search",
+            "x_search": {
+                "enable_image_understanding": True,
+                "enable_video_understanding": True,
+            },
+        }
+        if handles:
+            # Remove @ prefix if present
+            clean_handles = [h.lstrip("@") for h in handles]
+            x_tool["x_search"]["allowed_x_handles"] = clean_handles
+        if from_date:
+            x_tool["x_search"]["from_date"] = f"{from_date}T00:00:00Z"
+        if to_date:
+            x_tool["x_search"]["to_date"] = f"{to_date}T23:59:59Z"
+        tools.append(x_tool)
+
+    # Add web search tool
+    if use_web:
+        web_tool = {"type": "web_search"}
+        if domains:
+            web_tool["web_search"] = {"allowed_domains": domains}
+        tools.append(web_tool)
+
+    if not tools:
+        print("Error: Must enable at least one search type (--x or --web)")
+        sys.exit(1)
+
+    payload = {
+        "model": model,
+        "input": [{"role": "user", "content": query}],
+        "tools": tools,
+    }
+
+    if verbose:
+        print(f"Request payload: {json.dumps(payload, indent=2)}")
+
+    try:
+        response = requests.post(
+            "https://api.x.ai/v1/responses",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=120,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    except requests.exceptions.HTTPError as e:
+        print(f"API Error: {e}")
+        if response.text:
+            print(f"Response: {response.text}")
+        sys.exit(1)
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+        sys.exit(1)
+
+
+def format_output(result: dict, show_citations: bool = True) -> str:
+    """Format API response for display."""
+    output = []
+    annotations = []
+
+    # Extract main content from the new response format
+    # output is a list of items, find the message with content
+    if "output" in result:
+        for item in result["output"]:
+            if isinstance(item, dict) and item.get("type") == "message":
+                content_list = item.get("content", [])
+                for content_item in content_list:
+                    if content_item.get("type") == "output_text":
+                        output.append(content_item.get("text", ""))
+                        # Collect annotations for citations
+                        if show_citations:
+                            annotations.extend(content_item.get("annotations", []))
+
+    # Fallback for OpenAI-compatible format
+    if not output and "choices" in result:
+        for choice in result["choices"]:
+            if "message" in choice:
+                output.append(choice["message"].get("content", ""))
+
+    # Add unique citations from annotations
+    if show_citations and annotations:
+        seen_urls = set()
+        unique_citations = []
+        for ann in annotations:
+            if ann.get("type") == "url_citation":
+                url = ann.get("url", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    unique_citations.append(url)
+
+        if unique_citations:
+            output.append("\n--- Sources ---")
+            for i, url in enumerate(unique_citations[:15], 1):
+                output.append(f"{i}. {url}")
+
+    return "\n".join(output)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Search X and web using xAI Grok Live Search",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s "What's trending in AI?"
+  %(prog)s --x "voice cloning news"
+  %(prog)s --web "Next.js documentation"
+  %(prog)s --x --handles "@elonmusk,@xai" "announcements"
+  %(prog)s --x --from 2026-01-01 "machine learning papers"
+        """,
+    )
+
+    parser.add_argument("query", help="Search query")
+
+    # Search type options
+    parser.add_argument(
+        "--x", "-x", action="store_true", help="Search X (Twitter) only"
+    )
+    parser.add_argument("--web", "-w", action="store_true", help="Search web only")
+
+    # X search filters
+    parser.add_argument(
+        "--handles",
+        "-H",
+        help="Comma-separated X handles to search (e.g., @elonmusk,@xai)",
+    )
+    parser.add_argument("--from", dest="from_date", help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--to", dest="to_date", help="End date (YYYY-MM-DD)")
+
+    # Web search filters
+    parser.add_argument(
+        "--domains", "-d", help="Comma-separated domains to search (e.g., github.com)"
+    )
+
+    # Output options
+    parser.add_argument(
+        "--model",
+        "-m",
+        default="grok-4-1-fast",
+        help="Model to use (default: grok-4-1-fast)",
+    )
+    parser.add_argument(
+        "--json", "-j", action="store_true", help="Output raw JSON response"
+    )
+    parser.add_argument(
+        "--no-citations", action="store_true", help="Hide source citations"
+    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+
+    args = parser.parse_args()
+
+    # Determine search modes
+    use_x = True
+    use_web = True
+
+    if args.x and not args.web:
+        use_web = False
+    elif args.web and not args.x:
+        use_x = False
+
+    # Parse list arguments
+    handles = args.handles.split(",") if args.handles else None
+    domains = args.domains.split(",") if args.domains else None
+
+    # Execute search
+    if args.verbose:
+        print(f"Searching: {args.query}")
+        print(f"X: {use_x}, Web: {use_web}")
+        if handles:
+            print(f"Handles: {handles}")
+        if domains:
+            print(f"Domains: {domains}")
+        print()
+
+    result = search(
+        query=args.query,
+        use_x=use_x,
+        use_web=use_web,
+        handles=handles,
+        from_date=args.from_date,
+        to_date=args.to_date,
+        domains=domains,
+        model=args.model,
+        verbose=args.verbose,
+    )
+
+    # Output
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(format_output(result, show_citations=not args.no_citations))
+
+
+if __name__ == "__main__":
+    main()

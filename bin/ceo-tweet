@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""
+LabFork CEO Tweet Tool
+
+Post tweets as @LabForkCEO
+
+Usage:
+    ceo-tweet "Your tweet text here"
+    ceo-tweet --reply 123456789 "Reply to this tweet"
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+import hashlib
+import hmac
+import base64
+import urllib.parse
+import secrets
+
+try:
+    import requests
+except ImportError:
+    print("Error: requests library required")
+    sys.exit(1)
+
+
+def get_env(key: str) -> str:
+    """Get environment variable or exit."""
+    val = os.getenv(key)
+    if not val:
+        print(f"Error: {key} environment variable not set")
+        sys.exit(1)
+    return val
+
+
+def create_oauth_signature(
+    method: str,
+    url: str,
+    params: dict,
+    consumer_secret: str,
+    token_secret: str,
+) -> str:
+    """Create OAuth 1.0a signature."""
+    # Sort and encode parameters
+    sorted_params = sorted(params.items())
+    param_string = "&".join(
+        f"{urllib.parse.quote(str(k), safe='')}"
+        f"={urllib.parse.quote(str(v), safe='')}"
+        for k, v in sorted_params
+    )
+
+    # Create signature base string
+    base_string = "&".join([
+        method.upper(),
+        urllib.parse.quote(url, safe=""),
+        urllib.parse.quote(param_string, safe=""),
+    ])
+
+    # Create signing key
+    signing_key = "&".join([
+        urllib.parse.quote(consumer_secret, safe=""),
+        urllib.parse.quote(token_secret, safe=""),
+    ])
+
+    # Generate signature
+    signature = hmac.new(
+        signing_key.encode(),
+        base_string.encode(),
+        hashlib.sha1,
+    ).digest()
+
+    return base64.b64encode(signature).decode()
+
+
+def post_tweet(text: str, reply_to: str = None) -> dict:
+    """Post a tweet using OAuth 1.0a."""
+    api_key = get_env("X_API_KEY")
+    api_secret = get_env("X_API_SECRET")
+    access_token = get_env("X_ACCESS_TOKEN")
+    access_token_secret = get_env("X_ACCESS_TOKEN_SECRET")
+
+    url = "https://api.twitter.com/2/tweets"
+
+    # OAuth parameters
+    oauth_params = {
+        "oauth_consumer_key": api_key,
+        "oauth_nonce": secrets.token_hex(16),
+        "oauth_signature_method": "HMAC-SHA1",
+        "oauth_timestamp": str(int(time.time())),
+        "oauth_token": access_token,
+        "oauth_version": "1.0",
+    }
+
+    # Create signature
+    signature = create_oauth_signature(
+        "POST", url, oauth_params, api_secret, access_token_secret
+    )
+    oauth_params["oauth_signature"] = signature
+
+    # Build Authorization header
+    auth_header = "OAuth " + ", ".join(
+        f'{urllib.parse.quote(k, safe="")}="{urllib.parse.quote(v, safe="")}"'
+        for k, v in sorted(oauth_params.items())
+    )
+
+    # Request body
+    body = {"text": text}
+    if reply_to:
+        body["reply"] = {"in_reply_to_tweet_id": reply_to}
+
+    # Make request
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": auth_header,
+            "Content-Type": "application/json",
+        },
+        json=body,
+        timeout=30,
+    )
+
+    if not response.ok:
+        print(f"Error: {response.status_code}")
+        print(response.text)
+        sys.exit(1)
+
+    return response.json()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Post tweets as @LabForkCEO")
+    parser.add_argument("text", help="Tweet text (max 280 chars)")
+    parser.add_argument("--reply", "-r", help="Tweet ID to reply to")
+
+    args = parser.parse_args()
+
+    if len(args.text) > 280:
+        print(f"Error: Tweet too long ({len(args.text)} chars, max 280)")
+        sys.exit(1)
+
+    print(f"Posting: {args.text[:50]}...")
+
+    result = post_tweet(args.text, args.reply)
+
+    tweet_id = result.get("data", {}).get("id")
+    print(f"✓ Posted! https://x.com/LabForkCEO/status/{tweet_id}")
+
+
+if __name__ == "__main__":
+    main()

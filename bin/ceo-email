@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""
+LabFork CEO Email Manager
+
+Send and receive emails as the AI CEO of LabFork.
+
+Usage:
+    ceo-email send "recipient@example.com" "Subject" "Body text"
+    ceo-email check
+    ceo-email list
+"""
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime
+
+try:
+    import requests
+except ImportError:
+    print("Error: requests library required")
+    sys.exit(1)
+
+API_BASE = "https://api.agentmail.to/v0"
+INBOX_ID = "labfork-ceo@agentmail.to"
+FORWARD_TO = "ceo@labfork.com"  # All sent emails BCC'd here for human oversight
+
+
+def get_api_key() -> str:
+    """Get AgentMail API key from environment."""
+    key = os.getenv("AGENTMAIL_API_KEY")
+    if not key:
+        print("Error: AGENTMAIL_API_KEY environment variable not set")
+        sys.exit(1)
+    return key
+
+
+def get_headers() -> dict:
+    """Get API headers."""
+    return {
+        "Authorization": f"Bearer {get_api_key()}",
+        "Content-Type": "application/json",
+    }
+
+
+def send_email(to: str, subject: str, body: str, html: str = None, no_forward: bool = False) -> dict:
+    """Send an email from the CEO inbox."""
+    payload = {
+        "to": to if isinstance(to, list) else [to],
+        "subject": subject,
+        "text": body,
+    }
+    # Auto-BCC to human oversight email
+    if not no_forward and FORWARD_TO:
+        payload["bcc"] = [FORWARD_TO]
+    if html:
+        payload["html"] = html
+
+    response = requests.post(
+        f"{API_BASE}/inboxes/{INBOX_ID}/messages/send",
+        headers=get_headers(),
+        json=payload,
+        timeout=30,
+    )
+
+    if not response.ok:
+        print(f"Error: {response.status_code} - {response.text}")
+        sys.exit(1)
+
+    return response.json()
+
+
+def list_messages(limit: int = 20) -> list:
+    """List messages in the inbox."""
+    response = requests.get(
+        f"{API_BASE}/inboxes/{INBOX_ID}/messages",
+        headers=get_headers(),
+        params={"limit": limit},
+        timeout=30,
+    )
+
+    if not response.ok:
+        # API might not have read permissions
+        return {"messages": [], "error": f"Cannot list messages (API returned {response.status_code})"}
+
+    return response.json()
+
+
+def get_message(message_id: str) -> dict:
+    """Get a specific message."""
+    response = requests.get(
+        f"{API_BASE}/inboxes/{INBOX_ID}/messages/{message_id}",
+        headers=get_headers(),
+        timeout=30,
+    )
+
+    if not response.ok:
+        print(f"Error: {response.status_code} - {response.text}")
+        sys.exit(1)
+
+    return response.json()
+
+
+def format_message_list(messages: dict | list) -> str:
+    """Format messages for display."""
+    # Handle error response
+    if isinstance(messages, dict):
+        if "error" in messages:
+            return f"⚠️  {messages['error']}\n\nNote: Emails you send are forwarded to {FORWARD_TO}"
+        messages = messages.get("messages", [])
+
+    if not messages:
+        return "No messages found.\n\nNote: Check ceo@labfork.com for forwarded copies of sent emails."
+
+    output = []
+    for msg in messages:
+        if isinstance(msg, str):
+            output.append(msg)
+            continue
+        from_field = msg.get("from", {})
+        from_addr = from_field.get("address", "Unknown") if isinstance(from_field, dict) else str(from_field)
+        subject = msg.get("subject", "(No subject)")
+        date = str(msg.get("created_at", ""))[:10]
+        msg_id = str(msg.get("message_id", ""))[:8]
+        output.append(f"[{msg_id}] {date} | From: {from_addr} | {subject}")
+
+    return "\n".join(output)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="LabFork CEO Email Manager",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # Send command
+    send_parser = subparsers.add_parser("send", help="Send an email")
+    send_parser.add_argument("to", help="Recipient email address")
+    send_parser.add_argument("subject", help="Email subject")
+    send_parser.add_argument("body", help="Email body text")
+
+    # List command
+    list_parser = subparsers.add_parser("list", help="List inbox messages")
+    list_parser.add_argument(
+        "--limit", "-l", type=int, default=20, help="Number of messages"
+    )
+
+    # Check command (alias for list)
+    subparsers.add_parser("check", help="Check for new messages")
+
+    # Read command
+    read_parser = subparsers.add_parser("read", help="Read a specific message")
+    read_parser.add_argument("message_id", help="Message ID to read")
+
+    # Info command
+    subparsers.add_parser("info", help="Show inbox info")
+
+    args = parser.parse_args()
+
+    if args.command == "send":
+        result = send_email(args.to, args.subject, args.body)
+        print(f"✓ Email sent to {args.to}")
+        print(f"  Message ID: {result.get('message_id', 'N/A')}")
+
+    elif args.command in ("list", "check"):
+        limit = getattr(args, "limit", 20)
+        messages = list_messages(limit)
+        if isinstance(messages, dict) and "messages" in messages:
+            messages = messages["messages"]
+        print(f"📬 Inbox: {INBOX_ID}\n")
+        print(format_message_list(messages))
+
+    elif args.command == "read":
+        msg = get_message(args.message_id)
+        print(f"From: {msg.get('from', {}).get('address', 'Unknown')}")
+        print(f"Subject: {msg.get('subject', '(No subject)')}")
+        print(f"Date: {msg.get('created_at', '')}")
+        print("-" * 40)
+        print(msg.get("text", msg.get("html", "(No content)")))
+
+    elif args.command == "info":
+        print(f"📧 LabFork CEO Email")
+        print(f"   Address: {INBOX_ID}")
+        print(f"   Display: Claude | LabFork CEO")
+
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
