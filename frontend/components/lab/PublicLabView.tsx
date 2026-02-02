@@ -4,6 +4,12 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import Lab3D from "@/components/Lab3D";
 import { useLabActivities, activitiesToLog } from "@/components/lab/activities";
 import {
+  useAgentStatus,
+  useAgentWorkLog,
+  workLogToActivityLog,
+  type AgentStatus as WorkersAgentStatus,
+} from "@/hooks/useAgentStatus";
+import {
   Brain,
   Cpu,
   Search,
@@ -14,7 +20,11 @@ import {
   Server,
   Monitor,
   Zap,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
+import { useCompletedTasks } from "@/hooks/useCompletedTasks";
 
 // ============== Fun Agent Names ==============
 
@@ -200,6 +210,9 @@ const COLORS = {
   explorer: 0xffffba,
   planner: 0xbaffc9,
   labManager: 0x4ecdc4,
+  researcher: 0xbae1ff,
+  developer: 0xffb3ba,
+  coordinator: 0xbaffc9,
 };
 
 const AGENT_ICONS: Record<string, typeof Brain> = {
@@ -208,7 +221,37 @@ const AGENT_ICONS: Record<string, typeof Brain> = {
   explorer: Search,
   planner: ListTodo,
   "lab-manager": Activity,
+  researcher: Brain,
+  developer: Cpu,
+  coordinator: ListTodo,
 };
+
+// Helper to get agent color based on type
+function getAgentColor(type: string): number {
+  const typeMap: Record<string, number> = {
+    researcher: COLORS.researcher,
+    developer: COLORS.developer,
+    explorer: COLORS.explorer,
+    coordinator: COLORS.coordinator,
+    codex: COLORS.codex,
+    opus: COLORS.opus,
+    planner: COLORS.planner,
+  };
+  return typeMap[type.toLowerCase()] || COLORS.labManager;
+}
+
+// Helper to map agent status from Workers API format
+function mapAgentStatus(status: string): "idle" | "working" | "thinking" {
+  switch (status) {
+    case 'working':
+      return 'working';
+    case 'blocked':
+      return 'thinking';
+    case 'idle':
+    default:
+      return 'idle';
+  }
+}
 
 // ============== Public Lab View Component ==============
 
@@ -229,12 +272,43 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
   const [gpuStats, setGpuStats] = useState<SanitizedGpuStats | null>(null);
   const [computeNetworkStats, setComputeNetworkStats] = useState<ComputeNetworkStats | null>(null);
 
+  // Fetch agent status from Cloudflare Workers API (new autonomous agent system)
+  const {
+    agents: workersAgents,
+    isLoading: workersAgentsLoading,
+    isDemo: isWorkersDemo,
+    lastUpdated: workersLastUpdated,
+  } = useAgentStatus({ pollInterval: 5000 });
+
+  // Fetch work log from Cloudflare Workers API
+  const {
+    entries: workLogEntries,
+    isLoading: workLogLoading,
+    isDemo: isWorkLogDemo,
+  } = useAgentWorkLog({ limit: 20, pollInterval: 5000 });
+
+  // Fetch completed tasks from Firefly Network project
+  const {
+    completedTasks,
+    taskSummary,
+    isLoading: tasksLoading,
+  } = useCompletedTasks({ projectId: "firefly-network", pollInterval: 15000 });
+
+  // Legacy activities hook (for backward compatibility)
   const {
     activities,
-    activeCount,
+    activeCount: legacyActiveCount,
     isLoading: activitiesLoading,
     lastUpdated,
   } = useLabActivities({ pollInterval: 5000 });
+
+  // Calculate active agent count from workers API
+  const workersActiveCount = useMemo(() => {
+    return workersAgents.filter((a) => a.status === 'working').length;
+  }, [workersAgents]);
+
+  // Use workers count if available, otherwise fall back to legacy
+  const activeCount = workersActiveCount > 0 ? workersActiveCount : legacyActiveCount;
 
   // Demo agents to show when no real agents are running
   const DEMO_AGENTS: Agent[] = [
@@ -258,7 +332,19 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
       return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius];
     };
 
-    // Get real working agents
+    // Priority 1: Try Workers API agents (new autonomous agent system)
+    if (workersAgents.length > 0 && !isWorkersDemo) {
+      return workersAgents.map((a, index) => ({
+        id: a.id,
+        name: a.name || getFunName(a.id),
+        color: getAgentColor(a.type),
+        position: getPosition(index),
+        task: sanitizeMessage(a.current_task?.title || "Working..."),
+        status: mapAgentStatus(a.status),
+      }));
+    }
+
+    // Priority 2: Try 4090 agent status (legacy system)
     const realAgents = agent4090Status
       .filter(a => a.status === 'working')
       .map((a, index) => ({
@@ -270,9 +356,9 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
         status: "working" as const,
       }));
 
-    // If no real agents, show demo agents
+    // Priority 3: Fall back to demo agents
     return realAgents.length > 0 ? realAgents : DEMO_AGENTS;
-  }, [agent4090Status]);
+  }, [workersAgents, isWorkersDemo, agent4090Status]);
 
   // Demo activities when no real activities
   const DEMO_ACTIVITIES = [
@@ -285,14 +371,24 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
 
   // Sanitized activity log with demo fallback
   const activityLog = useMemo(() => {
+    // Priority 1: Use work log from Workers API if available
+    if (workLogEntries.length > 0 && !isWorkLogDemo) {
+      const workLogActivities = workLogToActivityLog(workLogEntries, workersAgents);
+      return workLogActivities.map((entry) => ({
+        ...entry,
+        action: sanitizeMessage(entry.action),
+      }));
+    }
+
+    // Priority 2: Use legacy activities
     const realActivities = activitiesToLog(activities).map((entry) => ({
       ...entry,
       action: sanitizeMessage(entry.action),
     }));
 
-    // If no real activities, show demo activities
+    // Priority 3: Fall back to demo activities
     return realActivities.length > 0 ? realActivities : DEMO_ACTIVITIES;
-  }, [activities]);
+  }, [workLogEntries, isWorkLogDemo, workersAgents, activities]);
 
   // Fetch 4090 agent status
   useEffect(() => {
@@ -427,6 +523,13 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
               </p>
             </div>
               <div className="flex items-center gap-2 sm:gap-3">
+                {/* Demo mode indicator */}
+                {isWorkersDemo && (
+                  <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[10px]">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>Demo</span>
+                  </div>
+                )}
                 {/* GPU stats - hide on mobile, show condensed on tablet */}
                 {gpuStats?.connected && gpuStats.gpu && (
                 <div className="hidden sm:flex items-center gap-2 md:gap-4 text-xs text-muted-foreground">
@@ -452,7 +555,7 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
                   <span className="text-[10px] sm:text-xs text-muted-foreground">
                     {activeCount} active
                   </span>
-                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-foreground animate-pulse" />
+                  <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isWorkersDemo ? 'bg-amber-500' : 'bg-green-500'} animate-pulse`} />
                 </div>
             </div>
           </div>
@@ -597,8 +700,10 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
             <div className="flex items-center justify-between mb-2 sm:mb-3">
               <h3 className="text-xs sm:text-sm text-foreground-bright">Activity</h3>
               <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-foreground animate-pulse" />
-                <span className="text-[10px] sm:text-xs text-muted-foreground">Live</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${isWorkLogDemo ? 'bg-amber-500' : 'bg-green-500'} animate-pulse`} />
+                <span className="text-[10px] sm:text-xs text-muted-foreground">
+                  {isWorkLogDemo ? 'Demo' : 'Live'}
+                </span>
               </div>
             </div>
             <div className="space-y-1.5 sm:space-y-2 max-h-[200px] lg:max-h-[300px] overflow-y-auto">
@@ -609,7 +714,7 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
                     className="text-[10px] sm:text-xs p-1.5 sm:p-2 border-l-2 border-foreground/30 bg-foreground/5"
                   >
                     <div className="flex items-center gap-1.5 sm:gap-2 text-muted-foreground">
-                      <span>{entry.time.toLocaleTimeString()}</span>
+                      <span suppressHydrationWarning>{entry.time.toLocaleTimeString()}</span>
                       <span className="hidden sm:inline">|</span>
                       <span className="text-foreground">{entry.agent}</span>
                     </div>
@@ -624,11 +729,83 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
                 </div>
               )}
             </div>
-            {lastUpdated && (
-              <div className="text-[10px] sm:text-xs text-foreground-subtle text-center mt-2 sm:mt-3">
-                Updated {lastUpdated.toLocaleTimeString()}
+            {(workersLastUpdated || lastUpdated) && (
+              <div className="text-[10px] sm:text-xs text-foreground-subtle text-center mt-2 sm:mt-3" suppressHydrationWarning>
+                Updated {(workersLastUpdated || lastUpdated)?.toLocaleTimeString()}
               </div>
             )}
+          </div>
+
+          {/* Completed Tasks - Firefly Network Progress */}
+          <div className="p-3 sm:p-4 border-t border-border">
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <h3 className="text-xs sm:text-sm text-foreground-bright flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                Completed Tasks
+              </h3>
+              {taskSummary && (
+                <span className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">
+                  {taskSummary.completed}/{taskSummary.total}
+                </span>
+              )}
+            </div>
+
+            {/* Task Progress Bar */}
+            {taskSummary && taskSummary.total > 0 && (
+              <div className="mb-3">
+                <div className="h-1.5 bg-background rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-500"
+                    style={{ width: `${(taskSummary.completed / taskSummary.total) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                  <span>{taskSummary.pending} pending</span>
+                  <span>{taskSummary.in_progress} active</span>
+                </div>
+              </div>
+            )}
+
+            {/* Recent Completed Tasks List */}
+            <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
+              {completedTasks.length > 0 ? (
+                completedTasks.slice(0, 5).map((task) => (
+                  <div
+                    key={task.id}
+                    className="text-[10px] sm:text-xs p-1.5 sm:p-2 bg-green-500/5 border border-green-500/20 rounded"
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-foreground font-medium truncate">
+                          {task.title}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-muted-foreground mt-0.5">
+                          <Clock className="w-2.5 h-2.5" />
+                          <span suppressHydrationWarning>
+                            {new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {task.assigned_agent && (
+                            <>
+                              <span>•</span>
+                              <span className="truncate">{task.assigned_agent}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : tasksLoading ? (
+                <div className="text-muted-foreground text-center py-3 text-[10px] sm:text-xs">
+                  Loading tasks...
+                </div>
+              ) : (
+                <div className="text-muted-foreground text-center py-3 text-[10px] sm:text-xs">
+                  No completed tasks yet
+                </div>
+              )}
+            </div>
           </div>
         </aside>
       </div>

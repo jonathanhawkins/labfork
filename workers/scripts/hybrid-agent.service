@@ -1,0 +1,46 @@
+# Hybrid Agent Daemon - systemd user service
+# Runs on the 4090 to execute both Workers tasks and independent research
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp hybrid-agent.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable hybrid-agent
+#   systemctl --user start hybrid-agent
+#
+# Logs:
+#   journalctl --user -u hybrid-agent -f
+
+[Unit]
+Description=Hybrid Agent Daemon - Workers + Local Research
+Documentation=https://github.com/jonathanhawkins/labfork
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Environment variables - customize WORKERS_API_URL for your deployment
+Environment="WORKERS_API_URL=https://labfork-workers.your-subdomain.workers.dev"
+Environment="PYTHONUNBUFFERED=1"
+
+# Main process
+ExecStart=/usr/bin/python3 %h/dev/voice-clone-pipeline/.skills/research-manager/hybrid-agent-daemon.py --poll-interval 30
+
+# Working directory
+WorkingDirectory=%h/dev/voice-clone-pipeline
+
+# Restart policy
+Restart=always
+RestartSec=30
+
+# Resource limits
+MemoryMax=4G
+CPUQuota=200%
+
+# Logging - goes to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hybrid-agent
+
+[Install]
+WantedBy=default.target

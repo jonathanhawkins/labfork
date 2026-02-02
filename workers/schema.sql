@@ -100,6 +100,7 @@ CREATE TABLE compute_devices (
   current_task_id TEXT,
   last_heartbeat TEXT,
   stats TEXT, -- JSON: {tasksCompleted, creditsEarned, totalComputeTime}
+  auth_token TEXT, -- Bearer token for device authentication
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -135,3 +136,45 @@ CREATE INDEX idx_compute_devices_last_heartbeat ON compute_devices(last_heartbea
 CREATE INDEX idx_compute_tasks_status_priority ON compute_tasks(status, priority DESC);
 CREATE INDEX idx_compute_tasks_assigned_device ON compute_tasks(assigned_device_id);
 CREATE INDEX idx_compute_tasks_parent_task ON compute_tasks(parent_task_id);
+
+-- ============================================================================
+-- RESEARCH TABLES
+-- These tables support independent research by 4090 and syncing findings
+-- ============================================================================
+
+-- Research objectives: queue of research topics for autonomous exploration
+CREATE TABLE research_objectives (
+  id TEXT PRIMARY KEY,
+  lab_id TEXT NOT NULL DEFAULT 'voice-clone',
+  title TEXT NOT NULL,
+  description TEXT,
+  priority INTEGER DEFAULT 5 CHECK(priority >= 1 AND priority <= 10),
+  status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'archived')),
+  tags TEXT, -- JSON array of tags
+  assigned_device_id TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (assigned_device_id) REFERENCES compute_devices(id) ON DELETE SET NULL
+);
+
+-- Research results: findings synced from 4090's local research
+CREATE TABLE research_results (
+  id TEXT PRIMARY KEY,
+  device_id TEXT NOT NULL,
+  lab_id TEXT NOT NULL DEFAULT 'voice-clone',
+  objective_id TEXT,
+  objective_title TEXT,
+  objective_description TEXT,
+  success INTEGER DEFAULT 0 CHECK(success IN (0, 1)),
+  output TEXT, -- Summary or full research output
+  duration_minutes REAL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (device_id) REFERENCES compute_devices(id) ON DELETE CASCADE,
+  FOREIGN KEY (objective_id) REFERENCES research_objectives(id) ON DELETE SET NULL
+);
+
+-- Indexes for research tables
+CREATE INDEX idx_research_objectives_lab_status ON research_objectives(lab_id, status);
+CREATE INDEX idx_research_objectives_priority ON research_objectives(priority DESC);
+CREATE INDEX idx_research_results_lab_created ON research_results(lab_id, created_at DESC);
+CREATE INDEX idx_research_results_device ON research_results(device_id);

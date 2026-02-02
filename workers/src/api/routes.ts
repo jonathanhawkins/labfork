@@ -9,6 +9,8 @@ import compute from './compute';
 interface Env {
   DB: D1Database;
   // AI binding removed - using distributed compute network
+  MANAGER_WORKFLOW: Workflow;
+  WORKER_WORKFLOW: Workflow;
 }
 
 // Response types
@@ -242,6 +244,142 @@ api.get('/health', (c) => {
     timestamp: new Date().toISOString(),
   };
   return c.json(response);
+});
+
+// GET /api/projects - List all projects with basic stats
+api.get('/projects', async (c) => {
+  try {
+    const status = c.req.query('status');
+    const limit = parseInt(c.req.query('limit') || '50', 10);
+    const offset = parseInt(c.req.query('offset') || '0', 10);
+
+    // Build query
+    let query = 'SELECT * FROM projects WHERE 1=1';
+    const params: (string | number)[] = [];
+
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+
+    query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const stmt = c.env.DB.prepare(query);
+    const results = await stmt.bind(...params).all();
+
+    // Get task counts for each project
+    const projects = await Promise.all(
+      (results.results || []).map(async (row) => {
+        const taskCounts = await getTaskCounts(c.env.DB, row.id as string);
+        const config = parseJsonField<Record<string, unknown>>(row.config as string, {});
+
+        return {
+          id: row.id as string,
+          name: row.name as string,
+          slug: row.slug as string,
+          status: row.status as string,
+          config,
+          created_at: row.created_at as string,
+          updated_at: row.updated_at as string,
+          task_counts: taskCounts,
+        };
+      })
+    );
+
+    return c.json({
+      projects,
+      count: projects.length,
+      limit,
+      offset,
+    });
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to fetch projects'
+      ),
+      500
+    );
+  }
+});
+
+// GET /api/projects/:id - Get project details with task summary and active agents
+api.get('/projects/:id', async (c) => {
+  try {
+    const projectId = c.req.param('id');
+
+    if (!projectId) {
+      return c.json(createErrorResponse('Project ID is required', 400), 400);
+    }
+
+    // Check if this is actually the /status route (Hono routes are matched in order)
+    // Since :id could match 'status', we need to handle this case
+    // Actually, the /status route is separate and will be matched first if it comes before
+
+    const project = await c.env.DB.prepare(
+      `SELECT * FROM projects WHERE id = ?`
+    )
+      .bind(projectId)
+      .first();
+
+    if (!project) {
+      return c.json(createErrorResponse('Project not found', 404), 404);
+    }
+
+    // Get task counts, agents, and recent completed tasks in parallel
+    const [taskCounts, agents, recentCompletedResults] = await Promise.all([
+      getTaskCounts(c.env.DB, projectId),
+      getProjectAgents(c.env.DB, projectId),
+      c.env.DB.prepare(
+        `SELECT id, title, description, status, priority, assigned_agent, updated_at
+         FROM tasks
+         WHERE project_id = ? AND status = 'completed'
+         ORDER BY updated_at DESC
+         LIMIT 5`
+      )
+        .bind(projectId)
+        .all(),
+    ]);
+
+    const recentCompletedTasks = (recentCompletedResults.results || []).map((row) => ({
+      id: row.id as string,
+      title: row.title as string,
+      description: row.description as string | null,
+      status: row.status as string,
+      priority: row.priority as number,
+      assigned_agent: row.assigned_agent as string | null,
+      completed_at: row.updated_at as string,
+    }));
+
+    // Filter active agents (working status or has current task)
+    const activeAgents = agents.filter(
+      (agent) => agent.status === 'working' || agent.current_task_id !== null
+    );
+
+    const config = parseJsonField<Record<string, unknown>>(project.config as string, {});
+
+    return c.json({
+      id: project.id as string,
+      name: project.name as string,
+      slug: project.slug as string,
+      status: project.status as string,
+      config,
+      created_at: project.created_at as string,
+      updated_at: project.updated_at as string,
+      task_summary: taskCounts,
+      recent_completed_tasks: recentCompletedTasks,
+      active_agents: activeAgents,
+    });
+  } catch (error) {
+    console.error('Error fetching project details:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to fetch project details'
+      ),
+      500
+    );
+  }
 });
 
 // GET /api/projects/:id/status - Get project status with stats
@@ -551,6 +689,400 @@ api.post('/tasks/:id/complete', async (c) => {
   }
 });
 
+// ============================================================================
+// Project Tasks API - For Compute Agents (Main Work Driver)
+// ============================================================================
+
+/**
+ * GET /api/tasks/pending - Get pending project tasks for compute agents
+ *
+ * This endpoint returns tasks from the main tasks table that are available
+ * for compute agents to claim. These are the PRIMARY work driver (Firefly Network tasks).
+ *
+ * Query params:
+ *   - deviceId: The compute device requesting tasks
+ *   - projectId: Filter by project (optional)
+ *   - limit: Max tasks to return (default 5)
+ *   - requiresPhysical: Filter by physical requirement (default false = only non-physical)
+ */
+api.get('/tasks/pending', async (c) => {
+  try {
+    const deviceId = c.req.query('deviceId');
+    const projectId = c.req.query('projectId');
+    const limit = parseInt(c.req.query('limit') || '5', 10);
+    const requiresPhysical = c.req.query('requiresPhysical') === 'true';
+
+    // Build query for available tasks
+    // Pending or blocked tasks that are now unblocked
+    // Handle requires_physical: NULL and 0 both mean non-physical
+    let query = `
+      SELECT t.*, p.name as project_name, p.slug as project_slug
+      FROM tasks t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.status IN ('pending')
+        AND (t.assigned_agent IS NULL OR t.assigned_agent = '')
+        AND (t.blocked_by IS NULL OR t.blocked_by = '' OR t.blocked_by = '[]')
+    `;
+    const params: (string | number)[] = [];
+
+    // Filter by physical requirement
+    if (requiresPhysical) {
+      query += ' AND t.requires_physical = 1';
+    } else {
+      query += ' AND (t.requires_physical IS NULL OR t.requires_physical = 0)';
+    }
+
+    if (projectId) {
+      query += ' AND t.project_id = ?';
+      params.push(projectId);
+    }
+
+    query += ' ORDER BY t.priority DESC, t.created_at ASC LIMIT ?';
+    params.push(limit);
+
+    const stmt = c.env.DB.prepare(query);
+    const results = await stmt.bind(...params).all();
+
+    const tasks = (results.results || []).map((row) => ({
+      id: row.id as string,
+      project_id: row.project_id as string,
+      project_name: row.project_name as string,
+      project_slug: row.project_slug as string,
+      title: row.title as string,
+      description: row.description as string,
+      status: row.status as string,
+      priority: row.priority as number,
+      requires_physical: Boolean(row.requires_physical),
+      progress: row.progress as number,
+      created_at: row.created_at as string,
+    }));
+
+    return c.json({
+      tasks,
+      count: tasks.length,
+      device_id: deviceId,
+      message: tasks.length > 0 ? 'Tasks available' : 'No pending tasks',
+    });
+  } catch (error) {
+    console.error('[Tasks] Get pending error:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to get pending tasks'
+      ),
+      500
+    );
+  }
+});
+
+/**
+ * POST /api/tasks/:id/claim - Claim a project task for execution
+ *
+ * Request body:
+ *   - deviceId: The compute device claiming the task
+ *   - agentName: Optional agent name for display
+ */
+api.post('/tasks/:id/claim', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const { deviceId, agentName } = body as { deviceId?: string; agentName?: string };
+
+    if (!taskId) {
+      return c.json(createErrorResponse('Task ID is required', 400), 400);
+    }
+
+    if (!deviceId) {
+      return c.json(createErrorResponse('deviceId is required', 400), 400);
+    }
+
+    // Verify task exists and is available (join with projects to get project_name)
+    const task = await c.env.DB.prepare(`
+      SELECT t.*, p.name as project_name, p.slug as project_slug
+      FROM tasks t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.id = ?
+    `)
+      .bind(taskId)
+      .first();
+
+    if (!task) {
+      return c.json(createErrorResponse('Task not found', 404), 404);
+    }
+
+    if (task.status !== 'pending') {
+      return c.json(createErrorResponse(`Task is not pending (status: ${task.status})`, 400), 400);
+    }
+
+    if (task.assigned_agent && task.assigned_agent !== '') {
+      return c.json(createErrorResponse('Task is already claimed', 400), 400);
+    }
+
+    // Verify device exists
+    const device = await c.env.DB.prepare(`SELECT * FROM compute_devices WHERE id = ?`)
+      .bind(deviceId)
+      .first();
+
+    if (!device) {
+      return c.json(createErrorResponse('Device not registered', 404), 404);
+    }
+
+    // Claim the task
+    const assignedAgent = agentName || `device-${deviceId.substring(0, 8)}`;
+    await c.env.DB.prepare(
+      `UPDATE tasks SET
+        assigned_agent = ?,
+        status = 'in_progress',
+        updated_at = datetime('now')
+       WHERE id = ?`
+    )
+      .bind(assignedAgent, taskId)
+      .run();
+
+    // Log the claim (non-blocking - work_log has FK constraint to agent_state)
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO work_log (id, agent_id, task_id, action, details, created_at)
+         VALUES (?, ?, ?, 'task_claimed', ?, datetime('now'))`
+      )
+        .bind(
+          crypto.randomUUID(),
+          assignedAgent,
+          taskId,
+          JSON.stringify({ device_id: deviceId, agent_name: agentName })
+        )
+        .run();
+    } catch (logError) {
+      // work_log has FK constraint on agent_id -> agent_state
+      // Compute devices don't have agent_state entries, so this may fail
+      console.log(`[Tasks] work_log insert skipped for compute device: ${deviceId}`);
+    }
+
+    return c.json({
+      success: true,
+      task: {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        project_id: task.project_id,
+        project_name: task.project_name,
+        project_slug: task.project_slug,
+      },
+      assigned_agent: assignedAgent,
+      message: 'Task claimed successfully',
+    });
+  } catch (error) {
+    console.error('[Tasks] Claim error:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to claim task'
+      ),
+      500
+    );
+  }
+});
+
+/**
+ * POST /api/tasks/:id/progress - Update task progress
+ *
+ * Request body:
+ *   - deviceId: The compute device updating progress
+ *   - progress: Progress percentage (0-100)
+ *   - status: Optional status update ('in_progress', 'blocked')
+ *   - result: Optional intermediate result
+ */
+api.post('/tasks/:id/progress', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const { deviceId, progress, status, result } = body as {
+      deviceId?: string;
+      progress?: number;
+      status?: string;
+      result?: string;
+    };
+
+    if (!taskId) {
+      return c.json(createErrorResponse('Task ID is required', 400), 400);
+    }
+
+    // Verify task exists
+    const task = await c.env.DB.prepare(`SELECT * FROM tasks WHERE id = ?`)
+      .bind(taskId)
+      .first();
+
+    if (!task) {
+      return c.json(createErrorResponse('Task not found', 404), 404);
+    }
+
+    // Build update query
+    const updates: string[] = ['updated_at = datetime(\'now\')'];
+    const params: (string | number)[] = [];
+
+    if (progress !== undefined && progress >= 0 && progress <= 100) {
+      updates.push('progress = ?');
+      params.push(progress);
+    }
+
+    if (status && ['in_progress', 'blocked', 'pending'].includes(status)) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+
+    if (result) {
+      updates.push('result = ?');
+      params.push(result);
+    }
+
+    params.push(taskId);
+
+    await c.env.DB.prepare(
+      `UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`
+    )
+      .bind(...params)
+      .run();
+
+    // Log progress update (non-blocking - work_log has FK constraint)
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO work_log (id, agent_id, task_id, action, details, created_at)
+         VALUES (?, ?, ?, 'task_progress', ?, datetime('now'))`
+      )
+        .bind(
+          crypto.randomUUID(),
+          task.assigned_agent || deviceId || 'unknown',
+          taskId,
+          JSON.stringify({ progress, status, device_id: deviceId })
+        )
+        .run();
+    } catch (logError) {
+      // work_log has FK constraint, may fail for compute devices
+      console.log(`[Tasks] work_log insert skipped for progress update`);
+    }
+
+    return c.json({
+      success: true,
+      task_id: taskId,
+      progress: progress ?? task.progress,
+      status: status ?? task.status,
+    });
+  } catch (error) {
+    console.error('[Tasks] Progress update error:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to update progress'
+      ),
+      500
+    );
+  }
+});
+
+/**
+ * PATCH /api/tasks/:id - Update task properties
+ *
+ * Request body:
+ *   - status: New status ('pending', 'in_progress', 'completed', 'blocked')
+ *   - priority: New priority (1-10)
+ *   - requires_physical: Whether task requires physical work
+ *   - blocked_by: Array of blocking task IDs or JSON string
+ *   - description: Updated description
+ *   - result: Task result/output
+ */
+api.patch('/tasks/:id', async (c) => {
+  try {
+    const taskId = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const { status, priority, requires_physical, blocked_by, description, result } = body as {
+      status?: string;
+      priority?: number;
+      requires_physical?: boolean;
+      blocked_by?: string[] | string;
+      description?: string;
+      result?: string;
+    };
+
+    if (!taskId) {
+      return c.json(createErrorResponse('Task ID is required', 400), 400);
+    }
+
+    // Verify task exists
+    const task = await c.env.DB.prepare(`SELECT * FROM tasks WHERE id = ?`)
+      .bind(taskId)
+      .first();
+
+    if (!task) {
+      return c.json(createErrorResponse('Task not found', 404), 404);
+    }
+
+    // Build update query
+    const updates: string[] = ['updated_at = datetime(\'now\')'];
+    const params: (string | number)[] = [];
+
+    if (status && ['pending', 'in_progress', 'completed', 'blocked'].includes(status)) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+
+    if (priority !== undefined && priority >= 1 && priority <= 10) {
+      updates.push('priority = ?');
+      params.push(priority);
+    }
+
+    if (requires_physical !== undefined) {
+      updates.push('requires_physical = ?');
+      params.push(requires_physical ? 1 : 0);
+    }
+
+    if (blocked_by !== undefined) {
+      const blockedByStr = Array.isArray(blocked_by) ? JSON.stringify(blocked_by) : blocked_by;
+      updates.push('blocked_by = ?');
+      params.push(blockedByStr || '');
+    }
+
+    if (description !== undefined) {
+      updates.push('description = ?');
+      params.push(description);
+    }
+
+    if (result !== undefined) {
+      updates.push('result = ?');
+      params.push(result);
+    }
+
+    if (updates.length === 1) {
+      return c.json(createErrorResponse('No valid fields to update', 400), 400);
+    }
+
+    params.push(taskId);
+
+    await c.env.DB.prepare(
+      `UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`
+    )
+      .bind(...params)
+      .run();
+
+    // Fetch updated task
+    const updatedTask = await c.env.DB.prepare(`SELECT * FROM tasks WHERE id = ?`)
+      .bind(taskId)
+      .first();
+
+    console.log(`[Tasks] Updated task ${taskId}:`, { status, priority, requires_physical });
+
+    return c.json({
+      success: true,
+      task: updatedTask,
+    });
+  } catch (error) {
+    console.error('[Tasks] Update error:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to update task'
+      ),
+      500
+    );
+  }
+});
+
 // GET /api/work-log - Get recent work log
 api.get('/work-log', async (c) => {
   try {
@@ -601,11 +1133,9 @@ api.get('/work-log', async (c) => {
   }
 });
 
-// POST /api/workflows/manager/trigger - Manually trigger manager
+// POST /api/workflows/manager/trigger - Manually trigger manager workflow
 api.post('/workflows/manager/trigger', async (c) => {
   try {
-    // In a real implementation, this would trigger a Cloudflare Workflow
-    // For now, we'll just log and return success
     const body = await c.req.json().catch(() => ({}));
     const projectId = body.project_id;
 
@@ -613,20 +1143,24 @@ api.post('/workflows/manager/trigger', async (c) => {
       return c.json(createErrorResponse('project_id is required in body', 400), 400);
     }
 
-    // Log the trigger attempt
+    // Actually trigger the Manager Workflow
+    const instance = await c.env.MANAGER_WORKFLOW.create();
+
+    // Log the trigger
     await c.env.DB.prepare(
       `INSERT INTO work_log (id, agent_id, task_id, action, details, created_at)
        VALUES (?, 'system', NULL, 'manager_triggered', ?, datetime('now'))`
     )
       .bind(
         crypto.randomUUID(),
-        JSON.stringify({ project_id: projectId, triggered_by: 'api' })
+        JSON.stringify({ project_id: projectId, triggered_by: 'api', workflow_id: instance.id })
       )
       .run();
 
     return c.json({
       success: true,
-      message: 'Manager workflow trigger logged',
+      message: 'Manager workflow started',
+      workflow_id: instance.id,
       project_id: projectId,
       timestamp: new Date().toISOString(),
     });
@@ -720,5 +1254,266 @@ api.post('/workflows/worker/trigger', async (c) => {
 
 // Mount compute network routes under /compute
 api.route('/compute', compute);
+
+// ============================================================================
+// Research Sync Routes - For 4090 Local Research Integration
+// ============================================================================
+
+/**
+ * POST /api/research/sync - Sync research results from 4090 to Workers
+ *
+ * This endpoint receives research findings from the hybrid agent daemon
+ * and stores them in the database for display on the /watch page.
+ *
+ * Request body:
+ * {
+ *   deviceId: string,
+ *   objective: { id, title, description },
+ *   results: { success, output, duration_minutes },
+ *   labId: string
+ * }
+ */
+api.post('/research/sync', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { deviceId, objective, results, labId } = body;
+
+    if (!deviceId || !objective || !results) {
+      return c.json(createErrorResponse('Missing required fields: deviceId, objective, results', 400), 400);
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    // Store research result in a dedicated table (create if not exists via schema)
+    await c.env.DB.prepare(`
+      INSERT INTO research_results (
+        id, device_id, lab_id, objective_id, objective_title,
+        objective_description, success, output, duration_minutes, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      deviceId,
+      labId || 'voice-clone',
+      objective.id || 'unknown',
+      objective.title || 'Unknown Research',
+      objective.description || '',
+      results.success ? 1 : 0,
+      results.output || '',
+      results.duration_minutes || 0,
+      now
+    ).run();
+
+    // Also log to work_log for visibility
+    await c.env.DB.prepare(`
+      INSERT INTO work_log (id, agent_id, task_id, action, details, created_at)
+      VALUES (?, ?, NULL, 'research_synced', ?, datetime('now'))
+    `).bind(
+      crypto.randomUUID(),
+      deviceId,
+      JSON.stringify({
+        objective_id: objective.id,
+        objective_title: objective.title,
+        success: results.success,
+        duration_minutes: results.duration_minutes
+      })
+    ).run();
+
+    console.log(`[Research] Synced result from ${deviceId}: ${objective.title} (${results.success ? 'success' : 'failed'})`);
+
+    return c.json({
+      success: true,
+      id,
+      message: 'Research result synced',
+      timestamp: now
+    });
+  } catch (error) {
+    console.error('Error syncing research:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to sync research'
+      ),
+      500
+    );
+  }
+});
+
+/**
+ * GET /api/research/results - Get research results
+ *
+ * Query params:
+ *   labId: string (optional, defaults to 'voice-clone')
+ *   limit: number (optional, default 20)
+ */
+api.get('/research/results', async (c) => {
+  try {
+    const labId = c.req.query('labId') || 'voice-clone';
+    const limit = parseInt(c.req.query('limit') || '20', 10);
+
+    const results = await c.env.DB.prepare(`
+      SELECT * FROM research_results
+      WHERE lab_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).bind(labId, limit).all();
+
+    const items = (results.results || []).map((row) => ({
+      id: row.id,
+      deviceId: row.device_id,
+      labId: row.lab_id,
+      objective: {
+        id: row.objective_id,
+        title: row.objective_title,
+        description: row.objective_description
+      },
+      success: row.success === 1,
+      output: row.output,
+      durationMinutes: row.duration_minutes,
+      createdAt: row.created_at
+    }));
+
+    return c.json({
+      results: items,
+      count: items.length,
+      labId
+    });
+  } catch (error) {
+    console.error('Error fetching research results:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to fetch research results'
+      ),
+      500
+    );
+  }
+});
+
+/**
+ * GET /api/research/objectives - Get research objectives queue
+ *
+ * Returns the current research objectives that devices can work on.
+ * Query params:
+ *   labId: string (optional, defaults to 'voice-clone')
+ */
+api.get('/research/objectives', async (c) => {
+  try {
+    const labId = c.req.query('labId') || 'voice-clone';
+
+    // Try to get objectives from database, or return defaults
+    const results = await c.env.DB.prepare(`
+      SELECT * FROM research_objectives
+      WHERE lab_id = ? AND status = 'pending'
+      ORDER BY priority DESC
+    `).bind(labId).all();
+
+    const items = (results.results || []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      priority: row.priority,
+      status: row.status,
+      tags: parseJsonField<string[]>(row.tags as string, [])
+    }));
+
+    // If no objectives in DB, return default ones
+    if (items.length === 0) {
+      return c.json({
+        objectives: [
+          {
+            id: 'prosody-conditioning-review',
+            title: 'Review prosody conditioning approaches',
+            description: 'Research and document different approaches to prosody conditioning in TTS models.',
+            priority: 8,
+            status: 'pending',
+            tags: ['research', 'prosody', 'tts']
+          },
+          {
+            id: 'csm-1b-finetuning-guide',
+            title: 'Document CSM-1B fine-tuning process',
+            description: 'Create a comprehensive guide for fine-tuning CSM-1B with emotional prosody.',
+            priority: 7,
+            status: 'pending',
+            tags: ['documentation', 'csm-1b', 'training']
+          }
+        ],
+        count: 2,
+        labId,
+        source: 'defaults'
+      });
+    }
+
+    return c.json({
+      objectives: items,
+      count: items.length,
+      labId,
+      source: 'database'
+    });
+  } catch (error) {
+    // If table doesn't exist yet, return defaults
+    return c.json({
+      objectives: [
+        {
+          id: 'prosody-conditioning-review',
+          title: 'Review prosody conditioning approaches',
+          description: 'Research and document different approaches to prosody conditioning in TTS models.',
+          priority: 8,
+          status: 'pending',
+          tags: ['research', 'prosody', 'tts']
+        }
+      ],
+      count: 1,
+      labId: c.req.query('labId') || 'voice-clone',
+      source: 'defaults'
+    });
+  }
+});
+
+/**
+ * POST /api/research/objectives - Add a new research objective
+ */
+api.post('/research/objectives', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { id, title, description, priority, tags, labId } = body;
+
+    if (!title || !description) {
+      return c.json(createErrorResponse('Missing required fields: title, description', 400), 400);
+    }
+
+    const objectiveId = id || crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    await c.env.DB.prepare(`
+      INSERT INTO research_objectives (
+        id, lab_id, title, description, priority, status, tags, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+    `).bind(
+      objectiveId,
+      labId || 'voice-clone',
+      title,
+      description,
+      priority || 5,
+      JSON.stringify(tags || []),
+      now,
+      now
+    ).run();
+
+    console.log(`[Research] Created objective: ${title}`);
+
+    return c.json({
+      success: true,
+      id: objectiveId,
+      message: 'Research objective created'
+    });
+  } catch (error) {
+    console.error('Error creating research objective:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to create research objective'
+      ),
+      500
+    );
+  }
+});
 
 export default api;

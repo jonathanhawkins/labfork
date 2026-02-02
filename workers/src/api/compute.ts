@@ -102,6 +102,41 @@ function generateId(prefix: string): string {
   return `${prefix}_${timestamp}_${random}`;
 }
 
+/**
+ * Generate a secure auth token for device authentication
+ */
+function generateAuthToken(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Validate device auth token from Authorization header
+ * Returns device ID if valid, null otherwise
+ */
+async function validateAuthToken(c: any): Promise<string | null> {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.slice(7);
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const device = await c.env.DB.prepare(`
+      SELECT id FROM compute_devices WHERE auth_token = ?
+    `).bind(token).first<{ id: string }>();
+
+    return device?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 function parseJson<T>(value: string | null, defaultValue: T): T {
   if (!value) return defaultValue;
   try {
@@ -170,13 +205,14 @@ compute.post('/devices', async (c) => {
 
     const id = generateId('dev');
     const tier = classifyTier(capabilities, platform);
+    const authToken = generateAuthToken();
     const now = new Date().toISOString();
 
     await c.env.DB.prepare(`
       INSERT INTO compute_devices (
         id, name, tier, platform, capabilities, endpoint_url,
-        status, last_heartbeat, stats, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'online', ?, ?, ?, ?)
+        status, last_heartbeat, stats, auth_token, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'online', ?, ?, ?, ?, ?)
     `).bind(
       id,
       name,
@@ -186,6 +222,7 @@ compute.post('/devices', async (c) => {
       endpointUrl || null,
       now,
       JSON.stringify({ tasksCompleted: 0, creditsEarned: 0, totalComputeTime: 0 }),
+      authToken,
       now,
       now
     ).run();
@@ -203,6 +240,8 @@ compute.post('/devices', async (c) => {
         status: 'online',
         registeredAt: now,
       },
+      // Return auth token - client must store this securely
+      authToken,
     });
   } catch (error) {
     console.error('[Compute] Device registration error:', error);
@@ -505,6 +544,232 @@ compute.get('/tasks/pending', async (c) => {
 });
 
 /**
+ * POST /tasks/assign - Request task assignment (poll endpoint for browser agents)
+ *
+ * This endpoint is optimized for browser-based device agents that poll for work.
+ * It atomically finds and assigns a task in one operation.
+ *
+ * Request body:
+ * {
+ *   deviceId: string,
+ *   capabilities?: { compute: number, memory: number, cachedModels: string[] }
+ * }
+ */
+compute.post('/tasks/assign', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { deviceId, capabilities } = body;
+
+    if (!deviceId) {
+      return c.json({ error: 'deviceId is required' }, 400);
+    }
+
+    // Validate auth token if provided (recommended for security)
+    const authDeviceId = await validateAuthToken(c);
+    if (authDeviceId && authDeviceId !== deviceId) {
+      return c.json({ error: 'Device ID does not match auth token' }, 403);
+    }
+    if (!authDeviceId) {
+      console.log(`[Compute] Task assign request without auth token for device ${deviceId}`);
+    }
+
+    const now = new Date().toISOString();
+
+    // Get device info
+    const device = await c.env.DB.prepare(`
+      SELECT * FROM compute_devices WHERE id = ?
+    `).bind(deviceId).first<ComputeDevice>();
+
+    if (!device) {
+      return c.json({ error: 'Device not found. Please register first.' }, 404);
+    }
+
+    // Update device heartbeat
+    await c.env.DB.prepare(`
+      UPDATE compute_devices
+      SET last_heartbeat = ?, updated_at = ?, status = 'online'
+      WHERE id = ?
+    `).bind(now, now, deviceId).run();
+
+    // If device already has a task, return that
+    if (device.current_task_id) {
+      const currentTask = await c.env.DB.prepare(`
+        SELECT * FROM compute_tasks WHERE id = ?
+      `).bind(device.current_task_id).first<ComputeTask>();
+
+      if (currentTask && currentTask.status === 'assigned') {
+        return c.json({
+          hasWork: true,
+          task: {
+            id: currentTask.id,
+            type: currentTask.type,
+            input: parseJson(currentTask.input, {}),
+            config: parseJson(currentTask.config, {}),
+            priority: currentTask.priority,
+            reward: 1, // Default reward
+          },
+        });
+      }
+    }
+
+    // Find and assign a task atomically
+    const task = await c.env.DB.prepare(`
+      SELECT * FROM compute_tasks
+      WHERE status = 'pending'
+        AND (min_tier IS NULL OR
+             (min_tier = 'crowd') OR
+             (min_tier = 'standard' AND ? IN ('standard', 'power')) OR
+             (min_tier = 'power' AND ? = 'power'))
+      ORDER BY priority DESC, created_at ASC
+      LIMIT 1
+    `).bind(device.tier, device.tier).first<ComputeTask>();
+
+    if (!task) {
+      return c.json({
+        hasWork: false,
+        message: 'No tasks available for your device tier',
+        deviceTier: device.tier,
+      });
+    }
+
+    // Assign task to device
+    await c.env.DB.prepare(`
+      UPDATE compute_tasks
+      SET status = 'assigned', assigned_device_id = ?, assigned_at = ?
+      WHERE id = ? AND status = 'pending'
+    `).bind(deviceId, now, task.id).run();
+
+    await c.env.DB.prepare(`
+      UPDATE compute_devices
+      SET status = 'busy', current_task_id = ?, updated_at = ?
+      WHERE id = ?
+    `).bind(task.id, now, deviceId).run();
+
+    console.log(`[Compute] Task ${task.id} assigned to device ${deviceId} via poll`);
+
+    return c.json({
+      hasWork: true,
+      task: {
+        id: task.id,
+        type: task.type,
+        input: parseJson(task.input, {}),
+        config: parseJson(task.config, {}),
+        priority: task.priority,
+        reward: 1, // Default reward - could be calculated based on task complexity
+      },
+    });
+  } catch (error) {
+    console.error('[Compute] Task assign error:', error);
+    return c.json({ error: 'Failed to assign task' }, 500);
+  }
+});
+
+/**
+ * POST /tasks/generate-crowd - Generate crowd-tier tasks from project work
+ *
+ * This endpoint breaks down larger work into bite-sized tasks suitable for
+ * browser contributors. Called by the orchestrator or manually to seed work.
+ *
+ * Request body:
+ * {
+ *   projectId?: string,
+ *   count?: number (default 10),
+ *   types?: string[] (subset of crowd-compatible types)
+ * }
+ */
+compute.post('/tasks/generate-crowd', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { projectId, count = 10, types } = body;
+
+    const now = new Date().toISOString();
+    const generatedTasks: { id: string; type: string }[] = [];
+
+    // Crowd-compatible task types with sample inputs
+    const crowdTaskTemplates = [
+      {
+        type: 'classification',
+        templates: [
+          { input: { text: 'Analyze the sentiment of user feedback about voice quality', categories: ['positive', 'negative', 'neutral', 'mixed'] }, priority: 5 },
+          { input: { text: 'Classify this research finding by relevance to TTS', categories: ['highly_relevant', 'somewhat_relevant', 'not_relevant'] }, priority: 4 },
+          { input: { text: 'Categorize prosody feature by type', categories: ['pitch', 'rhythm', 'stress', 'intonation', 'duration'] }, priority: 5 },
+        ],
+      },
+      {
+        type: 'summarization',
+        templates: [
+          { input: { text: 'Summarize the key findings from this voice clone experiment', maxLength: 150 }, priority: 4 },
+          { input: { text: 'Create a brief summary of the prosody analysis results', maxLength: 100 }, priority: 4 },
+          { input: { text: 'Summarize user feedback about voice naturalness', maxLength: 120 }, priority: 3 },
+        ],
+      },
+      {
+        type: 'embedding',
+        templates: [
+          { input: { text: 'Generate embedding for voice sample metadata', model: 'default' }, priority: 3 },
+          { input: { text: 'Create semantic embedding for research note', model: 'default' }, priority: 3 },
+          { input: { text: 'Embed prosody feature description', model: 'default' }, priority: 2 },
+        ],
+      },
+      {
+        type: 'assessment',
+        templates: [
+          { input: { prompt: 'Rate the quality of this transcription on a scale of 1-5', context: 'Voice clone quality assessment' }, priority: 5 },
+          { input: { prompt: 'Evaluate if this voice sample has clear prosody markers', context: 'Prosody detection assessment' }, priority: 4 },
+          { input: { prompt: 'Assess the naturalness of this synthesized speech description', context: 'TTS quality assessment' }, priority: 5 },
+        ],
+      },
+    ];
+
+    // Filter by requested types if specified
+    const taskPool = types
+      ? crowdTaskTemplates.filter((t) => types.includes(t.type))
+      : crowdTaskTemplates;
+
+    if (taskPool.length === 0) {
+      return c.json({ error: 'No valid crowd task types specified' }, 400);
+    }
+
+    // Generate tasks
+    for (let i = 0; i < count; i++) {
+      const taskType = taskPool[Math.floor(Math.random() * taskPool.length)];
+      const template = taskType.templates[Math.floor(Math.random() * taskType.templates.length)];
+
+      const taskId = generateId('ctask');
+
+      await c.env.DB.prepare(`
+        INSERT INTO compute_tasks (
+          id, type, input, config, status, priority, min_tier,
+          parent_task_id, created_at
+        ) VALUES (?, ?, ?, ?, 'pending', ?, 'crowd', ?, ?)
+      `).bind(
+        taskId,
+        taskType.type,
+        JSON.stringify(template.input),
+        JSON.stringify({ maxTokens: 256, temperature: 0.7 }),
+        template.priority,
+        projectId || null,
+        now
+      ).run();
+
+      generatedTasks.push({ id: taskId, type: taskType.type });
+    }
+
+    console.log(`[Compute] Generated ${generatedTasks.length} crowd tasks`);
+
+    return c.json({
+      success: true,
+      generated: generatedTasks.length,
+      tasks: generatedTasks,
+      message: `Generated ${generatedTasks.length} crowd-tier tasks for browser contributors`,
+    });
+  } catch (error) {
+    console.error('[Compute] Generate crowd tasks error:', error);
+    return c.json({ error: 'Failed to generate crowd tasks' }, 500);
+  }
+});
+
+/**
  * POST /tasks/:id/claim - Claim a task for execution
  *
  * Request body:
@@ -569,6 +834,102 @@ compute.post('/tasks/:id/claim', async (c) => {
 });
 
 /**
+ * POST /tasks/:id - Complete a task (alias for browser device-agent compatibility)
+ *
+ * Request body:
+ * {
+ *   deviceId: string,
+ *   success: boolean,
+ *   result?: { text?: string, metrics: { computeTime: number } },
+ *   error?: string
+ * }
+ */
+compute.post('/tasks/:id', async (c) => {
+  // Route to the complete handler
+  const taskId = c.req.param('id');
+
+  // Skip if this looks like a different route pattern
+  if (taskId === 'assign' || taskId === 'pending' || taskId === 'generate-crowd') {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
+  try {
+    const body = await c.req.json();
+    const { deviceId, success, result, error } = body;
+
+    if (!deviceId) {
+      return c.json({ error: 'deviceId is required' }, 400);
+    }
+
+    // Validate auth token if provided
+    const authDeviceId = await validateAuthToken(c);
+    if (authDeviceId && authDeviceId !== deviceId) {
+      return c.json({ error: 'Device ID does not match auth token' }, 403);
+    }
+    if (!authDeviceId) {
+      console.log(`[Compute] Task complete request without auth token for device ${deviceId}`);
+    }
+
+    const now = new Date().toISOString();
+
+    // Get task
+    const task = await c.env.DB.prepare(`
+      SELECT * FROM compute_tasks WHERE id = ?
+    `).bind(taskId).first<ComputeTask>();
+
+    if (!task) {
+      return c.json({ error: 'Task not found' }, 404);
+    }
+
+    if (task.assigned_device_id !== deviceId) {
+      return c.json({ error: 'Task not assigned to this device' }, 403);
+    }
+
+    // Update task
+    const newStatus = success ? 'completed' : 'failed';
+    await c.env.DB.prepare(`
+      UPDATE compute_tasks
+      SET status = ?, result = ?, error = ?, completed_at = ?
+      WHERE id = ?
+    `).bind(newStatus, result ? JSON.stringify(result) : null, error || null, now, taskId).run();
+
+    // Free up device
+    await c.env.DB.prepare(`
+      UPDATE compute_devices
+      SET status = 'online', current_task_id = NULL, updated_at = ?
+      WHERE id = ?
+    `).bind(now, deviceId).run();
+
+    // Update device stats if successful
+    const computeTime = result?.metrics?.computeTime || 0;
+    if (success) {
+      await c.env.DB.prepare(`
+        UPDATE compute_devices
+        SET stats = json_set(
+          COALESCE(stats, '{}'),
+          '$.tasksCompleted', COALESCE(json_extract(stats, '$.tasksCompleted'), 0) + 1,
+          '$.creditsEarned', COALESCE(json_extract(stats, '$.creditsEarned'), 0) + 1,
+          '$.totalComputeTime', COALESCE(json_extract(stats, '$.totalComputeTime'), 0) + ?
+        )
+        WHERE id = ?
+      `).bind(computeTime / 1000, deviceId).run();
+    }
+
+    console.log(`[Compute] Task ${taskId} completed by ${deviceId}: ${newStatus}`);
+
+    return c.json({
+      success: true,
+      taskId,
+      status: newStatus,
+      creditsAwarded: success ? 1 : 0,
+    });
+  } catch (error) {
+    console.error('[Compute] Complete task error:', error);
+    return c.json({ error: 'Failed to complete task' }, 500);
+  }
+});
+
+/**
  * POST /tasks/:id/complete - Report task completion
  *
  * Request body:
@@ -619,17 +980,19 @@ compute.post('/tasks/:id/complete', async (c) => {
       WHERE id = ?
     `).bind(now, deviceId).run();
 
-    // Update device stats if successful
-    if (success && result?.metrics?.computeTime) {
+    // Update device stats if successful (always award credits on success)
+    if (success) {
+      const computeTime = result?.metrics?.computeTime || 0;
       await c.env.DB.prepare(`
         UPDATE compute_devices
         SET stats = json_set(
           COALESCE(stats, '{}'),
           '$.tasksCompleted', COALESCE(json_extract(stats, '$.tasksCompleted'), 0) + 1,
+          '$.creditsEarned', COALESCE(json_extract(stats, '$.creditsEarned'), 0) + 1,
           '$.totalComputeTime', COALESCE(json_extract(stats, '$.totalComputeTime'), 0) + ?
         )
         WHERE id = ?
-      `).bind(result.metrics.computeTime / 1000, deviceId).run();
+      `).bind(computeTime / 1000, deviceId).run();
     }
 
     console.log(`[Compute] Task ${taskId} completed by ${deviceId}: ${newStatus}`);
@@ -638,6 +1001,7 @@ compute.post('/tasks/:id/complete', async (c) => {
       success: true,
       taskId,
       status: newStatus,
+      creditsAwarded: success ? 1 : 0,
     });
   } catch (error) {
     console.error('[Compute] Complete task error:', error);
@@ -789,6 +1153,160 @@ compute.get('/stats', async (c) => {
   } catch (error) {
     console.error('[Compute] Stats error:', error);
     return c.json({ error: 'Failed to get stats' }, 500);
+  }
+});
+
+/**
+ * GET /leaderboard - Get top contributors ranked by credits earned
+ *
+ * Query params:
+ *   limit: number (default 20, max 100)
+ *   tier: 'power' | 'standard' | 'crowd' (optional filter)
+ */
+compute.get('/leaderboard', async (c) => {
+  try {
+    const limit = Math.min(parseInt(c.req.query('limit') || '20', 10), 100);
+    const tier = c.req.query('tier');
+
+    let query = `
+      SELECT
+        id,
+        name,
+        tier,
+        platform,
+        json_extract(stats, '$.tasksCompleted') as tasks_completed,
+        json_extract(stats, '$.creditsEarned') as credits_earned,
+        json_extract(stats, '$.totalComputeTime') as total_compute_time,
+        created_at
+      FROM compute_devices
+      WHERE json_extract(stats, '$.tasksCompleted') > 0
+    `;
+    const params: (string | number)[] = [];
+
+    if (tier) {
+      query += ' AND tier = ?';
+      params.push(tier);
+    }
+
+    query += ' ORDER BY json_extract(stats, \'$.creditsEarned\') DESC LIMIT ?';
+    params.push(limit);
+
+    const result = await c.env.DB.prepare(query).bind(...params).all();
+
+    // Helper to calculate rank based on tasks
+    const calculateRank = (tasks: number): 'novice' | 'contributor' | 'expert' | 'legend' => {
+      if (tasks >= 1000) return 'legend';
+      if (tasks >= 100) return 'expert';
+      if (tasks >= 10) return 'contributor';
+      return 'novice';
+    };
+
+    // Helper to check badges
+    const checkBadges = (tasks: number, credits: number, tier: string) => {
+      const badges: { id: string; name: string; description: string; icon: string; earnedAt: string }[] = [];
+      const now = new Date().toISOString();
+
+      if (tasks >= 1) badges.push({ id: 'first_task', name: 'First Contribution', description: 'Completed your first task', icon: '🌟', earnedAt: now });
+      if (tasks >= 100) badges.push({ id: 'hundred_tasks', name: 'Century', description: 'Completed 100 tasks', icon: '💯', earnedAt: now });
+      if (tasks >= 1000) badges.push({ id: 'thousand_tasks', name: 'Legend', description: 'Completed 1,000 tasks', icon: '🏆', earnedAt: now });
+      if (credits >= 1000) badges.push({ id: 'thousand_credits', name: 'Millionaire', description: 'Earned 1,000 credits', icon: '💰', earnedAt: now });
+      if (tier === 'power') badges.push({ id: 'power_contributor', name: 'Power Contributor', description: 'Registered a power-tier device', icon: '⚡', earnedAt: now });
+
+      return badges;
+    };
+
+    // Transform to ContributorProfile format expected by frontend
+    const leaderboard = (result.results || []).map((d: any) => {
+      const tasksCompleted = d.tasks_completed || 0;
+      const creditsEarned = d.credits_earned || 0;
+      const computeTime = d.total_compute_time || 0;
+
+      return {
+        userId: d.id,
+        displayName: d.name || `Contributor ${d.id.slice(-6)}`,
+        rank: calculateRank(tasksCompleted),
+        totalCreditsEarned: creditsEarned,
+        totalTasksCompleted: tasksCompleted,
+        totalComputeTime: Math.round(computeTime * 10) / 10,
+        devices: [d.id],
+        badges: checkBadges(tasksCompleted, creditsEarned, d.tier),
+        joinedAt: d.created_at,
+        // Extra fields for debugging
+        tier: d.tier,
+        platform: d.platform,
+      };
+    });
+
+    // Get total contributor count
+    const totalResult = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM compute_devices
+      WHERE json_extract(stats, '$.tasksCompleted') > 0
+    `).first<{ count: number }>();
+
+    // Return as array for frontend compatibility
+    return c.json(leaderboard);
+  } catch (error) {
+    console.error('[Compute] Leaderboard error:', error);
+    return c.json({ error: 'Failed to get leaderboard' }, 500);
+  }
+});
+
+/**
+ * GET /devices/:id/stats - Get stats for a specific device
+ */
+compute.get('/devices/:id/stats', async (c) => {
+  try {
+    const deviceId = c.req.param('id');
+
+    const device = await c.env.DB.prepare(`
+      SELECT
+        id,
+        name,
+        tier,
+        platform,
+        status,
+        stats,
+        created_at,
+        last_heartbeat
+      FROM compute_devices
+      WHERE id = ?
+    `).bind(deviceId).first();
+
+    if (!device) {
+      return c.json({ error: 'Device not found' }, 404);
+    }
+
+    const stats = parseJson<{
+      tasksCompleted: number;
+      creditsEarned: number;
+      totalComputeTime: number;
+    }>(device.stats as string, { tasksCompleted: 0, creditsEarned: 0, totalComputeTime: 0 });
+
+    // Get rank
+    const rankResult = await c.env.DB.prepare(`
+      SELECT COUNT(*) + 1 as rank
+      FROM compute_devices
+      WHERE json_extract(stats, '$.creditsEarned') > ?
+    `).bind(stats.creditsEarned).first<{ rank: number }>();
+
+    return c.json({
+      deviceId: device.id,
+      name: device.name,
+      tier: device.tier,
+      platform: device.platform,
+      status: device.status,
+      stats: {
+        tasksCompleted: stats.tasksCompleted,
+        creditsEarned: stats.creditsEarned,
+        totalComputeTime: Math.round(stats.totalComputeTime * 10) / 10,
+      },
+      rank: rankResult?.rank || 1,
+      memberSince: device.created_at,
+      lastActive: device.last_heartbeat,
+    });
+  } catch (error) {
+    console.error('[Compute] Device stats error:', error);
+    return c.json({ error: 'Failed to get device stats' }, 500);
   }
 });
 

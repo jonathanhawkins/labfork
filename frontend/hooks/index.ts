@@ -23,3 +23,11 @@ export {
   type UseSingleAgentStatusOptions,
   type UseSingleAgentStatusResult,
 } from './useAgentStatus';
+
+// Completed Tasks Hook
+export {
+  useCompletedTasks,
+  type CompletedTask,
+  type ProjectTaskSummary,
+  type ProjectDetails,
+} from './useCompletedTasks';
