@@ -659,18 +659,24 @@ api.post('/tasks/:id/complete', async (c) => {
     // Unblock dependent tasks
     const unblockedCount = await unblockDependentTasks(c.env.DB, taskId);
 
-    // Log the completion
-    await c.env.DB.prepare(
-      `INSERT INTO work_log (id, agent_id, task_id, action, details, created_at)
-       VALUES (?, ?, ?, 'task_completed', ?, datetime('now'))`
-    )
-      .bind(
-        crypto.randomUUID(),
-        task.assigned_agent_id || 'manual',
-        taskId,
-        JSON.stringify({ completed_by: 'api', unblocked_tasks: unblockedCount })
+    // Log the completion (non-blocking - work_log has FK constraint to agent_state)
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO work_log (id, agent_id, task_id, action, details, created_at)
+         VALUES (?, ?, ?, 'task_completed', ?, datetime('now'))`
       )
-      .run();
+        .bind(
+          crypto.randomUUID(),
+          task.assigned_agent || 'manual',
+          taskId,
+          JSON.stringify({ completed_by: 'api', unblocked_tasks: unblockedCount })
+        )
+        .run();
+    } catch (logError) {
+      // work_log has FK constraint on agent_id -> agent_state
+      // Compute devices don't have agent_state entries, so this may fail
+      console.log(`[Tasks] work_log insert skipped for task completion: ${taskId}`);
+    }
 
     return c.json({
       success: true,
