@@ -5,12 +5,28 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getCreditTransactions } from "@/lib/supabase";
+import { getCreditTransactions, isSupabaseConfigured } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured) {
+      return NextResponse.json(
+        {
+          transactions: [],
+          pagination: {
+            limit: 50,
+            offset: 0,
+            count: 0,
+          },
+          message: "Credits system not configured",
+        },
+        { status: 200 }
+      );
+    }
+
     // Get parameters from query
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");

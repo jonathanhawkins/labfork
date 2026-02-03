@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { recordSpentCredits, getUserCredits } from "@/lib/supabase";
+import { recordSpentCredits, getUserCredits, isSupabaseConfigured } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,17 @@ interface SpendCreditsRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Credits system not configured",
+        },
+        { status: 200 }
+      );
+    }
+
     const body: SpendCreditsRequest = await request.json();
 
     // Validate required fields

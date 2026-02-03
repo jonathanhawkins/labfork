@@ -21,8 +21,25 @@ import {
   BarChart3,
   Menu,
   X,
+  User,
 } from "lucide-react";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+
+// Dynamic Clerk imports with fallback
+let useUser: any;
+let SignInButton: any;
+let SignUpButton: any;
+let UserButton: any;
+
+try {
+  const clerkNextjs = require("@clerk/nextjs");
+  useUser = clerkNextjs.useUser;
+  SignInButton = clerkNextjs.SignInButton;
+  SignUpButton = clerkNextjs.SignUpButton;
+  UserButton = clerkNextjs.UserButton;
+} catch (error) {
+  // Clerk not available, will show fallback
+}
 
 interface NavItem {
   href: string;
@@ -61,6 +78,70 @@ interface DropdownProps {
   items: NavItem[];
   isActive: boolean;
   t: (key: string) => string;
+}
+
+// Check if Clerk is configured at module level (safe for SSR)
+const hasClerkKeys = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+// Separate component for when Clerk IS available (hooks always called)
+function ClerkAuthButtons() {
+  const clerkState = useUser();
+  const { isSignedIn, isLoaded } = clerkState;
+
+  // Show loading state
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="w-20 h-9 bg-muted/50 rounded-lg animate-pulse" />
+        <div className="w-20 h-9 bg-muted/50 rounded-lg animate-pulse" />
+      </div>
+    );
+  }
+
+  // Show Clerk auth UI for signed in users
+  if (isSignedIn && UserButton) {
+    return (
+      <div className="flex items-center min-h-[44px]">
+        <UserButton afterSignOutUrl="/" />
+      </div>
+    );
+  }
+
+  // Show sign in/up buttons
+  if (SignInButton && SignUpButton) {
+    return (
+      <div className="flex items-center gap-2">
+        <SignInButton mode="modal">
+          <button className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-md min-h-[44px]">
+            Sign In
+          </button>
+        </SignInButton>
+        <SignUpButton mode="modal">
+          <button className="px-3 py-2 text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-500 hover:to-purple-500 transition-all min-h-[44px]">
+            Sign Up
+          </button>
+        </SignUpButton>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+// Main auth buttons component - conditionally renders based on Clerk config
+function AuthButtons() {
+  // Show dev mode indicator when Clerk isn't configured
+  if (!hasClerkKeys || !useUser) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground bg-muted/20 rounded-lg min-h-[44px]">
+        <User className="w-4 h-4" />
+        <span className="hidden sm:inline">Dev Mode</span>
+      </div>
+    );
+  }
+
+  // Render Clerk auth buttons (hooks are called in this component)
+  return <ClerkAuthButtons />;
 }
 
 function Dropdown({ label, items, isActive, t }: DropdownProps) {
@@ -215,8 +296,16 @@ export function Navigation() {
             <LanguageSwitcher variant="dropdown" />
           </div>
 
-          {/* Right side: CTA + Status + Mobile Menu */}
+          {/* Right side: Auth + CTA + Status + Mobile Menu */}
           <div className="flex items-center gap-2">
+            {/* Auth Buttons - Desktop only */}
+            <div className="hidden md:flex">
+              <AuthButtons />
+            </div>
+
+            {/* Separator - Desktop only */}
+            <div className="hidden md:block w-px h-5 bg-border" />
+
             {/* Create Lab CTA - always visible but responsive */}
             <Link
               href="/lab/new"
@@ -257,6 +346,11 @@ export function Navigation() {
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 top-14 z-50 bg-background/95 backdrop-blur-sm overflow-y-auto">
           <div className="px-4 py-6 space-y-6">
+            {/* Auth Section - Mobile */}
+            <div className="pb-4 border-b border-border">
+              <AuthButtons />
+            </div>
+
             {/* Primary Navigation */}
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 mb-2">

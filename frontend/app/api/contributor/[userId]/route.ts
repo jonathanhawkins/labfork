@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   getContributorProfile,
   updateContributorProfile,
@@ -22,6 +23,25 @@ export async function GET(
       return NextResponse.json(
         { error: "User ID is required" },
         { status: 400 }
+      );
+    }
+
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured) {
+      return NextResponse.json(
+        {
+          userId,
+          displayName: "Anonymous",
+          rank: "Newcomer",
+          totalCreditsEarned: 0,
+          totalTasksCompleted: 0,
+          totalComputeTime: 0,
+          devices: [],
+          badges: [],
+          joinedAt: new Date().toISOString(),
+          message: "Credits system not configured",
+        },
+        { status: 200 }
       );
     }
 
@@ -55,6 +75,17 @@ export async function PATCH(
       return NextResponse.json(
         { error: "User ID is required" },
         { status: 400 }
+      );
+    }
+
+    // Check if Supabase is configured
+    if (!isSupabaseConfigured) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Credits system not configured",
+        },
+        { status: 200 }
       );
     }
 
