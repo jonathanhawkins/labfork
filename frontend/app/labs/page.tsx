@@ -29,6 +29,8 @@ export default function LabsOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [seedError, setSeedError] = useState<string | null>(null);
+  const [seedSuccess, setSeedSuccess] = useState(false);
 
   const fetchLabs = useCallback(async () => {
     try {
@@ -52,14 +54,21 @@ export default function LabsOverviewPage() {
 
   const seedLabs = async () => {
     setIsSeeding(true);
+    setSeedError(null);
+    setSeedSuccess(false);
     try {
       const response = await fetch("/api/labs/seed", { method: "POST" });
       const data = await response.json();
       if (data.success) {
         await fetchLabs();
+        setSeedSuccess(true);
+        setTimeout(() => setSeedSuccess(false), 3000);
+      } else {
+        setSeedError(data.error || "Failed to seed demo labs. Please try again.");
       }
     } catch (err) {
       console.error("Failed to seed labs:", err);
+      setSeedError("Failed to seed demo labs. Please try again.");
     } finally {
       setIsSeeding(false);
     }
@@ -128,26 +137,34 @@ export default function LabsOverviewPage() {
             <p className="text-foreground-muted mb-6">
               Create your first lab or seed demo labs to get started.
             </p>
-            <div className="flex gap-4 justify-center">
-              <Link
-                href="/lab/new"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Create Lab
-              </Link>
-              <button
-                onClick={seedLabs}
-                disabled={isSeeding}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
-              >
-                {isSeeding ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Activity className="w-4 h-4" />
-                )}
-                {isSeeding ? "Seeding..." : "Seed Demo Labs"}
-              </button>
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex gap-4">
+                <Link
+                  href="/lab/new"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Lab
+                </Link>
+                <button
+                  onClick={seedLabs}
+                  disabled={isSeeding}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  {isSeeding ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Activity className="w-4 h-4" />
+                  )}
+                  {isSeeding ? "Seeding..." : "Seed Demo Labs"}
+                </button>
+              </div>
+              {seedError && (
+                <p className="text-sm text-red-500">{seedError}</p>
+              )}
+              {seedSuccess && (
+                <p className="text-sm text-green-500">Demo labs created successfully!</p>
+              )}
             </div>
           </div>
         ) : (

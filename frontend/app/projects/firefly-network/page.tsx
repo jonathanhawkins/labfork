@@ -1133,7 +1133,7 @@ export default function FireflyNetworkPage() {
                 description:
                   "Build a prototype using our BOM. Document results, report issues, suggest improvements.",
                 cta: "Docs Coming",
-                href: "#",
+                href: "",
                 color: "green",
                 disabled: true,
               },
@@ -1142,7 +1142,7 @@ export default function FireflyNetworkPage() {
                 description:
                   "Help deploy and test prototypes in real conditions. Data collection partnerships welcome.",
                 cta: "Contact",
-                href: "#",
+                href: "",
                 color: "purple",
                 disabled: true,
               },
@@ -1158,7 +1158,11 @@ export default function FireflyNetworkPage() {
                   {action.description}
                 </p>
                 {action.disabled ? (
-                  <span className="px-4 py-2 rounded-lg bg-white/5 text-gray-500 text-sm text-center">
+                  <span
+                    role="button"
+                    aria-disabled="true"
+                    className="px-4 py-2 rounded-lg bg-white/5 text-gray-500 text-sm text-center pointer-events-none"
+                  >
                     {action.cta}
                   </span>
                 ) : (

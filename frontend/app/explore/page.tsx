@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { LabCard } from "@/components/labs/LabCard";
 import type { Lab } from "@/lib/labs/types";
+import { Button } from "@/components/ui/button";
 
 // Domain options
 const DOMAINS = [
@@ -55,6 +56,7 @@ export default function ExplorePage() {
   const [featuredLabs, setFeaturedLabs] = useState<Lab[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -100,12 +102,23 @@ export default function ExplorePage() {
         }
         setTotal(data.total);
         setHasMore(data.labs.length === 12 && data.labs.length < data.total);
+        setError(null);
+        setRetryCount(0); // Reset retry count on success
       } else {
-        setError(data.error || "Failed to load labs");
+        setError(data.error || "Failed to load labs. Please try again.");
+        setRetryCount((c) => c + 1);
       }
     } catch (err) {
       console.error("Failed to fetch labs:", err);
-      setError("Failed to load labs");
+      // Distinguish between network errors and API errors
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setError("Network error - please check your connection and try again");
+      } else if (err instanceof Error) {
+        setError(`Failed to load labs: ${err.message}`);
+      } else {
+        setError("Failed to load labs. Please try again.");
+      }
+      setRetryCount((c) => c + 1);
     } finally {
       setIsLoading(false);
     }
@@ -305,13 +318,21 @@ export default function ExplorePage() {
         {/* Error State */}
         {error && (
           <div className="text-center py-12">
-            <p className="text-red-400 mb-4">{error}</p>
-            <button
-              onClick={() => fetchLabs(true)}
-              className="px-4 py-2 rounded-lg border border-border hover:bg-foreground-muted/10 text-sm"
+            <p className="text-red-400 mb-2">{error}</p>
+            {retryCount > 1 && (
+              <p className="text-sm text-foreground-muted mb-4">
+                Tried {retryCount} times. If this persists, the service may be temporarily unavailable.
+              </p>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRetryCount((c) => c + 1);
+                fetchLabs(true);
+              }}
             >
               Try Again
-            </button>
+            </Button>
           </div>
         )}
 
