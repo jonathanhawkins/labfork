@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { GpuInfo } from "@/lib/lab-wizard/types";
 
+// Environment variable for Ollama URL with fallback
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
+
 /**
  * Hardware detection API
  *
@@ -57,7 +60,7 @@ export async function GET(request: NextRequest) {
     let ollamaModels: string[] = [];
 
     try {
-      const ollamaResponse = await fetch("http://localhost:11434/api/version", {
+      const ollamaResponse = await fetch(`${OLLAMA_URL}/api/version`, {
         signal: AbortSignal.timeout(2000),
       });
       if (ollamaResponse.ok) {
@@ -66,7 +69,7 @@ export async function GET(request: NextRequest) {
         ollamaVersion = versionData.version;
 
         // Get models
-        const modelsResponse = await fetch("http://localhost:11434/api/tags", {
+        const modelsResponse = await fetch(`${OLLAMA_URL}/api/tags`, {
           signal: AbortSignal.timeout(2000),
         });
         if (modelsResponse.ok) {
@@ -74,8 +77,9 @@ export async function GET(request: NextRequest) {
           ollamaModels = modelsData.models?.map((m: { name: string }) => m.name) || [];
         }
       }
-    } catch {
-      // Ollama not running
+    } catch (error) {
+      // Ollama not running or not reachable - gracefully continue
+      console.warn(`Ollama not available at ${OLLAMA_URL}:`, error instanceof Error ? error.message : 'Connection failed');
     }
 
     return NextResponse.json({

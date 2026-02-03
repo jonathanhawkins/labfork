@@ -11,6 +11,17 @@ import {
 
 export const dynamic = "force-dynamic";
 import { homedir } from "os";
+import { getServerUser } from "@/lib/auth/server";
+
+/**
+ * Get the base URL for internal API calls
+ * Priority: NEXT_PUBLIC_SITE_URL > VERCEL_URL > localhost
+ */
+const getBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'http://localhost:3003';
+};
 
 // Research Manager paths
 const projectRoot = join(process.cwd(), "..");
@@ -211,7 +222,7 @@ async function recordAgentOutcome(
   progressScore: number
 ) {
   try {
-    await fetch(`http://localhost:3003/api/lab/progress`, {
+    await fetch(`${getBaseUrl()}/api/lab/progress`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -237,7 +248,7 @@ async function getRetryRecommendation(taskId: string): Promise<{
   strategy?: string;
 }> {
   try {
-    const response = await fetch(`http://localhost:3003/api/lab/progress`, {
+    const response = await fetch(`${getBaseUrl()}/api/lab/progress`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "should-retry", taskId }),
@@ -546,6 +557,15 @@ You have access to all Claude Code tools. Be autonomous and thorough.`;
  * Now includes auto-cleanup of stuck/finished agents
  */
 export async function POST(request: Request) {
+  // Authentication required for spawning agents (expensive operation)
+  const user = await getServerUser();
+  if (!user) {
+    return NextResponse.json(
+      { success: false, error: "Authentication required" },
+      { status: 401 }
+    );
+  }
+
   try {
     // Check for force-research parameter
     const url = new URL(request.url);

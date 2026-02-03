@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync, existsSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
+import { getServerUser } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
@@ -507,6 +508,15 @@ export async function GET(request: Request) {
  * Record an outcome or get retry recommendation
  */
 export async function POST(request: Request) {
+  // Authentication required for modifying progress data
+  const user = await getServerUser();
+  if (!user) {
+    return NextResponse.json(
+      { success: false, error: "Authentication required" },
+      { status: 401 }
+    );
+  }
+
   try {
     const rawBody = await request.text();
     if (BACKEND_URL) {
