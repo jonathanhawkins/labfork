@@ -57,6 +57,13 @@ interface ResearchAgent {
   started_at: string;
 }
 
+interface AgentMessage {
+  agent: string;
+  message: string;
+  timestamp: string;
+  type: string;
+}
+
 // Pastel colors matching Lab3D
 const COLORS = {
   codex: 0xffb3ba,
@@ -330,12 +337,7 @@ export default function LabPage() {
     };
   } | null>(null);
 
-  const [agentMessages, setAgentMessages] = useState<{
-    agent: string;
-    message: string;
-    timestamp: string;
-    type: string;
-  }[]>([]);
+  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
 
   const [healthStatus, setHealthStatus] = useState<{
     healthy: boolean;
@@ -497,7 +499,7 @@ export default function LabPage() {
         const data = await response.json();
         if (data.messages) {
           setAgentMessages(
-            data.messages.map((m: any) => ({
+            data.messages.map((m: AgentMessage) => ({
               ...m,
               timestamp: new Date(m.timestamp).toLocaleTimeString(),
             }))

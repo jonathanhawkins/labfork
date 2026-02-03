@@ -128,7 +128,6 @@ function SuggestedLabs() {
               onClick={(e) => {
                 e.preventDefault();
                 // TODO: Implement star functionality
-                console.log("Star lab:", lab.slug);
               }}
             >
               Star

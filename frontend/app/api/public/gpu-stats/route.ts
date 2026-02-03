@@ -183,8 +183,9 @@ export async function GET() {
     }
 
     return NextResponse.json(sanitized);
-  } catch (error: any) {
+  } catch (error) {
     // Fallback to demo stats if backend unavailable
+    console.error('GPU stats fetch failed:', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json(getDemoStats());
   }
 }

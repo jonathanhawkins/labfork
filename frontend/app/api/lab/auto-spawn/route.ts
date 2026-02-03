@@ -13,6 +13,11 @@ export const dynamic = "force-dynamic";
 import { homedir } from "os";
 import { getServerUser } from "@/lib/auth/server";
 
+// Development logging helpers
+const isDev = process.env.NODE_ENV === 'development';
+const log = (...args: unknown[]) => isDev && console.log('[auto-spawn]', ...args);
+const logError = (...args: unknown[]) => console.error('[auto-spawn]', ...args);
+
 /**
  * Get the base URL for internal API calls
  * Priority: NEXT_PUBLIC_SITE_URL > VERCEL_URL > localhost
@@ -203,10 +208,10 @@ function killAgent(name: string): boolean {
       ["kill", "--name", name],
       { cwd: projectRoot, encoding: "utf-8" }
     );
-    console.log(`[Auto-spawn] Killed agent ${name}:`, result.stdout);
+    log(`Killed agent ${name}:`, result.stdout);
     return result.status === 0;
   } catch (e) {
-    console.error(`[Auto-spawn] Failed to kill agent ${name}:`, e);
+    logError(`Failed to kill agent ${name}:`, e);
     return false;
   }
 }
@@ -235,7 +240,7 @@ async function recordAgentOutcome(
       }),
     });
   } catch (e) {
-    console.error("[Auto-spawn] Failed to record outcome:", e);
+    logError("Failed to record outcome:", e);
   }
 }
 
@@ -282,7 +287,7 @@ function cleanupFinishedAgents(): { killed: string[]; reason: Record<string, str
     if (taskMatch) {
       const taskId = taskMatch[1];
       if (completedTaskIds.has(taskId)) {
-        console.log(`[Auto-spawn] Killing ${agent.name}: task #${taskId} completed`);
+        log(`Killing ${agent.name}: task #${taskId} completed`);
         if (killAgent(agent.name)) {
           killed.push(agent.name);
           reason[agent.name] = `Task #${taskId} completed`;
@@ -295,7 +300,7 @@ function cleanupFinishedAgents(): { killed: string[]; reason: Record<string, str
       // Also check log for completion signals (task might not be marked yet)
       const logCompletion = checkLogForCompletion(agent.name);
       if (logCompletion.completed && runningMinutes > 5) {
-        console.log(`[Auto-spawn] Killing ${agent.name}: log shows completion - ${logCompletion.reason}`);
+        log(`Killing ${agent.name}: log shows completion - ${logCompletion.reason}`);
         if (killAgent(agent.name)) {
           killed.push(agent.name);
           reason[agent.name] = `Log completion: ${logCompletion.reason}`;
@@ -307,7 +312,7 @@ function cleanupFinishedAgents(): { killed: string[]; reason: Record<string, str
 
     // Check if research agent running too long (20 min)
     if ((agent.name.includes("researcher") || agent.name.includes("web-research")) && runningMinutes > 20) {
-      console.log(`[Auto-spawn] Killing ${agent.name}: research timeout (${Math.round(runningMinutes)}min)`);
+      log(`Killing ${agent.name}: research timeout (${Math.round(runningMinutes)}min)`);
       if (killAgent(agent.name)) {
         killed.push(agent.name);
         reason[agent.name] = `Research timeout (${Math.round(runningMinutes)}min)`;
@@ -319,7 +324,7 @@ function cleanupFinishedAgents(): { killed: string[]; reason: Record<string, str
 
     // Check if any agent running too long (60 min = probably stuck)
     if (runningMinutes > 60) {
-      console.log(`[Auto-spawn] Killing ${agent.name}: stuck timeout (${Math.round(runningMinutes)}min)`);
+      log(`Killing ${agent.name}: stuck timeout (${Math.round(runningMinutes)}min)`);
       if (killAgent(agent.name)) {
         killed.push(agent.name);
         reason[agent.name] = `Stuck timeout (${Math.round(runningMinutes)}min)`;
@@ -352,7 +357,7 @@ function saveResearchState(state: { lastResearchTime: number; topicIndex: number
   try {
     writeFileSync(RESEARCH_STATE_FILE, JSON.stringify(state, null, 2));
   } catch (e) {
-    console.error("[Auto-spawn] Failed to save research state:", e);
+    logError("Failed to save research state:", e);
   }
 }
 
@@ -446,7 +451,7 @@ async function spawnAgentForTask(task: Task): Promise<{ success: boolean; isRetr
   const retryRec = await getRetryRecommendation(task.id);
 
   if (!retryRec.shouldRetry && retryRec.reason.includes("failed")) {
-    console.log(`[Auto-spawn] Skipping task #${task.id}: ${retryRec.reason}`);
+    log(`Skipping task #${task.id}: ${retryRec.reason}`);
     return { success: false, isRetry: false };
   }
 
@@ -534,12 +539,12 @@ You have access to all Claude Code tools. Be autonomous and thorough.`;
     });
 
     child.on("close", (code) => {
-      console.log(`[Auto-spawn] Agent ${agentName} spawn result:`, output);
+      log(`Agent ${agentName} spawn result:`, output);
       resolve({ success: code === 0, isRetry, strategy });
     });
 
     child.on("error", (err) => {
-      console.error(`[Auto-spawn] Failed to spawn agent:`, err);
+      logError(`Failed to spawn agent:`, err);
       resolve({ success: false, isRetry, strategy });
     });
 
@@ -585,7 +590,7 @@ export async function POST(request: Request) {
           { status: response.status }
         );
       } catch (error) {
-        console.error("[Auto-spawn] Backend request failed, falling back to local:", error);
+        logError("Backend request failed, falling back to local:", error);
       }
     }
 
@@ -595,7 +600,7 @@ export async function POST(request: Request) {
     // FIRST: Clean up finished/stuck agents to free slots
     const cleanupResult = cleanupFinishedAgents();
     if (cleanupResult.killed.length > 0) {
-      console.log(`[Auto-spawn] Cleaned up ${cleanupResult.killed.length} agents:`, cleanupResult.reason);
+      log(`Cleaned up ${cleanupResult.killed.length} agents:`, cleanupResult.reason);
     }
 
     // If cleanup-only mode, return results
@@ -613,8 +618,8 @@ export async function POST(request: Request) {
     const runningAgents = getRunningAgents();
     const researchState = getResearchState();
 
-    console.log(
-      `[Auto-spawn] Pending tasks: ${pendingTasks.length}, Running agents: ${runningAgents.length}`
+    log(
+      `Pending tasks: ${pendingTasks.length}, Running agents: ${runningAgents.length}`
     );
 
     // Check if we should spawn a research agent
@@ -637,7 +642,7 @@ export async function POST(request: Request) {
 
     // Priority 1: Spawn research agent if needed (or forced)
     if ((needsResearch || forceResearch) && !hasResearcher && runningAgents.length < 3) {
-      console.log(`[Auto-spawn] Spawning web research agent (last research: ${Math.round(timeSinceLastResearch / 60000)}min ago)`);
+      log(`Spawning web research agent (last research: ${Math.round(timeSinceLastResearch / 60000)}min ago)`);
       const spawned = await spawnWebResearchAgent();
 
       if (spawned) {
@@ -654,7 +659,7 @@ export async function POST(request: Request) {
     // Priority 2: Spawn task agent if pending tasks exist
     if (pendingTasks.length > 0 && runningAgents.length < 3) {
       const taskToAssign = pendingTasks[0];
-      console.log(`[Auto-spawn] Spawning agent for task: ${taskToAssign.subject}`);
+      log(`Spawning agent for task: ${taskToAssign.subject}`);
       const spawnResult = await spawnAgentForTask(taskToAssign);
 
       return NextResponse.json({
@@ -679,7 +684,7 @@ export async function POST(request: Request) {
       cleanup: cleanupResult.killed.length > 0 ? cleanupResult : undefined,
     });
   } catch (error) {
-    console.error("[Auto-spawn] Error:", error);
+    logError("Error:", error);
     return NextResponse.json(
       { error: "Failed to auto-spawn agent" },
       { status: 500 }
@@ -709,7 +714,7 @@ export async function GET(request: Request) {
           { status: response.status }
         );
       } catch (error) {
-        console.error("[Auto-spawn] Backend fetch failed, falling back to local:", error);
+        logError("Backend fetch failed, falling back to local:", error);
       }
     }
 
@@ -747,7 +752,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error("[Auto-spawn] Error:", error);
+    logError("Error:", error);
     return NextResponse.json(
       { error: "Failed to get auto-spawn status" },
       { status: 500 }

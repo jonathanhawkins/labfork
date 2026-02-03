@@ -39,7 +39,6 @@ export function ServiceWorkerRegistration() {
         });
 
         setRegistration(reg);
-        console.log("[PWA] Service worker registered");
 
         // Check for updates
         reg.addEventListener("updatefound", () => {
@@ -52,7 +51,6 @@ export function ServiceWorkerRegistration() {
               ) {
                 // New version available
                 setUpdateAvailable(true);
-                console.log("[PWA] New version available");
               }
             });
           }
@@ -61,10 +59,10 @@ export function ServiceWorkerRegistration() {
         // Handle controller change (new SW activated)
         navigator.serviceWorker.addEventListener("controllerchange", () => {
           // New service worker took over
-          console.log("[PWA] New service worker activated");
         });
       } catch (error) {
-        console.error("[PWA] Service worker registration failed:", error);
+        // Service worker registration failed - silently continue
+        // Error won't prevent app from working, just no PWA features
       }
     };
 
