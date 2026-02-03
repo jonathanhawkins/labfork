@@ -7,7 +7,7 @@
  * Shows real-time network health, contributor distribution, and performance metrics.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { NetworkHealth } from "@/components/compute/NetworkHealth";
 import { ContributorMap } from "@/components/compute/ContributorMap";
@@ -51,7 +51,7 @@ export default function AnalyticsPage() {
   const { networkStats, recentCompletion } = useNetworkEvents();
 
   // Fetch analytics data
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -71,12 +71,12 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
 
   // Initial fetch and period changes
   useEffect(() => {
     fetchAnalytics();
-  }, [period]);
+  }, [fetchAnalytics]);
 
   // Update analytics when network stats change
   useEffect(() => {

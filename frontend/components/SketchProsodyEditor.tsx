@@ -422,6 +422,10 @@ export default function SketchProsodyEditor({
     resolution,
     chartWidth,
     chartHeight,
+    padding.top,
+    padding.right,
+    padding.bottom,
+    padding.left,
   ]);
 
   // Redraw on state change
@@ -447,7 +451,7 @@ export default function SketchProsodyEditor({
         ),
       };
     },
-    [width, height]
+    [width, height, padding.left, padding.right, padding.top, padding.bottom]
   );
 
   const handleMouseDown = useCallback(
@@ -479,7 +483,7 @@ export default function SketchProsodyEditor({
         setCurrentPoints([point]);
       }
     },
-    [disabled, keyframes, getCanvasPoint, chartWidth, chartHeight]
+    [disabled, keyframes, getCanvasPoint, chartWidth, chartHeight, padding.left, padding.top]
   );
 
   const handleMouseMove = useCallback(
@@ -524,6 +528,8 @@ export default function SketchProsodyEditor({
       activeCurve,
       chartWidth,
       chartHeight,
+      padding.left,
+      padding.top,
     ]
   );
 
@@ -576,6 +582,10 @@ export default function SketchProsodyEditor({
     chartHeight,
     width,
     height,
+    padding.left,
+    padding.right,
+    padding.top,
+    padding.bottom,
   ]);
 
   // Apply preset

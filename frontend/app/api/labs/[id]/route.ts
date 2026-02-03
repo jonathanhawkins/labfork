@@ -16,7 +16,7 @@ import {
 import { getLabSocialStats } from "@/lib/labs/social";
 import type { UpdateLabInput } from "@/lib/labs/types";
 import { canEditLab, canViewLab } from "@/lib/labs/types";
-import { getServerUser } from "@/lib/auth/mock-user";
+import { getServerUser } from "@/lib/auth/server";
 
 interface RouteParams {
   params: Promise<{ id: string }>;

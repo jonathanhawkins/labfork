@@ -82,6 +82,8 @@ function Dropdown({ label, items, isActive, t }: DropdownProps) {
     <div ref={dropdownRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
         className={cn(
           "flex items-center gap-1.5 px-3 py-2 text-sm transition-colors rounded-md min-h-[44px]",
           isActive
@@ -95,7 +97,10 @@ function Dropdown({ label, items, isActive, t }: DropdownProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-64 py-2 bg-background-elevated border border-border rounded-lg shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-100">
+        <div
+          role="menu"
+          className="absolute top-full left-0 mt-1 w-64 py-2 bg-background-elevated border border-border rounded-lg shadow-lg z-50 animate-in fade-in-0 zoom-in-95 duration-100"
+        >
           {items.map((item) => {
             const Icon = item.icon;
             return (
@@ -103,6 +108,7 @@ function Dropdown({ label, items, isActive, t }: DropdownProps) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setIsOpen(false)}
+                role="menuitem"
                 className="flex items-start gap-3 px-4 py-3 hover:bg-accent/50 transition-colors min-h-[48px]"
               >
                 <Icon className="w-5 h-5 mt-0.5 text-muted-foreground" />

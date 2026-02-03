@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
   Heart,
@@ -264,10 +265,12 @@ export function ResultCard({
       {/* Media Preview (not in compact mode) */}
       {!compact && previewImage && (
         <div className="mt-3 rounded-lg overflow-hidden bg-background-darker aspect-video">
-          <img
+          <Image
             src={previewImage.url}
             alt={previewImage.alt || result.title}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            unoptimized
           />
         </div>
       )}

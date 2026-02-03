@@ -112,7 +112,7 @@ export function PaperDetailView({
   };
 
   // Generate citation
-  const generateCitation = (): string => {
+  const generateCitation = useCallback((): string => {
     const authors = paper.metadata.authors;
     const firstAuthor = authors.length > 0 ? authors[0].name : "Unknown";
     const year = paper.metadata.publishedDate
@@ -121,7 +121,7 @@ export function PaperDetailView({
     const etAl = authors.length > 1 ? " et al." : "";
 
     return `${firstAuthor}${etAl} (${year}). ${paper.metadata.title}. ${paper.metadata.url}`;
-  };
+  }, [paper.metadata.authors, paper.metadata.publishedDate, paper.metadata.title, paper.metadata.url]);
 
   // Copy citation to clipboard
   const handleCopyCitation = useCallback(async () => {
@@ -133,7 +133,7 @@ export function PaperDetailView({
     } catch (err) {
       console.error("Failed to copy citation:", err);
     }
-  }, [paper]);
+  }, [generateCitation]);
 
   // Handle accept
   const handleAccept = useCallback(async () => {

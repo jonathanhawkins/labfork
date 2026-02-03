@@ -765,6 +765,11 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Capture refs at start for cleanup
+    const currentContainer = containerRef.current;
+    const currentAgentMeshes = agentMeshesRef.current;
+    const currentAgentLabels = agentLabelsRef.current;
+
     // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(COLORS.sky);
@@ -1568,8 +1573,8 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
-      containerRef.current?.removeEventListener("click", handleClick);
-      containerRef.current?.removeEventListener("mousemove", handleMouseMove);
+      currentContainer?.removeEventListener("click", handleClick);
+      currentContainer?.removeEventListener("mousemove", handleMouseMove);
       cancelAnimationFrame(animationRef.current);
 
       // Traverse entire scene and dispose all geometries/materials (prevent GPU memory leak)
@@ -1595,12 +1600,12 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
       screenMeshesRef.current = [];
 
       // Properly dispose of all labels before clearing (remove DOM elements)
-      agentLabelsRef.current.forEach((label) => {
+      currentAgentLabels.forEach((label) => {
         label.removeFromParent();
         label.element.remove();
       });
-      agentMeshesRef.current.clear();
-      agentLabelsRef.current.clear();
+      currentAgentMeshes.clear();
+      currentAgentLabels.clear();
 
       // Dispose contributor devices
       if (contributorDevicesRef.current) {
@@ -1620,12 +1625,12 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
       const styleSheet = document.getElementById("lab3d-animations");
       if (styleSheet) styleSheet.remove();
 
-      if (containerRef.current) {
+      if (currentContainer) {
         if (renderer.domElement) {
-          containerRef.current.removeChild(renderer.domElement);
+          currentContainer.removeChild(renderer.domElement);
         }
         if (labelRenderer.domElement) {
-          containerRef.current.removeChild(labelRenderer.domElement);
+          currentContainer.removeChild(labelRenderer.domElement);
         }
       }
     };
@@ -1750,11 +1755,12 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
 
   // Cleanup props on unmount
   useEffect(() => {
+    const currentProps = propsRef.current;
     return () => {
-      propsRef.current.forEach(({ type, refs }) => {
+      currentProps.forEach(({ type, refs }) => {
         disposeProp3D(type, refs);
       });
-      propsRef.current.clear();
+      currentProps.clear();
     };
   }, []);
 
@@ -1875,6 +1881,7 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
   // Fetch agent output and apply to monitor screens
   useEffect(() => {
     const abortController = new AbortController();
+    const currentMonitorTextures = monitorTexturesRef.current;
 
     const fetchAndApply = async () => {
       try {
@@ -1910,8 +1917,8 @@ export default function Lab3D({ agents = DEFAULT_AGENTS, activities = [], onAgen
     return () => {
       abortController.abort();
       clearInterval(interval);
-      monitorTexturesRef.current.forEach((t) => t.dispose());
-      monitorTexturesRef.current.clear();
+      currentMonitorTextures.forEach((t) => t.dispose());
+      currentMonitorTextures.clear();
     };
   }, [renderMonitorTexture]);
 

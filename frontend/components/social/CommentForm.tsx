@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Send, X, Loader2, AtSign } from "lucide-react";
 import type { CommentAuthor } from "@/lib/social/comments/types";
@@ -130,10 +131,13 @@ export function CommentForm({
       {!compact && (
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-foreground-muted/20 flex items-center justify-center text-sm font-medium text-foreground-muted overflow-hidden">
           {author.avatar ? (
-            <img
+            <Image
               src={author.avatar}
               alt={author.displayName}
+              width={32}
+              height={32}
               className="w-full h-full object-cover"
+              unoptimized
             />
           ) : (
             author.displayName.charAt(0).toUpperCase()

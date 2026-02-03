@@ -14,7 +14,8 @@ import {
   getLabLineage,
 } from "@/lib/labs/social";
 import { canViewLab } from "@/lib/labs/types";
-import { getServerUser, userToLabOwner } from "@/lib/auth/mock-user";
+import { getServerUser } from "@/lib/auth/server";
+import { userToLabOwner } from "@/lib/auth/mock-user";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -40,7 +41,7 @@ export async function GET(
       );
     }
 
-    // Check visibility
+    // Check visibility (user may be null if not authenticated)
     const user = await getServerUser();
     if (!canViewLab(lab, user?.id)) {
       return NextResponse.json(

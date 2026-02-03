@@ -10,7 +10,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
 // Types matching the seed data
@@ -105,7 +105,7 @@ export function LiveLabView({ className = "" }: { className?: string }) {
   const [seeding, setSeeding] = useState(false);
 
   // Fetch lab data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const response = await fetch("/api/labs/firefly");
       if (!response.ok) throw new Error("Failed to fetch");
@@ -120,10 +120,10 @@ export function LiveLabView({ className = "" }: { className?: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Seed the database
-  const seedDatabase = async () => {
+  const seedDatabase = useCallback(async () => {
     setSeeding(true);
     try {
       const response = await fetch("/api/labs/firefly", {
@@ -139,21 +139,21 @@ export function LiveLabView({ className = "" }: { className?: string }) {
     } finally {
       setSeeding(false);
     }
-  };
+  }, [fetchData]);
 
   useEffect(() => {
     fetchData();
     // Poll for updates every 30 seconds
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData]);
 
   // Auto-seed on first load if no data
   useEffect(() => {
     if (!loading && !data?.lab && !seeding) {
       seedDatabase();
     }
-  }, [loading, data, seeding]);
+  }, [loading, data, seeding, seedDatabase]);
 
   if (loading) {
     return (

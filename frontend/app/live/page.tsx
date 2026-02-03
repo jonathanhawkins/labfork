@@ -138,6 +138,7 @@ export default function LiveTransformPage() {
   const nextPlayTimeRef = useRef<number>(0);
   const isPlayingRef = useRef<boolean>(false);
   const lastOutputChunkRef = useRef<Float32Array | null>(null);
+  const playAudioChunkRef = useRef<((base64Data: string, sampleRate: number) => void) | null>(null);
 
   // Configurable chunk duration (user can adjust)
   const [chunkDurationMs, setChunkDurationMs] = useState(1500);
@@ -166,7 +167,7 @@ export default function LiveTransformPage() {
       }
     };
     fetchStatus();
-  }, [selectedBackend, currentBackend.api]);
+  }, [selectedBackend, currentBackend.api, selectedEmotion]);
 
   // Track if component is mounted to avoid state updates after unmount
   const isMountedRef = useRef(true);
@@ -208,7 +209,8 @@ export default function LiveTransformPage() {
         const msg = JSON.parse(event.data);
 
         if (msg.type === "audio_output") {
-          playAudioChunk(msg.data, msg.sample_rate);
+          // Use ref to get latest playAudioChunk function
+          playAudioChunkRef.current?.(msg.data, msg.sample_rate);
           setLatency(msg.latency_ms || 0);
           setProcessedCount((c) => c + 1);
         } else if (msg.type === "status") {
@@ -314,6 +316,11 @@ export default function LiveTransformPage() {
       console.error("Failed to play audio:", e);
     }
   }, [isMuted, applyCrossfade]);
+
+  // Keep ref updated with latest playAudioChunk function
+  useEffect(() => {
+    playAudioChunkRef.current = playAudioChunk;
+  }, [playAudioChunk]);
 
   const samplesPerChunk = Math.floor((chunkDurationMs / 1000) * INPUT_SAMPLE_RATE);
 

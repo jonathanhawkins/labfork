@@ -9,7 +9,7 @@
  * - Refresh on seed completion
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, FlaskConical, Bell, Settings } from "lucide-react";
@@ -27,15 +27,77 @@ const FILTER_TABS: { id: FilterTab; label: string; types?: ActivityType[] }[] = 
   { id: "labs", label: "Labs", types: ["lab_starred", "lab_forked", "lab_created"] },
 ];
 
+// Fallback demo data for suggested labs
+const DEMO_LABS = [
+  { id: "1", name: "Firefly Network", owner: "spark_research", stars: 128, slug: "firefly-network" },
+  { id: "2", name: "Voice Clone Lab", owner: "voice_pioneer", stars: 89, slug: "voice-clone" },
+  { id: "3", name: "Quant Trading", owner: "ai_researcher", stars: 67, slug: "quant-trading" },
+];
+
 /**
  * Suggested labs sidebar
  */
 function SuggestedLabs() {
-  const suggestedLabs = [
-    { name: "Firefly Network", owner: "spark_research", stars: 128, slug: "firefly-network" },
-    { name: "Voice Clone Lab", owner: "voice_pioneer", stars: 89, slug: "voice-clone" },
-    { name: "Quant Trading", owner: "ai_researcher", stars: 67, slug: "quant-trading" },
-  ];
+  const [suggestedLabs, setSuggestedLabs] = useState<Array<{
+    id: string;
+    name: string;
+    owner: string;
+    stars: number;
+    slug: string;
+  }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchSuggestedLabs() {
+      try {
+        const response = await fetch("/api/labs?sortBy=stars&limit=3&visibility=public");
+        if (!response.ok) {
+          setSuggestedLabs(DEMO_LABS);
+          return;
+        }
+
+        const data = await response.json();
+        if (data.success && data.labs && data.labs.length > 0) {
+          const mapped = data.labs.map((lab: {
+            id: string;
+            name: string;
+            slug: string;
+            owner: { username: string };
+            stats: { stars: number };
+          }) => ({
+            id: lab.id,
+            name: lab.name,
+            owner: lab.owner.username,
+            stars: lab.stats.stars,
+            slug: lab.slug,
+          }));
+          setSuggestedLabs(mapped);
+        } else {
+          setSuggestedLabs(DEMO_LABS);
+        }
+      } catch (error) {
+        console.error("Failed to fetch suggested labs:", error);
+        setSuggestedLabs(DEMO_LABS);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchSuggestedLabs();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 rounded-lg border border-border">
+        <h3 className="text-sm font-medium text-foreground mb-3">
+          Suggested Labs
+        </h3>
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-foreground-muted" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 rounded-lg border border-border">
@@ -60,7 +122,15 @@ function SuggestedLabs() {
                 @{lab.owner} · {lab.stars} stars
               </p>
             </div>
-            <button className="px-2 py-1 rounded text-xs min-h-[44px] bg-foreground-bright/10 text-foreground-bright hover:bg-foreground-bright/20 transition-colors">
+            <button
+              className="px-3 py-1 rounded text-xs min-h-[44px] min-w-[44px] bg-foreground-bright/10 text-foreground-bright hover:bg-foreground-bright/20 transition-colors"
+              aria-label={`Star ${lab.name}`}
+              onClick={(e) => {
+                e.preventDefault();
+                // TODO: Implement star functionality
+                console.log("Star lab:", lab.slug);
+              }}
+            >
               Star
             </button>
           </a>
@@ -72,8 +142,13 @@ function SuggestedLabs() {
 
 /**
  * Trending topics sidebar
+ * NOTE: These are curated editorial topics until we have enough real activity
+ * to compute trending tags dynamically from lab tags and activity data.
  */
 function TrendingTopics() {
+  // Curated trending topics (editorial)
+  // TODO: Replace with API call once we have /api/topics/trending
+  // which aggregates tags from recent labs, results, and activity
   const topics = [
     { tag: "mppt-algorithm", count: 34 },
     { tag: "mesh-networking", count: 28 },
@@ -142,10 +217,19 @@ export function FeedPageClient() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="p-2 min-w-[44px] min-h-[44px] rounded-lg text-foreground-muted hover:text-foreground hover:bg-foreground-muted/10 transition-colors">
+                <a
+                  href="/notifications"
+                  className="p-2 min-w-[44px] min-h-[44px] rounded-lg text-foreground-muted hover:text-foreground hover:bg-foreground-muted/10 transition-colors flex items-center justify-center"
+                  aria-label="View notifications"
+                >
                   <Bell className="w-5 h-5" />
-                </button>
-                <button className="p-2 min-w-[44px] min-h-[44px] rounded-lg text-foreground-muted hover:text-foreground hover:bg-foreground-muted/10 transition-colors">
+                </a>
+                <button
+                  className="p-2 min-w-[44px] min-h-[44px] rounded-lg text-foreground-muted hover:text-foreground hover:bg-foreground-muted/10 transition-colors cursor-not-allowed opacity-50"
+                  aria-label="Feed settings (coming soon)"
+                  title="Feed settings coming soon"
+                  disabled
+                >
                   <Settings className="w-5 h-5" />
                 </button>
               </div>

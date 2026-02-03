@@ -11,6 +11,7 @@ type ContributionStatus = "active" | "paused" | "idle";
 
 interface ContributorDashboardProps {
   onSettingsClick?: () => void;
+  userId?: string;
 }
 
 // Animated counter component
@@ -44,57 +45,141 @@ function AnimatedCounter({ value, suffix = "" }: { value: number; suffix?: strin
   );
 }
 
-// Mock data generator
-function getMockData() {
+// Default fallback data (used when APIs are unavailable)
+function getDefaultData() {
   return {
     status: "active" as ContributionStatus,
-    tasksCompleted: 147,
-    creditsEarned: 2941,
-    currentTask: {
-      name: "Voice Model Training - Batch 47",
-      progress: 67,
-      timeRemaining: "3m 24s",
-      isActive: true,
-    },
-    sessionDuration: "2h 14m",
+    tasksCompleted: 0,
+    creditsEarned: 0,
+    currentTask: null as { name: string; progress: number; timeRemaining: string; isActive: boolean } | null,
+    sessionDuration: "0h 0m",
     networkStats: {
-      activeContributors: 1247,
-      networkComputePower: 847.3,
-      yourRank: 23,
-      contributionPercent: 1.8,
+      activeContributors: 0,
+      networkComputePower: 0,
+      yourRank: 0,
+      contributionPercent: 0,
     },
-    history: [
-      { day: "Mon", tasksCompleted: 18, creditsEarned: 360 },
-      { day: "Tue", tasksCompleted: 23, creditsEarned: 460 },
-      { day: "Wed", tasksCompleted: 21, creditsEarned: 420 },
-      { day: "Thu", tasksCompleted: 25, creditsEarned: 500 },
-      { day: "Fri", tasksCompleted: 19, creditsEarned: 380 },
-      { day: "Sat", tasksCompleted: 22, creditsEarned: 440 },
-      { day: "Sun", tasksCompleted: 19, creditsEarned: 381 },
-    ],
+    history: [] as { day: string; tasksCompleted: number; creditsEarned: number }[],
   };
 }
 
-export function ContributorDashboard({ onSettingsClick }: ContributorDashboardProps) {
-  const [status, setStatus] = useState<ContributionStatus>("active");
-  const [data, setData] = useState(getMockData());
+// Generate history from real task data
+function generateHistoryFromTasks(tasks: { completedAt?: string; reward?: number }[]) {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const history: { day: string; tasksCompleted: number; creditsEarned: number }[] = [];
 
-  // Simulate real-time updates
+  // Group tasks by day of week
+  const dayStats: Record<string, { tasks: number; credits: number }> = {};
+  days.forEach(d => { dayStats[d] = { tasks: 0, credits: 0 }; });
+
+  tasks.forEach(task => {
+    if (task.completedAt) {
+      const date = new Date(task.completedAt);
+      const day = days[date.getDay()];
+      dayStats[day].tasks++;
+      dayStats[day].credits += task.reward || 20;
+    }
+  });
+
+  // Build array starting from current day going back
+  const today = new Date().getDay();
+  for (let i = 6; i >= 0; i--) {
+    const dayIndex = (today - i + 7) % 7;
+    const day = days[dayIndex];
+    history.push({
+      day,
+      tasksCompleted: dayStats[day].tasks,
+      creditsEarned: dayStats[day].credits,
+    });
+  }
+
+  return history;
+}
+
+// Generate demo history when no real data available
+function generateDemoHistory() {
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return days.map(day => ({
+    day,
+    tasksCompleted: Math.floor(Math.random() * 10) + 5,
+    creditsEarned: Math.floor(Math.random() * 200) + 100,
+  }));
+}
+
+export function ContributorDashboard({ onSettingsClick, userId = "anonymous" }: ContributorDashboardProps) {
+  const [status, setStatus] = useState<ContributionStatus>("active");
+  const [data, setData] = useState(getDefaultData());
+  const [sessionStart] = useState(() => Date.now());
+
+  // Fetch real data from APIs
+  const fetchData = useCallback(async () => {
+    try {
+      // Fetch network stats, user credits, and tasks in parallel
+      const [statsRes, creditsRes, tasksRes] = await Promise.all([
+        fetch("/api/compute/stats").catch(() => null),
+        fetch(`/api/credits?userId=${userId}`).catch(() => null),
+        fetch(`/api/compute/tasks?submitter=${userId}&status=completed`).catch(() => null),
+      ]);
+
+      const statsData = statsRes?.ok ? await statsRes.json() : null;
+      const creditsData = creditsRes?.ok ? await creditsRes.json() : null;
+      const tasksData = tasksRes?.ok ? await tasksRes.json() : null;
+
+      // Calculate session duration
+      const sessionMs = Date.now() - sessionStart;
+      const hours = Math.floor(sessionMs / 3600000);
+      const minutes = Math.floor((sessionMs % 3600000) / 60000);
+      const sessionDuration = `${hours}h ${minutes}m`;
+
+      // Build history from real data or generate demo
+      const history = tasksData?.tasks?.length > 0
+        ? generateHistoryFromTasks(tasksData.tasks)
+        : generateDemoHistory();
+
+      setData({
+        status: "active",
+        tasksCompleted: tasksData?.count || 0,
+        creditsEarned: creditsData?.balance || 0,
+        currentTask: null, // Would come from active task assignment
+        sessionDuration,
+        networkStats: {
+          activeContributors: statsData?.onlineDevices || statsData?.totalDevices || 0,
+          networkComputePower: statsData?.totalCompute || 0,
+          yourRank: creditsData?.rank || 0,
+          contributionPercent: statsData?.totalCompute > 0
+            ? Math.round((creditsData?.totalEarned || 0) / statsData.totalCompute * 100 * 10) / 10
+            : 0,
+        },
+        history,
+      });
+    } catch (error) {
+      console.error("Failed to fetch contributor data:", error);
+    }
+  }, [userId, sessionStart]);
+
+  // Initial fetch and polling
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 30000); // Poll every 30s
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // Update session duration periodically
   useEffect(() => {
     if (status !== "active") return;
 
     const interval = setInterval(() => {
+      const sessionMs = Date.now() - sessionStart;
+      const hours = Math.floor(sessionMs / 3600000);
+      const minutes = Math.floor((sessionMs % 3600000) / 60000);
       setData((prev) => ({
         ...prev,
-        currentTask: {
-          ...prev.currentTask,
-          progress: Math.min(100, prev.currentTask.progress + 1),
-        },
+        sessionDuration: `${hours}h ${minutes}m`,
       }));
-    }, 2000);
+    }, 60000); // Update every minute
 
     return () => clearInterval(interval);
-  }, [status]);
+  }, [status, sessionStart]);
 
   const handleTogglePause = useCallback(() => {
     setStatus((prev) => (prev === "active" ? "paused" : "active"));
@@ -224,7 +309,7 @@ export function ContributorDashboard({ onSettingsClick }: ContributorDashboardPr
 
       {/* Current Task Progress */}
       <AnimatePresence mode="wait">
-        {status === "active" && data.currentTask.isActive && (
+        {status === "active" && data.currentTask?.isActive && (
           <TaskProgress
             taskName={data.currentTask.name}
             progress={data.currentTask.progress}

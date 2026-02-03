@@ -8,8 +8,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import type {
   Paper,
   PaperListFilters,
@@ -17,114 +15,16 @@ import type {
   PaperStatus,
 } from "@/lib/papers/types";
 import { fetchPaper, validateInput } from "@/lib/papers/parser";
+import {
+  listPapers,
+  getPaperByMetadataId,
+  getPaperByUrl,
+  createPaper,
+  updatePaper,
+  deletePaper,
+} from "@/lib/papers/repository";
 
 export const dynamic = "force-dynamic";
-
-// Storage path for papers
-const getStoragePath = () => {
-  const projectRoot = join(process.cwd(), "..");
-  const papersDir = join(projectRoot, "data", "papers");
-
-  // Ensure directory exists
-  if (!existsSync(papersDir)) {
-    mkdirSync(papersDir, { recursive: true });
-  }
-
-  return join(papersDir, "papers.json");
-};
-
-// Load papers from storage
-function loadPapers(): Paper[] {
-  const path = getStoragePath();
-  if (!existsSync(path)) {
-    return [];
-  }
-  try {
-    const content = readFileSync(path, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return [];
-  }
-}
-
-// Save papers to storage
-function savePapers(papers: Paper[]): void {
-  const path = getStoragePath();
-  writeFileSync(path, JSON.stringify(papers, null, 2));
-}
-
-// Filter papers based on criteria
-function filterPapers(papers: Paper[], filters: PaperListFilters): Paper[] {
-  let filtered = [...papers];
-
-  // Status filter
-  if (filters.status) {
-    const statuses = Array.isArray(filters.status)
-      ? filters.status
-      : [filters.status];
-    filtered = filtered.filter((p) => statuses.includes(p.status));
-  }
-
-  // Domain filter
-  if (filters.domainSlug) {
-    filtered = filtered.filter((p) => p.domainSlug === filters.domainSlug);
-  }
-
-  // Source filter
-  if (filters.source) {
-    filtered = filtered.filter((p) => p.metadata.source === filters.source);
-  }
-
-  // Search filter
-  if (filters.search) {
-    const searchLower = filters.search.toLowerCase();
-    filtered = filtered.filter((p) => {
-      const titleMatch = p.metadata.title.toLowerCase().includes(searchLower);
-      const abstractMatch = p.metadata.abstract
-        .toLowerCase()
-        .includes(searchLower);
-      const authorMatch = p.metadata.authors.some((a) =>
-        a.name.toLowerCase().includes(searchLower)
-      );
-      return titleMatch || abstractMatch || authorMatch;
-    });
-  }
-
-  // Minimum relevance filter
-  if (filters.minRelevance !== undefined) {
-    filtered = filtered.filter(
-      (p) =>
-        p.analysis && p.analysis.relevanceScore >= filters.minRelevance!
-    );
-  }
-
-  // Sorting
-  const sortBy = filters.sortBy || "addedAt";
-  const sortOrder = filters.sortOrder || "desc";
-  const multiplier = sortOrder === "desc" ? -1 : 1;
-
-  filtered.sort((a, b) => {
-    switch (sortBy) {
-      case "relevanceScore":
-        const scoreA = a.analysis?.relevanceScore ?? 0;
-        const scoreB = b.analysis?.relevanceScore ?? 0;
-        return (scoreA - scoreB) * multiplier;
-      case "citationCount":
-        const citesA = a.metadata.citationCount ?? 0;
-        const citesB = b.metadata.citationCount ?? 0;
-        return (citesA - citesB) * multiplier;
-      case "publishedDate":
-        const dateA = a.metadata.publishedDate || "";
-        const dateB = b.metadata.publishedDate || "";
-        return dateA.localeCompare(dateB) * multiplier;
-      case "addedAt":
-      default:
-        return a.addedAt.localeCompare(b.addedAt) * multiplier;
-    }
-  });
-
-  return filtered;
-}
 
 /**
  * GET /api/papers - List papers
@@ -169,25 +69,8 @@ export async function GET(request: NextRequest) {
     const offset = searchParams.get("offset");
     if (offset) filters.offset = parseInt(offset, 10);
 
-    // Load and filter papers
-    const allPapers = loadPapers();
-    const filtered = filterPapers(allPapers, filters);
-    const total = filtered.length;
-
-    // Apply pagination
-    let papers = filtered;
-    if (filters.offset) {
-      papers = papers.slice(filters.offset);
-    }
-    if (filters.limit) {
-      papers = papers.slice(0, filters.limit);
-    }
-
-    const response: PaperListResponse = {
-      papers,
-      total,
-      filters,
-    };
+    // List papers using repository
+    const response: PaperListResponse = await listPapers(filters);
 
     return NextResponse.json(response);
   } catch (error) {
@@ -223,13 +106,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if paper already exists
-    const papers = loadPapers();
-    const existing = papers.find(
-      (p) =>
-        p.metadata.id === validation.detection?.identifier ||
-        p.metadata.url === input
-    );
+    // Check if paper already exists by metadata ID or URL
+    let existing = null;
+    if (validation.detection?.identifier) {
+      existing = await getPaperByMetadataId(validation.detection.identifier);
+    }
+    if (!existing) {
+      existing = await getPaperByUrl(input);
+    }
 
     if (existing) {
       return NextResponse.json({
@@ -255,13 +139,12 @@ export async function POST(request: NextRequest) {
       result.paper.domainSlug = domainSlug;
     }
 
-    // Save to storage
-    papers.push(result.paper);
-    savePapers(papers);
+    // Save to database
+    const savedPaper = await createPaper(result.paper);
 
     return NextResponse.json({
       success: true,
-      paper: result.paper,
+      paper: savedPaper,
       fromCache: false,
     });
   } catch (error) {
@@ -288,30 +171,28 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const papers = loadPapers();
-    const index = papers.findIndex((p) => p.id === id);
+    // Build updates object
+    const updates: Partial<Paper> = {};
+    if (status) {
+      updates.status = status;
+    }
+    if (notes !== undefined) {
+      updates.notes = notes;
+    }
 
-    if (index === -1) {
+    // Update paper using repository
+    const updatedPaper = await updatePaper(id, updates);
+
+    if (!updatedPaper) {
       return NextResponse.json(
         { error: "Paper not found" },
         { status: 404 }
       );
     }
 
-    // Update fields
-    if (status) {
-      papers[index].status = status;
-    }
-    if (notes !== undefined) {
-      papers[index].notes = notes;
-    }
-    papers[index].updatedAt = new Date().toISOString();
-
-    savePapers(papers);
-
     return NextResponse.json({
       success: true,
-      paper: papers[index],
+      paper: updatedPaper,
     });
   } catch (error) {
     console.error("Error updating paper:", error);
@@ -337,18 +218,15 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const papers = loadPapers();
-    const index = papers.findIndex((p) => p.id === id);
+    // Delete paper using repository
+    const deleted = await deletePaper(id);
 
-    if (index === -1) {
+    if (!deleted) {
       return NextResponse.json(
         { error: "Paper not found" },
         { status: 404 }
       );
     }
-
-    papers.splice(index, 1);
-    savePapers(papers);
 
     return NextResponse.json({
       success: true,

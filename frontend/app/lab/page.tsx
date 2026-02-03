@@ -161,6 +161,18 @@ export default function LabPage() {
   const [newTaskSubject, setNewTaskSubject] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
 
+  // Error states for fetch operations
+  const [fetchErrors, setFetchErrors] = useState<{
+    tasks: string | null;
+    agents: string | null;
+    messages: string | null;
+    health: string | null;
+  }>({ tasks: null, agents: null, messages: null, health: null });
+
+  const setFetchError = useCallback((key: "tasks" | "agents" | "messages" | "health", error: string | null) => {
+    setFetchErrors(prev => ({ ...prev, [key]: error }));
+  }, []);
+
   const {
     activities,
     activeCount,
@@ -286,7 +298,7 @@ export default function LabPage() {
       });
 
     return [...dynamicAgents, ...agents4090];
-  }, [activities, agent4090Status, researchAgents, tasks]);
+  }, [agent4090Status, researchAgents, tasks]);
 
   const activityLog = useMemo(() => {
     return activitiesToLog(activities);
@@ -424,6 +436,7 @@ export default function LabPage() {
     const fetchTasks = async () => {
       try {
         const response = await fetch("/api/tasks");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data.tasks) {
           setTasks(data.tasks);
@@ -431,15 +444,17 @@ export default function LabPage() {
         if (data.agents) {
           setResearchAgents(data.agents);
         }
+        setFetchError("tasks", null);
       } catch (error) {
         console.error("Failed to fetch tasks:", error);
+        setFetchError("tasks", "Unable to load tasks");
       }
     };
 
     fetchTasks();
     const interval = setInterval(fetchTasks, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [setFetchError]);
 
   useEffect(() => {
     const checkAutoSpawn = async () => {
@@ -478,6 +493,7 @@ export default function LabPage() {
     const fetchMessages = async () => {
       try {
         const response = await fetch("/api/lab/agent-messages");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data.messages) {
           setAgentMessages(
@@ -487,34 +503,39 @@ export default function LabPage() {
             }))
           );
         }
+        setFetchError("messages", null);
       } catch (error) {
         console.error("Failed to fetch agent messages:", error);
+        setFetchError("messages", "Unable to load agent messages");
       }
     };
 
     fetchMessages();
     const interval = setInterval(fetchMessages, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [setFetchError]);
 
   // Fetch 4090 agent status (lab-manager)
   useEffect(() => {
     const fetch4090Status = async () => {
       try {
         const response = await fetch("/api/lab/agent-status");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data.agents) {
           setAgent4090Status(data.agents);
         }
+        setFetchError("agents", null);
       } catch (error) {
         console.error("Failed to fetch 4090 agent status:", error);
+        setFetchError("agents", "Unable to load agent status");
       }
     };
 
     fetch4090Status();
     const interval = setInterval(fetch4090Status, 3000); // Poll every 3 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [setFetchError]);
 
   // Fetch agent output from 4090 monitors
   useEffect(() => {
@@ -539,8 +560,10 @@ export default function LabPage() {
     const fetchHealth = async () => {
       try {
         const response = await fetch("/api/lab/health");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         setHealthStatus(data);
+        setFetchError("health", null);
 
         if (data.stuckCount > 0 && autoSpawnEnabled) {
           console.log("[Lab] Detected stuck agents, triggering cleanup...");
@@ -552,13 +575,14 @@ export default function LabPage() {
         }
       } catch (error) {
         console.error("Health check failed:", error);
+        setFetchError("health", "Unable to check system health");
       }
     };
 
     fetchHealth();
     const interval = setInterval(fetchHealth, 30000);
     return () => clearInterval(interval);
-  }, [autoSpawnEnabled]);
+  }, [autoSpawnEnabled, setFetchError]);
 
   useEffect(() => {
     const fetchProgress = async () => {
@@ -1297,6 +1321,22 @@ export default function LabPage() {
               <span className="text-sm">Fullscreen</span>
             </button>
           </div>
+
+          {/* Error Banner */}
+          {Object.values(fetchErrors).some(Boolean) && (
+            <div className="mb-4 p-3 border border-amber-500/30 bg-amber-500/10 rounded-lg">
+              <div className="flex items-center gap-2 text-amber-400 text-sm">
+                <Activity className="w-4 h-4" />
+                <span>Some data could not be loaded:</span>
+              </div>
+              <ul className="mt-2 text-xs text-amber-300/80 space-y-1 pl-6">
+                {fetchErrors.tasks && <li>{fetchErrors.tasks}</li>}
+                {fetchErrors.agents && <li>{fetchErrors.agents}</li>}
+                {fetchErrors.messages && <li>{fetchErrors.messages}</li>}
+                {fetchErrors.health && <li>{fetchErrors.health}</li>}
+              </ul>
+            </div>
+          )}
 
           {/* 3D Visualization */}
           <div className="border border-border rounded overflow-hidden mb-4">

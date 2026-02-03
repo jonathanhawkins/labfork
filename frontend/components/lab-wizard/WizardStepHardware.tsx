@@ -89,13 +89,6 @@ export function WizardStepHardware({
   const [sshError, setSshError] = useState<string | null>(null);
   const [remoteGpu, setRemoteGpu] = useState<GpuInfo | null>(null);
 
-  // Detect local hardware on mount and when switching to local
-  useEffect(() => {
-    if (config.type === "local" && !localGpu) {
-      detectLocalHardware();
-    }
-  }, [config.type]);
-
   // Detect local GPU and Ollama
   const detectLocalHardware = useCallback(async () => {
     setIsDetecting(true);
@@ -126,6 +119,13 @@ export function WizardStepHardware({
       setIsDetecting(false);
     }
   }, [config, onConfigChange]);
+
+  // Detect local hardware on mount and when switching to local
+  useEffect(() => {
+    if (config.type === "local" && !localGpu && !isDetecting) {
+      detectLocalHardware();
+    }
+  }, [config.type, localGpu, isDetecting, detectLocalHardware]);
 
   // Test SSH connection
   const testSSHConnection = useCallback(async () => {

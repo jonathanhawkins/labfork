@@ -5,8 +5,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import type { Paper, PaperAnalysis } from "@/lib/papers/types";
 import {
   generateAnalysisPrompt,
@@ -14,54 +12,9 @@ import {
   PAPER_ANALYSIS_SYSTEM_PROMPT,
 } from "@/lib/papers/prompts";
 import { loadDomainConfig } from "@/lib/domain/loader";
+import { getPaperById, updatePaper } from "@/lib/papers/repository";
 
 export const dynamic = "force-dynamic";
-
-// Storage path for papers
-const getStoragePath = () => {
-  const projectRoot = join(process.cwd(), "..");
-  const papersDir = join(projectRoot, "data", "papers");
-
-  if (!existsSync(papersDir)) {
-    mkdirSync(papersDir, { recursive: true });
-  }
-
-  return join(papersDir, "papers.json");
-};
-
-// Load papers from storage
-function loadPapers(): Paper[] {
-  const path = getStoragePath();
-  if (!existsSync(path)) {
-    return [];
-  }
-  try {
-    const content = readFileSync(path, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return [];
-  }
-}
-
-// Save papers to storage
-function savePapers(papers: Paper[]): void {
-  const path = getStoragePath();
-  writeFileSync(path, JSON.stringify(papers, null, 2));
-}
-
-// Find paper by ID
-function findPaper(papers: Paper[], id: string): Paper | undefined {
-  return papers.find((p) => p.id === id);
-}
-
-// Update paper in list
-function updatePaper(papers: Paper[], updatedPaper: Paper): Paper[] {
-  const index = papers.findIndex((p) => p.id === updatedPaper.id);
-  if (index !== -1) {
-    papers[index] = updatedPaper;
-  }
-  return papers;
-}
 
 /**
  * Call Claude API for analysis
@@ -206,9 +159,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Load papers
-    const papers = loadPapers();
-    const paper = findPaper(papers, paperId);
+    // Get paper from repository
+    const paper = await getPaperById(paperId);
 
     if (!paper) {
       return NextResponse.json(
@@ -228,9 +180,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update status to analyzing
-    paper.status = "analyzing";
-    paper.updatedAt = new Date().toISOString();
-    savePapers(updatePaper(papers, paper));
+    await updatePaper(paperId, { status: "analyzing" });
 
     // Load domain config for context
     let domainConfig = null;
@@ -263,16 +213,16 @@ export async function POST(request: NextRequest) {
     );
 
     if (!apiResult.success || !apiResult.response) {
-      paper.status = "error";
-      paper.error = apiResult.error || "Analysis failed";
-      paper.updatedAt = new Date().toISOString();
-      savePapers(updatePaper(papers, paper));
+      const errorPaper = await updatePaper(paperId, {
+        status: "error",
+        error: apiResult.error || "Analysis failed",
+      });
 
       return NextResponse.json(
         {
           success: false,
-          error: paper.error,
-          paper,
+          error: apiResult.error || "Analysis failed",
+          paper: errorPaper,
         },
         { status: 500 }
       );
@@ -282,16 +232,16 @@ export async function POST(request: NextRequest) {
     const parsed = parseAnalysisResponse(apiResult.response);
 
     if (!parsed.success || !parsed.analysis) {
-      paper.status = "error";
-      paper.error = parsed.error || "Failed to parse analysis";
-      paper.updatedAt = new Date().toISOString();
-      savePapers(updatePaper(papers, paper));
+      const errorPaper = await updatePaper(paperId, {
+        status: "error",
+        error: parsed.error || "Failed to parse analysis",
+      });
 
       return NextResponse.json(
         {
           success: false,
-          error: paper.error,
-          paper,
+          error: parsed.error || "Failed to parse analysis",
+          paper: errorPaper,
           rawResponse: apiResult.response,
         },
         { status: 500 }
@@ -307,18 +257,19 @@ export async function POST(request: NextRequest) {
     };
 
     // Update paper with analysis
-    paper.analysis = analysis;
-    paper.status = "analyzed";
-    paper.updatedAt = new Date().toISOString();
+    const updates: Partial<Paper> = {
+      analysis,
+      status: "analyzed",
+    };
     if (effectiveDomain) {
-      paper.domainSlug = effectiveDomain;
+      updates.domainSlug = effectiveDomain;
     }
 
-    savePapers(updatePaper(papers, paper));
+    const updatedPaper = await updatePaper(paperId, updates);
 
     return NextResponse.json({
       success: true,
-      paper,
+      paper: updatedPaper,
       fromCache: false,
     });
   } catch (error) {

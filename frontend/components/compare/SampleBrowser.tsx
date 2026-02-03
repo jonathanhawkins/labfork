@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +58,7 @@ export function SampleBrowser({
 
   const limit = 20;
 
-  const fetchSamples = async () => {
+  const fetchSamples = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -81,11 +81,11 @@ export function SampleBrowser({
     } finally {
       setLoading(false);
     }
-  };
+  }, [offset, search, filters]);
 
   useEffect(() => {
     fetchSamples();
-  }, [offset, filters]);
+  }, [fetchSamples]);
 
   const handleSearch = () => {
     setOffset(0);

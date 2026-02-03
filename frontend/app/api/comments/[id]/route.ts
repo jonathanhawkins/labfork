@@ -12,6 +12,8 @@ import {
   updateComment,
   deleteComment,
   getReplies,
+  canEditComment,
+  canDeleteComment,
 } from "@/lib/social/comments";
 
 interface RouteParams {
@@ -94,7 +96,14 @@ export async function PATCH(
       );
     }
 
-    // TODO: Verify user has permission to edit
+    // Verify user has permission to edit
+    const userId = request.headers.get("x-user-id");
+    if (!canEditComment(comment, userId || undefined)) {
+      return NextResponse.json(
+        { error: "You do not have permission to edit this comment" },
+        { status: 403 }
+      );
+    }
 
     const { content } = body;
 
@@ -158,7 +167,14 @@ export async function DELETE(
       );
     }
 
-    // TODO: Verify user has permission to delete
+    // Verify user has permission to delete
+    const userId = request.headers.get("x-user-id");
+    if (!canDeleteComment(comment, userId || undefined)) {
+      return NextResponse.json(
+        { error: "You do not have permission to delete this comment" },
+        { status: 403 }
+      );
+    }
 
     const deleted = await deleteComment(id);
 

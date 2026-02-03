@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
   MessageCircle,
@@ -281,10 +282,13 @@ export function CommentThread({
         {/* Avatar */}
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-foreground-muted/20 flex items-center justify-center text-sm font-medium text-foreground-muted overflow-hidden">
           {comment.author.avatar ? (
-            <img
+            <Image
               src={comment.author.avatar}
               alt={comment.author.displayName}
+              width={32}
+              height={32}
               className="w-full h-full object-cover"
+              unoptimized
             />
           ) : (
             comment.author.displayName.charAt(0).toUpperCase()

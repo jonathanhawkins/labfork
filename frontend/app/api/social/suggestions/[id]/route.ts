@@ -11,6 +11,7 @@ import {
   getSuggestionById,
   updateSuggestion,
   deleteSuggestion,
+  canEditSuggestion,
 } from "@/lib/social/suggestions";
 
 interface RouteParams {
@@ -65,7 +66,14 @@ export async function PATCH(
       );
     }
 
-    // TODO: Verify user has permission to update
+    // Verify user has permission to update
+    const userId = request.headers.get("x-user-id");
+    if (!canEditSuggestion(suggestion, userId || undefined)) {
+      return NextResponse.json(
+        { error: "You do not have permission to update this suggestion" },
+        { status: 403 }
+      );
+    }
 
     const updated = await updateSuggestion(id, body, body.changedBy);
 
@@ -104,7 +112,14 @@ export async function DELETE(
       );
     }
 
-    // TODO: Verify user has permission to delete
+    // Verify user has permission to delete
+    const userId = request.headers.get("x-user-id");
+    if (!canEditSuggestion(suggestion, userId || undefined)) {
+      return NextResponse.json(
+        { error: "You do not have permission to delete this suggestion" },
+        { status: 403 }
+      );
+    }
 
     const deleted = await deleteSuggestion(id);
 

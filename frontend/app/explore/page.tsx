@@ -136,12 +136,13 @@ export default function ExplorePage() {
   useEffect(() => {
     fetchLabs(true);
     fetchFeaturedLabs();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchFeaturedLabs]); // fetchLabs excluded intentionally - filter useEffect handles it
 
   // Refetch on filter change
   useEffect(() => {
     fetchLabs(true);
-  }, [searchQuery, selectedDomain, sortBy]);
+  }, [fetchLabs]);
 
   // Load more
   const loadMore = () => {
@@ -154,7 +155,8 @@ export default function ExplorePage() {
     if (page > 1) {
       fetchLabs(false);
     }
-  }, [page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]); // fetchLabs excluded - we only want this to fire on page change
 
   return (
     <div className="min-h-screen bg-background">

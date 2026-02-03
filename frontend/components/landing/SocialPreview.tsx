@@ -6,7 +6,7 @@
 
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 interface ActivityItem {
   id: string;
@@ -18,7 +18,8 @@ interface ActivityItem {
   details?: string;
 }
 
-const mockActivity: ActivityItem[] = [
+// Fallback demo activities when no real data available
+const demoActivities: ActivityItem[] = [
   {
     id: "1",
     type: "discovery",
@@ -64,6 +65,37 @@ const mockActivity: ActivityItem[] = [
     details: "Have you tried combining this with hierarchical RL?",
   },
 ];
+
+// Map activity types from API to display types
+function mapActivityType(apiType: string): ActivityItem["type"] {
+  const typeMap: Record<string, ActivityItem["type"]> = {
+    lab_starred: "star",
+    lab_forked: "fork",
+    comment_added: "comment",
+    result_published: "discovery",
+    collaboration_started: "collaboration",
+    lab_created: "discovery",
+    task_completed: "discovery",
+  };
+  return typeMap[apiType] || "discovery";
+}
+
+// Format relative time
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
 
 const typeIcons: Record<string, React.ReactNode> = {
   star: (
@@ -135,6 +167,47 @@ function ActivityCard({ item }: { item: ActivityItem }) {
 }
 
 export function SocialPreview() {
+  const [activities, setActivities] = useState<ActivityItem[]>(demoActivities);
+
+  // Fetch real activity data
+  const fetchActivities = useCallback(async () => {
+    try {
+      const response = await fetch("/api/activity?publicOnly=true&limit=10");
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (data.activities && data.activities.length > 0) {
+        const mapped: ActivityItem[] = data.activities.map((a: {
+          id: string;
+          type: string;
+          actor?: { displayName?: string; username?: string };
+          target?: { title?: string; name?: string };
+          data?: { description?: string };
+          createdAt: string;
+        }) => ({
+          id: a.id,
+          type: mapActivityType(a.type),
+          user: a.actor?.displayName || a.actor?.username || "Anonymous",
+          avatar: (a.actor?.displayName || a.actor?.username || "A").charAt(0).toUpperCase(),
+          target: a.target?.title || a.target?.name || "Research",
+          time: formatRelativeTime(a.createdAt),
+          details: a.data?.description,
+        }));
+        setActivities(mapped);
+      }
+    } catch (error) {
+      console.error("Failed to fetch activities:", error);
+      // Keep using demo data on error
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActivities();
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchActivities, 60000);
+    return () => clearInterval(interval);
+  }, [fetchActivities]);
+
   return (
     <section className="py-24 bg-gradient-to-b from-slate-900 to-slate-950">
       <div className="max-w-6xl mx-auto px-6">
@@ -229,7 +302,7 @@ export function SocialPreview() {
               <span className="text-sm text-gray-500">Global Feed</span>
             </div>
             <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
-              {mockActivity.map((item) => (
+              {activities.map((item) => (
                 <ActivityCard key={item.id} item={item} />
               ))}
             </div>

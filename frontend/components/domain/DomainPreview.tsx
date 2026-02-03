@@ -145,6 +145,9 @@ export function DomainPreview({
     [accentColor]
   );
 
+  // Stable props count to avoid scene recreation on props array changes
+  const propsCount = useMemo(() => props.length, [props.length]);
+
   // Initialize scene
   useEffect(() => {
     if (!containerRef.current) return;
@@ -249,7 +252,7 @@ export function DomainPreview({
       [-0.3, 0.25, 0.4],
     ];
 
-    const propsToAdd = Math.min(props.length || 3, 5);
+    const propsToAdd = Math.min(propsCount || 3, 5);
     for (let i = 0; i < propsToAdd; i++) {
       const pos = propPositions[i];
       const isAccent = i % 2 === 1;
@@ -285,8 +288,8 @@ export function DomainPreview({
     return () => {
       cancelAnimationFrame(animationRef.current);
 
-      if (rendererRef.current && containerRef.current) {
-        containerRef.current.removeChild(rendererRef.current.domElement);
+      if (rendererRef.current && container) {
+        container.removeChild(rendererRef.current.domElement);
         rendererRef.current.dispose();
       }
 
@@ -302,7 +305,8 @@ export function DomainPreview({
         }
       });
     };
-  }, [backgroundStyle, height]); // Only reinit on style change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backgroundStyle, height, propsCount]); // primaryNum/accentNum intentionally excluded - handled by color update effect
 
   // Update colors when they change
   useEffect(() => {

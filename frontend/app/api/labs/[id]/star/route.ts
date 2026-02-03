@@ -16,7 +16,7 @@ import {
   toggleStar,
 } from "@/lib/labs/social";
 import { canViewLab } from "@/lib/labs/types";
-import { getServerUser } from "@/lib/auth/mock-user";
+import { getServerUser } from "@/lib/auth/server";
 
 interface RouteParams {
   params: Promise<{ id: string }>;

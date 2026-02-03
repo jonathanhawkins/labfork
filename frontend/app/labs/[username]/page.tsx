@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import {
   User,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react";
 import { LabCard } from "@/components/labs/LabCard";
 import type { Lab } from "@/lib/labs/types";
-import { getCurrentUser } from "@/lib/auth/mock-user";
+import { getClientUser } from "@/lib/auth/client";
 
 interface UserLabsPageProps {
   params: {
@@ -28,6 +29,10 @@ interface UserLabsPageProps {
 
 export default function UserLabsPage({ params }: UserLabsPageProps) {
   const { username } = params;
+
+  // Clerk authentication
+  const { user: clerkUser, isLoaded: isUserLoaded } = useUser();
+  const currentUser = getClientUser(clerkUser);
 
   const [labs, setLabs] = useState<Lab[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,8 +60,7 @@ export default function UserLabsPage({ params }: UserLabsPageProps) {
         setTotalStars(stars);
         setTotalForks(forks);
 
-        // Check if this is the current user
-        const currentUser = getCurrentUser();
+        // Check if this is the current user using proper auth
         setIsCurrentUser(currentUser?.username === username);
       } else {
         setError(data.error || "Failed to load labs");
@@ -67,13 +71,17 @@ export default function UserLabsPage({ params }: UserLabsPageProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [username]);
+  }, [username, currentUser]);
 
   useEffect(() => {
-    fetchUserLabs();
-  }, [fetchUserLabs]);
+    // Only fetch labs once user auth is loaded
+    if (isUserLoaded) {
+      fetchUserLabs();
+    }
+  }, [isUserLoaded, fetchUserLabs]);
 
-  if (isLoading) {
+  // Show loading state while user auth or labs are loading
+  if (!isUserLoaded || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-foreground-muted" />

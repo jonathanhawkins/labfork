@@ -70,6 +70,10 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
     if (currentStep === 3 && !gpuInfo && !isDetecting) {
       handleDetectDevice();
     }
+    // Dependencies intentionally limited to currentStep:
+    // - gpuInfo and isDetecting are checked as guards but shouldn't trigger re-runs
+    // - Effect should only fire when transitioning to step 3, not when detection state changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
 
   async function handleDetectDevice() {

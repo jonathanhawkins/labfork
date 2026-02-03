@@ -267,6 +267,33 @@ interface ComputeNetworkStats {
   totalCompute: number; // TFLOPS
 }
 
+// ============== Demo Data (Stable Constants) ==============
+
+// Demo agents to show when no real agents are running
+const DEMO_AGENTS: Agent[] = [
+  { id: "opus", name: "Opus", color: COLORS.opus, position: [-3, 0, -2], task: "Analyzing research papers", status: "working" },
+  { id: "codex", name: "Codex", color: COLORS.codex, position: [3, 0, -2], task: "Implementing prosody model", status: "working" },
+  { id: "explorer", name: "Scout", color: COLORS.explorer, position: [-3, 0, 2], task: "Searching for synergies", status: "thinking" },
+  { id: "planner", name: "Planner", color: COLORS.planner, position: [3, 0, 2], task: "Scheduling training runs", status: "idle" },
+];
+
+// Demo activities when no real activities
+const DEMO_ACTIVITIES = [
+  { time: new Date(Date.now() - 30000), agent: "Opus", action: "Completed analysis of voice prosody patterns" },
+  { time: new Date(Date.now() - 60000), agent: "Codex", action: "Training step 2847/5000 - loss: 0.0234" },
+  { time: new Date(Date.now() - 120000), agent: "Scout", action: "Found synergy: EmoProsody + StyleTransfer" },
+  { time: new Date(Date.now() - 180000), agent: "Planner", action: "Scheduled overnight training batch" },
+  { time: new Date(Date.now() - 240000), agent: "Opus", action: "Reviewing MaskGCT paper implementation" },
+];
+
+// Demo compute stats as fallback
+const DEMO_COMPUTE_STATS: ComputeNetworkStats = {
+  totalDevices: 12,
+  busyDevices: 8,
+  tierCounts: { power: 2, standard: 5, crowd: 5 },
+  totalCompute: 45.2,
+};
+
 export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
   const [agent4090Status, setAgent4090Status] = useState<Agent4090Status[]>([]);
   const [gpuStats, setGpuStats] = useState<SanitizedGpuStats | null>(null);
@@ -310,14 +337,6 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
   // Use workers count if available, otherwise fall back to legacy
   const activeCount = workersActiveCount > 0 ? workersActiveCount : legacyActiveCount;
 
-  // Demo agents to show when no real agents are running
-  const DEMO_AGENTS: Agent[] = [
-    { id: "opus", name: "Opus", color: COLORS.opus, position: [-3, 0, -2], task: "Analyzing research papers", status: "working" },
-    { id: "codex", name: "Codex", color: COLORS.codex, position: [3, 0, -2], task: "Implementing prosody model", status: "working" },
-    { id: "explorer", name: "Scout", color: COLORS.explorer, position: [-3, 0, 2], task: "Searching for synergies", status: "thinking" },
-    { id: "planner", name: "Planner", color: COLORS.planner, position: [3, 0, 2], task: "Scheduling training runs", status: "idle" },
-  ];
-
   // Build agent list from real running agents, fall back to demo agents
   const agents = useMemo<Agent[]>(() => {
     const POSITION_PRESETS: [number, number, number][] = [
@@ -359,15 +378,6 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
     // Priority 3: Fall back to demo agents
     return realAgents.length > 0 ? realAgents : DEMO_AGENTS;
   }, [workersAgents, isWorkersDemo, agent4090Status]);
-
-  // Demo activities when no real activities
-  const DEMO_ACTIVITIES = [
-    { time: new Date(Date.now() - 30000), agent: "Opus", action: "Completed analysis of voice prosody patterns" },
-    { time: new Date(Date.now() - 60000), agent: "Codex", action: "Training step 2847/5000 - loss: 0.0234" },
-    { time: new Date(Date.now() - 120000), agent: "Scout", action: "Found synergy: EmoProsody + StyleTransfer" },
-    { time: new Date(Date.now() - 180000), agent: "Planner", action: "Scheduled overnight training batch" },
-    { time: new Date(Date.now() - 240000), agent: "Opus", action: "Reviewing MaskGCT paper implementation" },
-  ];
 
   // Sanitized activity log with demo fallback
   const activityLog = useMemo(() => {
@@ -431,14 +441,6 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
     const interval = setInterval(fetchGpuStats, 10000);
     return () => clearInterval(interval);
   }, []);
-
-  // Demo compute stats as fallback
-  const DEMO_COMPUTE_STATS: ComputeNetworkStats = {
-    totalDevices: 12,
-    busyDevices: 8,
-    tierCounts: { power: 2, standard: 5, crowd: 5 },
-    totalCompute: 45.2,
-  };
 
   // Fetch compute network stats
   useEffect(() => {

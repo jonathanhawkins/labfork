@@ -7,6 +7,7 @@
  */
 
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
   Plus,
@@ -230,10 +231,13 @@ export function FeedItem({
               title={actor.displayName}
             >
               {actor.avatar ? (
-                <img
+                <Image
                   src={actor.avatar}
                   alt={actor.displayName}
+                  width={24}
+                  height={24}
                   className="w-full h-full object-cover"
+                  unoptimized
                 />
               ) : (
                 actor.displayName.charAt(0).toUpperCase()

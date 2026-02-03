@@ -51,17 +51,21 @@ interface RunRecord {
 export default function ResearchPage() {
   const [data, setData] = useState<ResearchData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchData() {
       try {
         const res = await fetch('/api/research')
-        if (res.ok) {
-          const json = await res.json()
-          setData(json)
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`)
         }
+        const json = await res.json()
+        setData(json)
+        setError(null)
       } catch (e) {
         console.error('Failed to fetch research data:', e)
+        setError(e instanceof Error ? e.message : 'Failed to load research data')
       } finally {
         setLoading(false)
       }
@@ -113,6 +117,19 @@ export default function ResearchPage() {
     return (
       <div className="min-h-screen bg-background p-8 flex items-center justify-center">
         <div className="text-muted-foreground">Loading research data...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background p-8 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-foreground mb-2">Unable to load research data</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
       </div>
     )
   }

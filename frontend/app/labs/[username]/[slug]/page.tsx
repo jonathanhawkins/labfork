@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import {
   Activity,
@@ -28,8 +29,28 @@ import { LabHeader } from "@/components/labs/LabHeader";
 import { ShareDialog } from "@/components/labs/ShareDialog";
 import { FireflyLabContent } from "@/components/labs/FireflyLabContent";
 import { LiveLabViewer } from "@/components/labs/LiveLabViewer";
+import { ActivityFeed } from "@/components/social/ActivityFeed";
 import type { Lab } from "@/lib/labs/types";
-import { getCurrentUser } from "@/lib/auth/mock-user";
+import { getClientUser } from "@/lib/auth/client";
+import type { User } from "@/lib/auth/mock-user";
+import {
+  CheckCircle2,
+  Circle,
+  AlertCircle,
+} from "lucide-react";
+
+interface Task {
+  id: string;
+  subject: string;
+  description?: string;
+  status: "pending" | "in_progress" | "completed";
+  owner?: string;
+  blockedBy?: string[];
+  blocks?: string[];
+  activeForm?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 interface LabPortalPageProps {
   params: {
@@ -44,6 +65,10 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
   const { username, slug } = params;
   const router = useRouter();
 
+  // Clerk authentication
+  const { user: clerkUser, isLoaded: isUserLoaded } = useUser();
+  const currentUser = getClientUser(clerkUser);
+
   const [lab, setLab] = useState<Lab | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +76,10 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
   const [isOwner, setIsOwner] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+
+  // Tasks state
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
 
   // Fetch lab data
   const fetchLab = useCallback(async () => {
@@ -81,8 +110,7 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
         setLab(detailData.lab);
         setIsStarred(detailData.social?.isStarred || false);
 
-        // Check if current user is owner
-        const currentUser = getCurrentUser();
+        // Check if current user is owner using proper auth
         setIsOwner(currentUser?.id === detailData.lab.owner.id);
       } else {
         setError(detailData.error || "Failed to load lab");
@@ -93,11 +121,42 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [username, slug]);
+  }, [username, slug, currentUser]);
+
+  // Wait for both user and lab data to load
+  useEffect(() => {
+    // Only fetch lab once user auth is loaded
+    if (isUserLoaded) {
+      fetchLab();
+    }
+  }, [isUserLoaded, fetchLab]);
+
+  // Fetch tasks for this lab
+  const fetchTasks = useCallback(async () => {
+    if (!lab) return;
+
+    try {
+      setTasksLoading(true);
+      const response = await fetch("/api/tasks");
+      const data = await response.json();
+
+      if (data.tasks) {
+        // Filter tasks for this lab owner (since tasks don't have labId yet)
+        // For now, show all tasks - in the future, filter by labId
+        setTasks(data.tasks);
+      }
+    } catch (err) {
+      console.error("Failed to fetch tasks:", err);
+    } finally {
+      setTasksLoading(false);
+    }
+  }, [lab]);
 
   useEffect(() => {
-    fetchLab();
-  }, [fetchLab]);
+    if (activeTab === "tasks" && lab) {
+      fetchTasks();
+    }
+  }, [activeTab, lab, fetchTasks]);
 
   // Handle star toggle
   const handleStarToggle = (starred: boolean, count: number) => {
@@ -123,7 +182,8 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
     ...(isOwner ? [{ id: "settings" as const, label: "Settings", icon: Settings }] : []),
   ];
 
-  if (isLoading) {
+  // Show loading state while user auth or lab data is loading
+  if (!isUserLoaded || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-foreground-muted" />
@@ -321,7 +381,7 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
           <div className="max-w-3xl">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-medium text-foreground-bright">
-                Tasks ({lab.stats.tasks})
+                Tasks ({tasks.length})
               </h2>
               {isOwner && (
                 <button className="px-3 py-1.5 text-sm rounded-lg bg-foreground-bright text-background hover:bg-white transition-colors">
@@ -330,15 +390,71 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
               )}
             </div>
 
-            <div className="text-center py-12 border border-border rounded-lg">
-              <ListTodo className="w-12 h-12 mx-auto text-foreground-subtle mb-3" />
-              <p className="text-sm text-foreground-muted">
-                No tasks yet
-              </p>
-              <p className="text-xs text-foreground-subtle mt-1">
-                Tasks will appear here when created
-              </p>
-            </div>
+            {tasksLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-foreground-muted" />
+              </div>
+            ) : tasks.length > 0 ? (
+              <div className="space-y-3">
+                {tasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="p-4 rounded-lg border border-border hover:border-foreground-muted/50 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Status Icon */}
+                      <div className="mt-0.5">
+                        {task.status === "completed" && (
+                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        )}
+                        {task.status === "in_progress" && (
+                          <AlertCircle className="w-5 h-5 text-blue-400 animate-pulse" />
+                        )}
+                        {task.status === "pending" && (
+                          <Circle className="w-5 h-5 text-foreground-subtle" />
+                        )}
+                      </div>
+
+                      {/* Task Content */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-medium text-foreground-bright mb-1">
+                          {task.subject}
+                        </h3>
+                        {task.description && (
+                          <p className="text-xs text-foreground-muted mb-2 line-clamp-2">
+                            {task.description}
+                          </p>
+                        )}
+                        {task.activeForm && task.status === "in_progress" && (
+                          <p className="text-xs text-blue-400 italic">
+                            {task.activeForm}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 mt-2 text-xs text-foreground-subtle">
+                          <span className="capitalize">{task.status.replace("_", " ")}</span>
+                          {task.owner && <span>By {task.owner}</span>}
+                          {task.blockedBy && task.blockedBy.length > 0 && (
+                            <span className="text-amber-400">
+                              Blocked by {task.blockedBy.length} task(s)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 border border-border rounded-lg">
+                <ListTodo className="w-12 h-12 mx-auto text-foreground-subtle mb-3" />
+                <p className="text-sm text-foreground-muted">
+                  No tasks yet
+                </p>
+                <p className="text-xs text-foreground-subtle mt-1">
+                  Tasks will appear here when created
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -349,15 +465,13 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
               Recent Activity
             </h2>
 
-            <div className="text-center py-12 border border-border rounded-lg">
-              <Activity className="w-12 h-12 mx-auto text-foreground-subtle mb-3" />
-              <p className="text-sm text-foreground-muted">
-                No activity yet
-              </p>
-              <p className="text-xs text-foreground-subtle mt-1">
-                Activity will appear here as work progresses
-              </p>
-            </div>
+            <ActivityFeed
+              labId={lab.id}
+              liveUpdates={true}
+              updateInterval={30000}
+              groupByDate={true}
+              emptyMessage="No activity yet. Activity will appear here as work progresses on this lab."
+            />
           </div>
         )}
 

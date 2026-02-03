@@ -55,7 +55,8 @@ export default function ProsodyMatrixVisualizer({
   const particlePositionsRef = useRef<Float32Array | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const currentContainer = containerRef.current;
+    if (!currentContainer) return;
 
     // Scene setup
     const scene = new THREE.Scene();
@@ -65,7 +66,7 @@ export default function ProsodyMatrixVisualizer({
     // Camera
     const camera = new THREE.PerspectiveCamera(
       60,
-      containerRef.current.clientWidth / containerRef.current.clientHeight,
+      currentContainer.clientWidth / currentContainer.clientHeight,
       0.1,
       100
     );
@@ -74,9 +75,9 @@ export default function ProsodyMatrixVisualizer({
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+    renderer.setSize(currentContainer.clientWidth, currentContainer.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    containerRef.current.appendChild(renderer.domElement);
+    currentContainer.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     // Controls
@@ -250,12 +251,12 @@ export default function ProsodyMatrixVisualizer({
 
     // Handle resize
     const handleResize = () => {
-      if (!containerRef.current) return;
-      camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+      if (!currentContainer) return;
+      camera.aspect = currentContainer.clientWidth / currentContainer.clientHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      renderer.setSize(currentContainer.clientWidth, currentContainer.clientHeight);
     };
-    
+
     window.addEventListener("resize", handleResize);
 
     // Cleanup
@@ -263,8 +264,8 @@ export default function ProsodyMatrixVisualizer({
       window.removeEventListener("resize", handleResize);
       cancelAnimationFrame(animationRef.current);
       renderer.dispose();
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
+      if (currentContainer && renderer.domElement) {
+        currentContainer.removeChild(renderer.domElement);
       }
     };
   }, []);

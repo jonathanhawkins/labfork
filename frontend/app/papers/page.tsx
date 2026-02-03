@@ -63,7 +63,7 @@ export default function PapersPage() {
   // Initial fetch
   useEffect(() => {
     fetchPapers();
-  }, []);
+  }, [fetchPapers]);
 
   // Handle paper click
   const handlePaperClick = useCallback((paper: Paper) => {

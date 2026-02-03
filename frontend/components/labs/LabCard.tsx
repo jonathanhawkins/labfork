@@ -21,6 +21,7 @@ import {
   Bot,
   Dna,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import type { Lab } from "@/lib/labs/types";
 import { getLabPath, formatLabStats } from "@/lib/labs/types";
@@ -34,6 +35,8 @@ export interface LabCardProps {
   showStar?: boolean;
   /** Is starred by current user */
   isStarred?: boolean;
+  /** Is star action loading */
+  isStarLoading?: boolean;
   /** Star click handler */
   onStarClick?: () => void;
   /** Card click handler (instead of navigation) */
@@ -106,6 +109,7 @@ export function LabCard({
   compact = false,
   showStar = true,
   isStarred = false,
+  isStarLoading = false,
   onStarClick,
   onClick,
   isSelected = false,
@@ -167,19 +171,27 @@ export function LabCard({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onStarClick?.();
+              if (!isStarLoading) {
+                onStarClick?.();
+              }
             }}
+            disabled={isStarLoading}
             className={cn(
-              "flex-shrink-0 p-1.5 rounded-lg transition-colors",
+              "flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors",
+              isStarLoading && "opacity-50 cursor-wait",
               isStarred
                 ? "text-yellow-400 hover:text-yellow-300"
-                : "text-foreground-subtle hover:text-foreground-muted"
+                : "text-foreground-subtle hover:text-foreground-muted hover:bg-foreground-muted/10"
             )}
-            title={isStarred ? "Unstar" : "Star"}
+            aria-label={isStarLoading ? "Updating star..." : isStarred ? `Unstar ${lab.name}` : `Star ${lab.name}`}
+            aria-pressed={isStarred}
+            aria-busy={isStarLoading}
           >
-            <Star
-              className={cn("w-4 h-4", isStarred && "fill-current")}
-            />
+            {isStarLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Star className={cn("w-4 h-4", isStarred && "fill-current")} />
+            )}
           </button>
         )}
       </div>

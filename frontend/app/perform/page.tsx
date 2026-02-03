@@ -163,7 +163,8 @@ export default function RecordPage() {
           localStorage.removeItem("voice_recording_session_id");
         });
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - session is used as guard to prevent duplicate restoration
 
   const fetchScriptLines = async () => {
     try {

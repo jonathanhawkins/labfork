@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
   Bell,
@@ -245,10 +246,13 @@ export function NotificationBell({
                     {/* Actor avatar or icon */}
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-foreground-muted/10 flex items-center justify-center">
                       {notification.actor?.avatar ? (
-                        <img
+                        <Image
                           src={notification.actor.avatar}
                           alt=""
+                          width={32}
+                          height={32}
                           className="w-full h-full rounded-full object-cover"
+                          unoptimized
                         />
                       ) : (
                         <Icon className="w-4 h-4 text-foreground-muted" />

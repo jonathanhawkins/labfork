@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getLabsByUser } from "@/lib/labs/repository";
-import { getServerUser, getUserByUsername } from "@/lib/auth/mock-user";
+import { getServerUser } from "@/lib/auth/server";
+import { getUserByUsername } from "@/lib/auth/mock-user";
 
 interface RouteParams {
   params: Promise<{ username: string }>;
