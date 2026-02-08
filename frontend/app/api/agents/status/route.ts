@@ -12,7 +12,8 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 const AGENTS_API_URL =
-  process.env.NEXT_PUBLIC_AGENTS_API_URL || 'http://localhost:8787';
+  process.env.NEXT_PUBLIC_AGENTS_API_URL ||
+  'https://labfork-agents.jonathan-hawkins.workers.dev';
 
 // Demo agents for fallback when API is unavailable
 const DEMO_AGENTS = [

@@ -449,21 +449,19 @@ export function PublicLabView({ showSuggestions = false }: PublicLabViewProps) {
         const response = await fetch("/api/compute/devices");
         const data = await response.json();
 
-        if (data.success && data.devices && data.devices.length > 0) {
-          const devices = data.devices;
-          const tierCounts = {
-            power: devices.filter((d: { tier: string }) => d.tier === 'power').length,
-            standard: devices.filter((d: { tier: string }) => d.tier === 'standard').length,
-            crowd: devices.filter((d: { tier: string }) => d.tier === 'crowd').length,
-          };
-          const busyDevices = devices.filter((d: { status: string }) => d.status === 'busy').length;
-          const totalCompute = devices.reduce((acc: number, d: { compute?: number }) => acc + (d.compute || 0), 0);
-
+        if (data.devices && data.devices.length > 0) {
           setComputeNetworkStats({
-            totalDevices: data.count,
-            busyDevices,
-            tierCounts,
-            totalCompute,
+            totalDevices: data.count || data.devices.length,
+            busyDevices: data.devices.filter((d: { status: string }) => d.status === 'busy').length,
+            tierCounts: data.byTier || {
+              power: data.devices.filter((d: { tier: string }) => d.tier === 'power').length,
+              standard: data.devices.filter((d: { tier: string }) => d.tier === 'standard').length,
+              crowd: data.devices.filter((d: { tier: string }) => d.tier === 'crowd').length,
+            },
+            totalCompute: data.totalCompute || data.devices.reduce(
+              (acc: number, d: { capabilities?: { compute?: number } }) =>
+                acc + (d.capabilities?.compute || 0), 0
+            ),
           });
         } else {
           // No real devices, use demo stats
