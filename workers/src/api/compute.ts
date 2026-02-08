@@ -303,28 +303,32 @@ compute.patch('/devices/:id', async (c) => {
       `).bind(device.tier, device.tier, device.tier).first<ComputeTask>();
 
       if (pendingTask) {
-        // Assign task to device
-        await c.env.DB.prepare(`
+        // Assign task to device (with race condition check)
+        const assignResult = await c.env.DB.prepare(`
           UPDATE compute_tasks
           SET status = 'assigned', assigned_device_id = ?, assigned_at = ?
-          WHERE id = ?
+          WHERE id = ? AND status = 'pending'
         `).bind(deviceId, now, pendingTask.id).run();
 
-        await c.env.DB.prepare(`
-          UPDATE compute_devices
-          SET status = 'busy', current_task_id = ?, updated_at = ?
-          WHERE id = ?
-        `).bind(pendingTask.id, now, deviceId).run();
+        if (assignResult.meta?.changes && assignResult.meta.changes > 0) {
+          await c.env.DB.prepare(`
+            UPDATE compute_devices
+            SET status = 'busy', current_task_id = ?, updated_at = ?
+            WHERE id = ?
+          `).bind(pendingTask.id, now, deviceId).run();
 
-        assignedTask = {
-          id: pendingTask.id,
-          type: pendingTask.type,
-          input: parseJson(pendingTask.input, {}),
-          config: parseJson(pendingTask.config, {}),
-          priority: pendingTask.priority,
-        };
+          assignedTask = {
+            id: pendingTask.id,
+            type: pendingTask.type,
+            input: parseJson(pendingTask.input, {}),
+            config: parseJson(pendingTask.config, {}),
+            priority: pendingTask.priority,
+          };
 
-        console.log(`[Compute] Task ${pendingTask.id} assigned to device ${deviceId}`);
+          console.log(`[Compute] Task ${pendingTask.id} assigned to device ${deviceId}`);
+        } else {
+          console.log(`[Compute] Task ${pendingTask.id} already claimed by another device`);
+        }
       }
     }
 
@@ -476,21 +480,25 @@ compute.post('/tasks', async (c) => {
       LIMIT 1
     `).bind(minTier || null, minTier || null, minTier || null, minTier || null, minTier || null).first<ComputeDevice>();
 
+    let assignedToDevice: string | null = null;
     if (device) {
-      // Assign task to device immediately
-      await c.env.DB.prepare(`
+      // Assign task to device immediately (with race condition check)
+      const assignResult = await c.env.DB.prepare(`
         UPDATE compute_tasks
         SET status = 'assigned', assigned_device_id = ?, assigned_at = ?
-        WHERE id = ?
+        WHERE id = ? AND status = 'pending'
       `).bind(device.id, now, id).run();
 
-      await c.env.DB.prepare(`
-        UPDATE compute_devices
-        SET status = 'busy', current_task_id = ?, updated_at = ?
-        WHERE id = ?
-      `).bind(id, now, device.id).run();
+      if (assignResult.meta?.changes && assignResult.meta.changes > 0) {
+        await c.env.DB.prepare(`
+          UPDATE compute_devices
+          SET status = 'busy', current_task_id = ?, updated_at = ?
+          WHERE id = ?
+        `).bind(id, now, device.id).run();
 
-      console.log(`[Compute] Task ${id} immediately assigned to ${device.id}`);
+        assignedToDevice = device.id;
+        console.log(`[Compute] Task ${id} immediately assigned to ${device.id}`);
+      }
     }
 
     return c.json({
@@ -498,8 +506,8 @@ compute.post('/tasks', async (c) => {
       task: {
         id,
         type,
-        status: device ? 'assigned' : 'pending',
-        assignedDeviceId: device?.id || null,
+        status: assignedToDevice ? 'assigned' : 'pending',
+        assignedDeviceId: assignedToDevice,
         createdAt: now,
       },
     });
@@ -655,12 +663,21 @@ compute.post('/tasks/assign', async (c) => {
       });
     }
 
-    // Assign task to device
-    await c.env.DB.prepare(`
+    // Assign task to device (with race condition check)
+    const assignResult = await c.env.DB.prepare(`
       UPDATE compute_tasks
       SET status = 'assigned', assigned_device_id = ?, assigned_at = ?
       WHERE id = ? AND status = 'pending'
     `).bind(deviceId, now, task.id).run();
+
+    if (!assignResult.meta?.changes || assignResult.meta.changes === 0) {
+      // Another device claimed it between SELECT and UPDATE
+      return c.json({
+        hasWork: false,
+        message: 'Task was claimed by another device, try again',
+        deviceTier: device.tier,
+      });
+    }
 
     await c.env.DB.prepare(`
       UPDATE compute_devices
@@ -825,12 +842,16 @@ compute.post('/tasks/:id/claim', async (c) => {
       return c.json({ error: 'Task is no longer available', status: task.status }, 409);
     }
 
-    // Assign task
-    await c.env.DB.prepare(`
+    // Assign task (with race condition check)
+    const assignResult = await c.env.DB.prepare(`
       UPDATE compute_tasks
       SET status = 'assigned', assigned_device_id = ?, assigned_at = ?
       WHERE id = ? AND status = 'pending'
     `).bind(deviceId, now, taskId).run();
+
+    if (!assignResult.meta?.changes || assignResult.meta.changes === 0) {
+      return c.json({ error: 'Task was claimed by another device', status: 'conflict' }, 409);
+    }
 
     await c.env.DB.prepare(`
       UPDATE compute_devices
@@ -1195,6 +1216,61 @@ compute.delete('/devices/stale', async (c) => {
   } catch (error) {
     console.error('[Compute] Delete stale error:', error);
     return c.json({ error: 'Failed to delete stale devices' }, 500);
+  }
+});
+
+/**
+ * POST /devices/cleanup - Force cleanup: mark stale devices offline and delete old ones
+ * This runs the same cleanup as the cron job but on-demand
+ */
+compute.post('/devices/cleanup', async (c) => {
+  try {
+    const now = new Date().toISOString();
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // Step 1: Mark devices offline if no heartbeat in 5 minutes
+    const offlineResult = await c.env.DB.prepare(`
+      UPDATE compute_devices
+      SET status = 'offline', updated_at = ?
+      WHERE status IN ('online', 'busy')
+        AND last_heartbeat < ?
+    `).bind(now, fiveMinutesAgo).run();
+
+    // Step 2: Reset tasks assigned to offline devices
+    await c.env.DB.prepare(`
+      UPDATE compute_tasks
+      SET status = 'pending', assigned_device_id = NULL, assigned_at = NULL
+      WHERE status = 'assigned'
+        AND assigned_device_id IN (SELECT id FROM compute_devices WHERE status = 'offline')
+    `).run();
+
+    // Step 3: Clear current_task_id for offline devices
+    await c.env.DB.prepare(`
+      UPDATE compute_devices
+      SET current_task_id = NULL
+      WHERE status = 'offline' AND current_task_id IS NOT NULL
+    `).run();
+
+    // Step 4: Delete devices offline for 24+ hours with no completed tasks
+    const deleteResult = await c.env.DB.prepare(`
+      DELETE FROM compute_devices
+      WHERE status = 'offline'
+        AND last_heartbeat < ?
+        AND json_extract(stats, '$.tasksCompleted') = 0
+    `).bind(oneDayAgo).run();
+
+    console.log(`[Compute] Cleanup: ${offlineResult.meta?.changes || 0} marked offline, ${deleteResult.meta?.changes || 0} deleted`);
+
+    return c.json({
+      success: true,
+      markedOffline: offlineResult.meta?.changes || 0,
+      devicesDeleted: deleteResult.meta?.changes || 0,
+      timestamp: now,
+    });
+  } catch (error) {
+    console.error('[Compute] Cleanup error:', error);
+    return c.json({ error: 'Failed to cleanup devices' }, 500);
   }
 });
 

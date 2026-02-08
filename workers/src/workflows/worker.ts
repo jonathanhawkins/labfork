@@ -325,6 +325,11 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
 
     if (!context) {
       console.error(`Failed to load context for task=${taskId}, agent=${agentId}`);
+      // Reset agent to idle so it's not stuck as 'working'
+      await step.do('cleanup-agent-on-context-fail', async () => {
+        await this.updateAgentStatus(agentId, 'idle', null);
+        return { cleaned: true };
+      });
       return { status: 'failed', reason: 'context_not_found', partial: false, resultsJson: null };
     }
 
@@ -371,6 +376,11 @@ export class WorkerWorkflow extends WorkflowEntrypoint<Env, WorkerPayload> {
 
     if (!plan || !plan.steps || plan.steps.length === 0) {
       console.error(`Failed to create execution plan for task=${taskId}`);
+      // Reset agent to idle so it's not stuck as 'working'
+      await step.do('cleanup-agent-on-plan-fail', async () => {
+        await this.updateAgentStatus(agentId, 'idle', null);
+        return { cleaned: true };
+      });
       return { status: 'failed', reason: 'planning_failed', partial: false, resultsJson: null };
     }
 

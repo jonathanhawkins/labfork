@@ -297,6 +297,187 @@ api.get('/projects', async (c) => {
   }
 });
 
+// POST /api/projects - Create a new project (for syncing labs from frontend)
+api.post('/projects', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { id, name, slug, status, config, domainSlug, domainName, description, tags } = body;
+
+    if (!name || !slug) {
+      return c.json(createErrorResponse('Missing required fields: name, slug', 400), 400);
+    }
+
+    // Check if project already exists by slug
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM projects WHERE slug = ?`
+    ).bind(slug).first();
+
+    const now = new Date().toISOString();
+    const projectId = id || `proj_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+
+    // Build config object
+    const projectConfig = {
+      domainSlug: domainSlug || 'general',
+      domainName: domainName || 'General',
+      description: description || '',
+      tags: tags || [],
+      ...(config || {})
+    };
+
+    if (existing) {
+      // Update existing project
+      await c.env.DB.prepare(`
+        UPDATE projects
+        SET name = ?, config = ?, status = COALESCE(?, status), updated_at = ?
+        WHERE slug = ?
+      `).bind(name, JSON.stringify(projectConfig), status || null, now, slug).run();
+
+      console.log(`[Projects] Updated project: ${slug}`);
+
+      return c.json({
+        success: true,
+        project: {
+          id: existing.id,
+          name,
+          slug,
+          status: status || 'active',
+          config: projectConfig
+        },
+        action: 'updated'
+      });
+    }
+
+    // Create new project
+    await c.env.DB.prepare(`
+      INSERT INTO projects (id, name, slug, status, config, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      projectId,
+      name,
+      slug,
+      status || 'active',
+      JSON.stringify(projectConfig),
+      now,
+      now
+    ).run();
+
+    console.log(`[Projects] Created project: ${slug} (${projectId})`);
+
+    return c.json({
+      success: true,
+      project: {
+        id: projectId,
+        name,
+        slug,
+        status: status || 'active',
+        config: projectConfig
+      },
+      action: 'created'
+    });
+  } catch (error) {
+    console.error('Error creating project:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to create project'
+      ),
+      500
+    );
+  }
+});
+
+// POST /api/projects/sync - Bulk sync labs from frontend
+api.post('/projects/sync', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { labs } = body;
+
+    if (!labs || !Array.isArray(labs)) {
+      return c.json(createErrorResponse('Missing required field: labs (array)', 400), 400);
+    }
+
+    const results = {
+      created: 0,
+      updated: 0,
+      failed: 0,
+      projects: [] as { slug: string; action: string }[]
+    };
+
+    const now = new Date().toISOString();
+
+    for (const lab of labs) {
+      try {
+        const { id, slug, name, description, domainSlug, domainName, tags, status } = lab;
+
+        if (!slug || !name) {
+          results.failed++;
+          continue;
+        }
+
+        // Check if exists
+        const existing = await c.env.DB.prepare(
+          `SELECT id FROM projects WHERE slug = ?`
+        ).bind(slug).first();
+
+        const projectConfig = {
+          domainSlug: domainSlug || 'general',
+          domainName: domainName || 'General',
+          description: description || '',
+          tags: tags || [],
+          labId: id // Store the lab ID for reference
+        };
+
+        if (existing) {
+          await c.env.DB.prepare(`
+            UPDATE projects
+            SET name = ?, config = ?, updated_at = ?
+            WHERE slug = ?
+          `).bind(name, JSON.stringify(projectConfig), now, slug).run();
+
+          results.updated++;
+          results.projects.push({ slug, action: 'updated' });
+        } else {
+          const projectId = `proj_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+
+          await c.env.DB.prepare(`
+            INSERT INTO projects (id, name, slug, status, config, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            projectId,
+            name,
+            slug,
+            status || 'active',
+            JSON.stringify(projectConfig),
+            now,
+            now
+          ).run();
+
+          results.created++;
+          results.projects.push({ slug, action: 'created' });
+        }
+      } catch (labError) {
+        console.error(`Failed to sync lab ${lab.slug}:`, labError);
+        results.failed++;
+      }
+    }
+
+    console.log(`[Projects] Sync complete: ${results.created} created, ${results.updated} updated, ${results.failed} failed`);
+
+    return c.json({
+      success: true,
+      ...results,
+      timestamp: now
+    });
+  } catch (error) {
+    console.error('Error syncing projects:', error);
+    return c.json(
+      createErrorResponse(
+        error instanceof Error ? error.message : 'Failed to sync projects'
+      ),
+      500
+    );
+  }
+});
+
 // GET /api/projects/:id - Get project details with task summary and active agents
 api.get('/projects/:id', async (c) => {
   try {
@@ -580,7 +761,7 @@ api.get('/tasks', async (c) => {
     }
 
     if (assignedAgent) {
-      query += ' AND assigned_agent_id = ?';
+      query += ' AND assigned_agent = ?';
       params.push(assignedAgent);
     }
 
@@ -597,7 +778,7 @@ api.get('/tasks', async (c) => {
       description: row.description as string | null,
       status: row.status as string,
       priority: row.priority as number,
-      assigned_agent_id: row.assigned_agent_id as string | null,
+      assigned_agent_id: row.assigned_agent as string | null,
       parent_task_id: row.parent_task_id as string | null,
       blocked_by: parseJsonField<string[]>(row.blocked_by as string, []),
       context: parseJsonField<Record<string, unknown>>(
@@ -1198,7 +1379,7 @@ api.post('/workflows/worker/trigger', async (c) => {
     }
 
     // Verify agent exists
-    const agent = await c.env.DB.prepare(`SELECT * FROM agent_state WHERE id = ?`)
+    const agent = await c.env.DB.prepare(`SELECT * FROM agent_state WHERE agent_id = ?`)
       .bind(agentId)
       .first();
 
@@ -1208,7 +1389,7 @@ api.post('/workflows/worker/trigger', async (c) => {
 
     // Assign task to agent and set to in_progress
     await c.env.DB.prepare(
-      `UPDATE tasks SET assigned_agent_id = ?, status = 'in_progress', updated_at = datetime('now') WHERE id = ?`
+      `UPDATE tasks SET assigned_agent = ?, status = 'in_progress', updated_at = datetime('now') WHERE id = ?`
     )
       .bind(agentId, taskId)
       .run();

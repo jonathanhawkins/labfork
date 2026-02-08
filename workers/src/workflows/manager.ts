@@ -416,6 +416,7 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
 
     let totalTasksCreated = 0;
     let totalAgentsAssigned = 0;
+    const newlyAssignedAgents: { agentId: string; taskId: string }[] = [];
 
     // Step 1: Get all active projects
     const projects = await step.do('get-projects', async () => {
@@ -462,15 +463,16 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
       }
 
       // Step 4: Assign idle agents to pending tasks
-      const assignedCount = await step.do(`assign-${project.id}`, async () => {
+      const assignmentResult = await step.do(`assign-${project.id}`, async () => {
         return await this.assignAgentsToTasks(project.id);
       });
-      totalAgentsAssigned += assignedCount;
+      totalAgentsAssigned += assignmentResult.count;
+      newlyAssignedAgents.push(...assignmentResult.assignments);
     }
 
-    // Step 5: Trigger worker workflows for all assigned agents
+    // Step 5: Trigger worker workflows only for newly assigned agents (not all working agents)
     const triggerResults = await step.do('trigger-workers', async () => {
-      return await this.triggerWorkerWorkflows();
+      return await this.triggerWorkerWorkflows(newlyAssignedAgents);
     });
 
     console.log(`Triggered ${triggerResults.filter((r) => r.status === 'triggered').length} worker workflows`);
@@ -600,8 +602,9 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
       console.log(`Created assessment compute task ${computeTaskId} for project ${project.id}`);
 
       // Wait for the compute task to complete (with timeout)
-      const timeout = 60000; // 60 seconds
-      const pollInterval = 1000; // 1 second
+      // Note: qwen3-coder-32k takes ~5 min for complex assessments
+      const timeout = 360000; // 6 minutes
+      const pollInterval = 2000; // 2 seconds
       let elapsed = 0;
 
       while (elapsed < timeout) {
@@ -707,7 +710,7 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
   /**
    * Assign idle agents to pending tasks based on specializations
    */
-  private async assignAgentsToTasks(projectId: string): Promise<number> {
+  private async assignAgentsToTasks(projectId: string): Promise<{ count: number; assignments: { agentId: string; taskId: string }[] }> {
     // Get idle agents for this project
     const agents = await getProjectAgents(this.env.DB, projectId);
     const idleAgents = agents.filter(
@@ -716,7 +719,7 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
 
     if (idleAgents.length === 0) {
       console.log(`No idle agents for project ${projectId}`);
-      return 0;
+      return { count: 0, assignments: [] };
     }
 
     // Get pending tasks
@@ -724,10 +727,11 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
 
     if (pendingTasks.length === 0) {
       console.log(`No pending tasks for project ${projectId}`);
-      return 0;
+      return { count: 0, assignments: [] };
     }
 
     let assignedCount = 0;
+    const assignments: { agentId: string; taskId: string }[] = [];
 
     // Match agents to tasks
     for (const agent of idleAgents) {
@@ -744,6 +748,7 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
         try {
           await assignAgentToTask(this.env.DB, agent.agent_id, task.id);
           assignedCount++;
+          assignments.push({ agentId: agent.agent_id, taskId: task.id });
 
           // Remove assigned task from pending list
           pendingTasks.splice(matchingTaskIndex, 1);
@@ -758,65 +763,57 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
       }
     }
 
-    return assignedCount;
+    return { count: assignedCount, assignments };
   }
 
   /**
-   * Trigger worker workflows for all agents with assigned tasks
+   * Trigger worker workflows only for newly assigned agents.
+   * Previously this queried ALL working agents, causing duplicate workflows
+   * for agents already working from a previous manager cycle.
    */
-  private async triggerWorkerWorkflows(): Promise<WorkerTriggerResult[]> {
+  private async triggerWorkerWorkflows(
+    assignments: { agentId: string; taskId: string }[]
+  ): Promise<WorkerTriggerResult[]> {
     const results: WorkerTriggerResult[] = [];
 
-    try {
-      // Get all agents that are working (have assigned tasks)
-      const workingAgents = await this.env.DB
-        .prepare(`
-          SELECT * FROM agent_state
-          WHERE status = 'working' AND current_task_id IS NOT NULL
-        `)
-        .all<AgentState>();
+    if (assignments.length === 0) {
+      console.log('No newly assigned agents to trigger');
+      return results;
+    }
 
-      if (!workingAgents.results || workingAgents.results.length === 0) {
-        console.log('No working agents to trigger');
-        return results;
+    for (const { agentId, taskId } of assignments) {
+      try {
+        // Trigger the worker workflow
+        const instance = await this.env.WORKER_WORKFLOW.create({
+          params: {
+            taskId,
+            agentId,
+          },
+        });
+
+        results.push({
+          agentId,
+          taskId,
+          workflowInstanceId: instance.id,
+          status: 'triggered',
+        });
+
+        console.log(
+          `Triggered worker workflow for agent ${agentId}, task ${taskId}`
+        );
+      } catch (error) {
+        console.error(
+          `Failed to trigger worker for agent ${agentId}:`,
+          error
+        );
+
+        results.push({
+          agentId,
+          taskId,
+          status: 'failed',
+          error: String(error),
+        });
       }
-
-      for (const agent of workingAgents.results) {
-        try {
-          // Trigger the worker workflow
-          const instance = await this.env.WORKER_WORKFLOW.create({
-            params: {
-              taskId: agent.current_task_id!,
-              agentId: agent.agent_id,
-            },
-          });
-
-          results.push({
-            agentId: agent.agent_id,
-            taskId: agent.current_task_id!,
-            workflowInstanceId: instance.id,
-            status: 'triggered',
-          });
-
-          console.log(
-            `Triggered worker workflow for agent ${agent.agent_id}, task ${agent.current_task_id}`
-          );
-        } catch (error) {
-          console.error(
-            `Failed to trigger worker for agent ${agent.agent_id}:`,
-            error
-          );
-
-          results.push({
-            agentId: agent.agent_id,
-            taskId: agent.current_task_id!,
-            status: 'failed',
-            error: String(error),
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Failed to query working agents:', error);
     }
 
     return results;
