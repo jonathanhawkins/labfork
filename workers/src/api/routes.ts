@@ -78,7 +78,7 @@ interface Task {
   description: string | null;
   status: string;
   priority: number;
-  assigned_agent_id: string | null;
+  assigned_agent: string | null;
   parent_task_id: string | null;
   blocked_by: string[];
   context: Record<string, unknown>;
@@ -778,7 +778,7 @@ api.get('/tasks', async (c) => {
       description: row.description as string | null,
       status: row.status as string,
       priority: row.priority as number,
-      assigned_agent_id: row.assigned_agent as string | null,
+      assigned_agent: row.assigned_agent as string | null,
       parent_task_id: row.parent_task_id as string | null,
       blocked_by: parseJsonField<string[]>(row.blocked_by as string, []),
       context: parseJsonField<Record<string, unknown>>(

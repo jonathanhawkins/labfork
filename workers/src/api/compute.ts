@@ -10,7 +10,8 @@
  * This is the core of the distributed compute system that replaces Workers AI.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import type { Env } from '../index';
 
 // ============================================================================
 // Types
@@ -115,7 +116,7 @@ function generateAuthToken(): string {
  * Validate device auth token from Authorization header
  * Returns device ID if valid, null otherwise
  */
-async function validateAuthToken(c: any): Promise<string | null> {
+async function validateAuthToken(c: Context<{ Bindings: Env }>): Promise<string | null> {
   const authHeader = c.req.header('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return null;
@@ -132,7 +133,8 @@ async function validateAuthToken(c: any): Promise<string | null> {
     `).bind(token).first<{ id: string }>();
 
     return device?.id || null;
-  } catch {
+  } catch (err) {
+    console.warn('[Compute] Auth token validation failed:', err);
     return null;
   }
 }
@@ -595,13 +597,13 @@ compute.post('/tasks/assign', async (c) => {
       return c.json({ error: 'deviceId is required' }, 400);
     }
 
-    // Validate auth token if provided (recommended for security)
+    // Validate auth token (required)
     const authDeviceId = await validateAuthToken(c);
-    if (authDeviceId && authDeviceId !== deviceId) {
-      return c.json({ error: 'Device ID does not match auth token' }, 403);
-    }
     if (!authDeviceId) {
-      console.log(`[Compute] Task assign request without auth token for device ${deviceId}`);
+      return c.json({ error: 'Valid auth token required. Include Authorization: Bearer <token> header.' }, 401);
+    }
+    if (authDeviceId !== deviceId) {
+      return c.json({ error: 'Device ID does not match auth token' }, 403);
     }
 
     const now = new Date().toISOString();
@@ -905,13 +907,13 @@ compute.post('/tasks/:id', async (c) => {
       return c.json({ error: 'deviceId is required' }, 400);
     }
 
-    // Validate auth token if provided
+    // Validate auth token (required)
     const authDeviceId = await validateAuthToken(c);
-    if (authDeviceId && authDeviceId !== deviceId) {
-      return c.json({ error: 'Device ID does not match auth token' }, 403);
-    }
     if (!authDeviceId) {
-      console.log(`[Compute] Task complete request without auth token for device ${deviceId}`);
+      return c.json({ error: 'Valid auth token required. Include Authorization: Bearer <token> header.' }, 401);
+    }
+    if (authDeviceId !== deviceId) {
+      return c.json({ error: 'Device ID does not match auth token' }, 403);
     }
 
     const now = new Date().toISOString();

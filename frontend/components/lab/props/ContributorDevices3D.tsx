@@ -10,6 +10,11 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import type { DeviceTier, DeviceStatus } from '@/lib/compute/types';
 
+/** Escape HTML special characters to prevent XSS when using innerHTML */
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // Tier colors matching the design system
 const TIER_COLORS = {
   power: 0xa855f7,    // Purple - high-end GPUs
@@ -363,8 +368,11 @@ export function animateContributorDevices3D(
     if (deviceInfo) {
       const { mesh, device } = deviceInfo;
       tooltipElement.style.display = 'block';
+      const safeName = escapeHtml(device.name);
+      const safeTier = escapeHtml(device.tier);
+      const safeStatus = escapeHtml(device.status);
       tooltipElement.innerHTML = `
-        <div style="font-weight: 600; margin-bottom: 4px;">${device.name}</div>
+        <div style="font-weight: 600; margin-bottom: 4px;">${safeName}</div>
         <div style="display: flex; gap: 8px; align-items: center;">
           <span style="
             background: ${device.tier === 'power' ? '#a855f7' : device.tier === 'standard' ? '#3b82f6' : '#22c55e'};
@@ -372,13 +380,13 @@ export function animateContributorDevices3D(
             border-radius: 4px;
             font-size: 9px;
             text-transform: uppercase;
-          ">${device.tier}</span>
+          ">${safeTier}</span>
           <span style="color: ${device.status === 'busy' ? '#f59e0b' : device.status === 'online' ? '#22c55e' : '#6b7280'}">
-            ${device.status === 'busy' ? 'Processing' : device.status}
+            ${device.status === 'busy' ? 'Processing' : safeStatus}
           </span>
         </div>
-        ${device.compute ? `<div style="margin-top: 4px; color: #9ca3af;">${device.compute.toFixed(1)} TFLOPS</div>` : ''}
-        ${device.stats ? `<div style="color: #9ca3af;">${device.stats.tasksCompleted} tasks completed</div>` : ''}
+        ${device.compute ? `<div style="margin-top: 4px; color: #9ca3af;">${Number(device.compute).toFixed(1)} TFLOPS</div>` : ''}
+        ${device.stats ? `<div style="color: #9ca3af;">${Number(device.stats.tasksCompleted)} tasks completed</div>` : ''}
       `;
 
       // Position tooltip near hovered device

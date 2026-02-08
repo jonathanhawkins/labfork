@@ -13,6 +13,8 @@ This file provides guidance to Claude Code when working on LabFork.
 - See a bug? Fix it - and say "Fixing bug in X..."
 - See an improvement? Implement it - and say "Improving X..."
 - Report what you're DOING as you do it, not just final results.
+- **Code review findings?** Fix them. Don't ask "should I fix this?" — if it's a real bug, security issue, type error, or code quality problem, just fix it and narrate.
+- **Logical cleanup?** Dead code, unused imports, `any` types, missing validation, inconsistent patterns — fix without asking.
 
 **CRITICAL: Don't go silent.** Provide brief progress updates:
 - "Exploring X to find..."
@@ -185,11 +187,11 @@ wav.write("output.wav", 24000, audio_np)
 
 ## Remote RTX 4090 Connection
 
-The 4090 is at `100.83.78.111` (Tailscale) with user `doc`.
+The 4090 runs WSL2 on Windows. SSH to `doc@100.100.219.33` (WSL Tailscale IP).
 
 **Environment Variables** (set in `.env` or by `./start-backend.sh`):
 ```bash
-REMOTE_GPU_HOST=100.83.78.111
+REMOTE_GPU_HOST=100.100.219.33
 REMOTE_GPU_USER=doc
 ```
 
@@ -197,16 +199,16 @@ REMOTE_GPU_USER=doc
 
 ```bash
 # Test SSH connection
-ssh doc@100.83.78.111 "nvidia-smi"
+ssh doc@100.100.219.33 "nvidia-smi"
 
 # Check GPU stats via API (requires backend running)
 curl http://localhost:8003/api/lab/gpu-stats
 
 # Attach to existing tmux training session
-ssh doc@100.83.78.111 -t "source ~/miniconda3/bin/activate && conda activate voice && tmux attach -t training"
+ssh doc@100.100.219.33 -t "source ~/miniconda3/bin/activate && conda activate voice && tmux attach -t training"
 
 # Create new training session
-ssh doc@100.83.78.111 -t "tmux new-session -s training"
+ssh doc@100.100.219.33 -t "tmux new-session -s training"
 ```
 
 ### Running Training on RTX 4090
@@ -214,7 +216,7 @@ ssh doc@100.83.78.111 -t "tmux new-session -s training"
 **IMPORTANT**: Use LoRA training for small datasets (< 500 samples) to prevent overfitting!
 
 ```bash
-ssh doc@100.83.78.111
+ssh doc@100.100.219.33
 source ~/miniconda3/bin/activate && conda activate voice
 cd ~/dev/labfork/training
 
@@ -236,7 +238,7 @@ python train_csm_final.py --config config/rtx_4090_deepseek.yaml
 # From Mac to 4090 (run on Mac)
 rsync -avz --progress --exclude 'node_modules' --exclude '.next' --exclude 'venv' \
   /Users/light/dev/web-apps/voice-clone-pipeline/ \
-  doc@100.83.78.111:~/dev/labfork/
+  doc@100.100.219.33:~/dev/labfork/
 ```
 
 ### GPU Monitoring

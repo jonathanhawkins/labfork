@@ -137,10 +137,9 @@ describe('Task Lifecycle', () => {
     const { data: devData } = await registerDevice();
     const device = devData.device as Record<string, unknown>;
     const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
 
     // Create task (will auto-assign since device is available)
-    // So we need to complete it first, then create another
-    // Actually let's create the task first with no device
     const { data: taskData } = await createTask();
     const task = taskData.task as Record<string, unknown>;
 
@@ -149,7 +148,10 @@ describe('Task Lifecycle', () => {
       // Task was already assigned, device should see it
       const pollRes = await SELF.fetch('https://test.local/api/compute/tasks/assign', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
         body: JSON.stringify({ deviceId }),
       });
       const pollData = await pollRes.json() as Record<string, unknown>;
@@ -158,7 +160,10 @@ describe('Task Lifecycle', () => {
       // Task is pending, device should claim it via poll
       const pollRes = await SELF.fetch('https://test.local/api/compute/tasks/assign', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
         body: JSON.stringify({ deviceId }),
       });
       const pollData = await pollRes.json() as Record<string, unknown>;

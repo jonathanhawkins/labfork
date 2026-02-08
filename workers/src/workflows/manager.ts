@@ -331,7 +331,8 @@ async function assignAgentToTask(
 function parsePersona(personaJson: string): AgentPersona | null {
   try {
     return JSON.parse(personaJson) as AgentPersona;
-  } catch {
+  } catch (err) {
+    console.warn('[Manager] Failed to parse agent persona:', err);
     return null;
   }
 }
@@ -531,7 +532,7 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
         id: project.id,
         name: project.name,
         slug: project.slug,
-        config: project.config ? JSON.parse(project.config) : null,
+        config: project.config ? (() => { try { return JSON.parse(project.config as string); } catch { return null; } })() : null,
       },
       taskSummary: {
         total: tasks.length,
