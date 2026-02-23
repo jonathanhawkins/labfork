@@ -1,1 +1,263 @@
-[]
+[
+  {
+    "id": "lab_seed_firefly_core",
+    "slug": "firefly-core",
+    "name": "Firefly Core",
+    "description": "Core MPPT algorithms and hardware integration for the Firefly mesh network",
+    "domainSlug": "firefly-network",
+    "domainName": "Firefly Network",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["mppt", "solar", "mesh", "hardware"],
+    "primaryColor": "#f59e0b",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_thread_protocol",
+    "slug": "thread-protocol",
+    "name": "Thread Protocol Implementation",
+    "description": "Thread mesh networking protocol for IoT devices in the Firefly network",
+    "domainSlug": "firefly-network",
+    "domainName": "Firefly Network",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["thread", "mesh", "iot", "protocol"],
+    "primaryColor": "#f59e0b",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_emotion_tts",
+    "slug": "emotion-tts",
+    "name": "Emotion TTS Research",
+    "description": "Prosody and emotion control in text-to-speech synthesis using neural networks",
+    "domainSlug": "voice-clone",
+    "domainName": "Voice Cloning",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["tts", "prosody", "emotion", "neural"],
+    "primaryColor": "#3b82f6",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_zero_shot_clone",
+    "slug": "zero-shot-clone",
+    "name": "Zero-Shot Voice Cloning",
+    "description": "Speaker adaptation with minimal reference audio using VALL-E and Pocket TTS",
+    "domainSlug": "voice-clone",
+    "domainName": "Voice Cloning",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["zero-shot", "vall-e", "speaker-adaptation"],
+    "primaryColor": "#3b82f6",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_water_harvester",
+    "slug": "water-harvester",
+    "name": "Atmospheric Water Harvester",
+    "description": "Solar-powered water extraction from air using biomimicry, cheap sorbents, and 3D-printable components",
+    "domainSlug": "sustainability",
+    "domainName": "Sustainability",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["water", "solar", "biomimicry", "3d-printing", "mof", "humanitarian"],
+    "primaryColor": "#06b6d4",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_transformer_signals",
+    "slug": "transformer-signals",
+    "name": "Transformer Signals",
+    "description": "An open research idea: momentum signal generation using transformer architectures. Fork this lab to start building.",
+    "domainSlug": "quant-trading",
+    "domainName": "Quantitative Trading",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "idea",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["transformer", "momentum", "signals", "ml"],
+    "primaryColor": "#22c55e",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_portfolio_opt",
+    "slug": "portfolio-opt",
+    "name": "Portfolio Optimization",
+    "description": "An open research idea: deep reinforcement learning for dynamic portfolio rebalancing. Fork this lab to start building.",
+    "domainSlug": "quant-trading",
+    "domainName": "Quantitative Trading",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "idea",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["rl", "portfolio", "optimization"],
+    "primaryColor": "#22c55e",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_sim2real",
+    "slug": "sim2real",
+    "name": "Sim2Real Transfer",
+    "description": "An open research idea: domain randomization and transfer learning for robotic manipulation. Fork this lab to start building.",
+    "domainSlug": "robotics",
+    "domainName": "Robotics",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "idea",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["sim2real", "manipulation", "transfer-learning"],
+    "primaryColor": "#a855f7",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  },
+  {
+    "id": "lab_seed_protein_folding",
+    "slug": "protein-folding",
+    "name": "Protein Folding Explorer",
+    "description": "An open research idea: AlphaFold-based analysis and prediction for novel protein structures. Fork this lab to start building.",
+    "domainSlug": "biotech",
+    "domainName": "Biotech",
+    "owner": {
+      "id": "user_community",
+      "username": "labfork",
+      "displayName": "LabFork",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "idea",
+    "stats": {
+      "stars": 0,
+      "forks": 0,
+      "tasks": 0,
+      "papers": 0,
+      "experiments": 0,
+      "viewers": 0
+    },
+    "tags": ["alphafold", "protein", "structure"],
+    "primaryColor": "#ec4899",
+    "createdAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+  }
+]
