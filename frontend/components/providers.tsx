@@ -11,8 +11,7 @@ const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
  * because it's guaranteed to be inside ClerkProvider.
  */
 function ClerkAuthProvider({ children }: { children: React.ReactNode }) {
-  // Dynamic import avoids module-level Clerk initialization
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line
   const { useUser } = require("@clerk/nextjs");
   const { user: clerkUser, isLoaded } = useUser();
   const user = getClientUser(clerkUser);
@@ -50,8 +49,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   if (clerkPubKey) {
-    // Dynamic import of ClerkProvider to avoid module-level init when not configured
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line
     const { ClerkProvider } = require("@clerk/nextjs");
 
     return (

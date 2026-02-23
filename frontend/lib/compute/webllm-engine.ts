@@ -141,8 +141,8 @@ export interface EngineEvents {
 export class WebLLMEngine {
   private static instance: WebLLMEngine | null = null;
   // Lazy-loaded Transformers.js embedding pipeline (shared across instances)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static embeddingPipeline: any = null;
+  // Lazy-loaded Transformers.js embedding pipeline
+  private static embeddingPipeline: ((text: string, opts?: Record<string, unknown>) => Promise<{ data: Float32Array }>) | null = null;
 
   private engine: webllm.MLCEngineInterface | null = null;
   private currentModelId: ModelId | null = null;
@@ -437,8 +437,8 @@ export class WebLLMEngine {
     try {
       if (!WebLLMEngine.embeddingPipeline) {
         // Dynamically import Transformers.js — webpackIgnore prevents SSR bundling
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod = await (Function('return import("@huggingface/transformers")')() as Promise<any>);
+        // Dynamic import to avoid SSR bundling
+        const mod = await (Function('return import("@huggingface/transformers")')() as Promise<{ pipeline: Function }>);
         const { pipeline } = mod;
         WebLLMEngine.embeddingPipeline = await pipeline(
           "feature-extraction",
