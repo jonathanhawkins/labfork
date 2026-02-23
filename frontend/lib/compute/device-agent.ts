@@ -642,14 +642,14 @@ export class DeviceAgent {
       // Execute task
       const result = await this.executeTask(task, abortController.signal);
 
-      // Report completion
-      await this.completeTask(task.id, true, result);
+      // Report completion and get actual credits awarded by server
+      const creditsAwarded = await this.completeTask(task.id, true, result);
 
       // Update stats
       const computeTime = Date.now() - this.currentTask.startTime;
       this.stats.tasksCompleted++;
       this.stats.totalComputeTime += computeTime / 1000;
-      this.stats.creditsEarned += task.reward || 1; // Default 1 credit per task
+      this.stats.creditsEarned += creditsAwarded || task.reward || 1;
       this.stats.lastTaskCompletedAt = new Date();
       this.emit("statsUpdated", this.getStats());
 
@@ -707,6 +707,7 @@ export class DeviceAgent {
 
       // Execute task with WebLLM
       const result = await this.webllmEngine.executeTask(task);
+      result.computeMode = 'webllm';
 
       clearInterval(progressInterval);
       this.emit("taskProgress", task.id, 100);
@@ -758,6 +759,7 @@ export class DeviceAgent {
       text: result.draft.tokens.map((t) => t.text).join(""),
       // Store draft in a special field for verification
       embedding: JSON.stringify(result.draft) as any, // Hack: use embedding field
+      computeMode: 'webllm',
       metrics: {
         computeTime,
         tokensPerSecond: result.tokensPerSecond,
@@ -808,6 +810,7 @@ export class DeviceAgent {
       text: result.finalText,
       // Store verification result
       embedding: JSON.stringify(result) as any,
+      computeMode: 'webllm',
       metrics: {
         computeTime,
         tokensPerSecond: result.tokensPerSecond,
@@ -841,6 +844,7 @@ export class DeviceAgent {
 
         // Mock result based on task type
         const result: TaskResult = {
+          computeMode: 'mock',
           metrics: {
             computeTime: computeTimeMs,
           },
@@ -853,20 +857,20 @@ export class DeviceAgent {
           result.text = "Mock inference result";
           result.metrics.tokensPerSecond = (task.config.maxTokens / computeTimeMs) * 1000;
         } else if (task.type === "embedding") {
-          result.embedding = Array(768)
-            .fill(0)
-            .map(() => Math.random() * 2 - 1);
+          // Return undefined instead of fake random vectors
+          // Server validates dimensions, and fake data pollutes indexes
+          result.embedding = undefined;
         }
 
         resolve(result);
       }, computeTimeMs);
 
-      // Handle abort
+      // Handle abort — use { once: true } to prevent memory leak
       signal.addEventListener("abort", () => {
         clearTimeout(timeout);
         clearInterval(progressInterval);
         reject(new Error("Task aborted"));
-      });
+      }, { once: true });
     });
   }
 
@@ -922,10 +926,10 @@ export class DeviceAgent {
     success: boolean,
     result?: TaskResult,
     error?: string
-  ): Promise<void> {
+  ): Promise<number> {
     if (!this.device) {
       console.warn("Cannot complete task: device not registered");
-      return;
+      return 0;
     }
 
     try {
@@ -956,12 +960,15 @@ export class DeviceAgent {
       }
 
       const data = await response.json();
-      if (data.creditsAwarded) {
-        console.log(`Earned ${data.creditsAwarded} credits`);
+      const credits = data.creditsAwarded || 0;
+      if (credits) {
+        console.log(`Earned ${credits} credits`);
       }
+      return credits;
     } catch (error) {
       console.error("Error reporting task completion:", error);
       this.emit("error", error instanceof Error ? error : new Error(String(error)));
+      return 0;
     }
   }
 
@@ -980,9 +987,34 @@ export class DeviceAgent {
 
     console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       if (this.status === "error" || this.status === "offline") {
         console.log("Attempting to reconnect...");
+
+        // If we already have a device + auth token, try a heartbeat first
+        // to re-establish the connection without creating a duplicate device
+        if (this.device && this.authToken) {
+          try {
+            const response = await this.authFetch(
+              `${this.config.apiBaseUrl}/devices/${this.device.id}`,
+              {
+                method: "PATCH",
+                body: JSON.stringify({ status: "online" }),
+              }
+            );
+            if (response.ok) {
+              console.log("Reconnected via heartbeat");
+              this.updateStatus("online");
+              this.startHeartbeat();
+              this.startTaskPolling();
+              this.reconnectAttempts = 0;
+              return;
+            }
+          } catch {
+            // Heartbeat failed, fall through to full re-registration
+          }
+        }
+
         this.start();
       }
     }, delay);

@@ -267,5 +267,41 @@
     "createdAt": "2026-01-30T07:19:29.837Z",
     "updatedAt": "2026-01-30T07:19:29.838Z",
     "lastActivityAt": "2026-01-30T07:19:29.837Z"
+  },
+  {
+    "id": "lab_ml74sohxxza3bx",
+    "slug": "water-harvester",
+    "name": "Atmospheric Water Harvester",
+    "description": "Solar-powered water extraction from air using biomimicry, cheap sorbents, and 3D-printable components",
+    "domainSlug": "sustainability",
+    "domainName": "Sustainability",
+    "owner": {
+      "id": "user_demo5",
+      "username": "open_hardware",
+      "displayName": "Open Hardware",
+      "avatar": ""
+    },
+    "visibility": "public",
+    "status": "active",
+    "stats": {
+      "stars": 342,
+      "forks": 89,
+      "tasks": 7,
+      "papers": 7,
+      "experiments": 4,
+      "viewers": 0
+    },
+    "tags": [
+      "water",
+      "solar",
+      "biomimicry",
+      "3d-printing",
+      "mof",
+      "humanitarian"
+    ],
+    "primaryColor": "#06b6d4",
+    "createdAt": "2026-02-03T21:49:18.981Z",
+    "updatedAt": "2026-02-03T21:49:18.994Z",
+    "lastActivityAt": "2026-02-03T21:49:18.981Z"
   }
 ]

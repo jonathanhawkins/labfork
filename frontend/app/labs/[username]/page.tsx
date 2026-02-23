@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/hooks";
 import { cn } from "@/lib/utils";
 import {
   User,
@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { LabCard } from "@/components/labs/LabCard";
 import type { Lab } from "@/lib/labs/types";
-import { getClientUser } from "@/lib/auth/client";
 
 interface UserLabsPageProps {
   params: {
@@ -30,9 +29,8 @@ interface UserLabsPageProps {
 export default function UserLabsPage({ params }: UserLabsPageProps) {
   const { username } = params;
 
-  // Clerk authentication
-  const { user: clerkUser, isLoaded: isUserLoaded } = useUser();
-  const currentUser = getClientUser(clerkUser);
+  // Authentication (works with Clerk on prod, mock in dev)
+  const { user: currentUser, isLoaded: isUserLoaded } = useAuth();
 
   const [labs, setLabs] = useState<Lab[]>([]);
   const [isLoading, setIsLoading] = useState(true);

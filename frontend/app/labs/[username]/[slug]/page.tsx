@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/hooks";
 import { cn } from "@/lib/utils";
 import {
   Activity,
@@ -31,8 +31,6 @@ import { FireflyLabContent } from "@/components/labs/FireflyLabContent";
 import { LiveLabViewer } from "@/components/labs/LiveLabViewer";
 import { ActivityFeed } from "@/components/social/ActivityFeed";
 import type { Lab } from "@/lib/labs/types";
-import { getClientUser } from "@/lib/auth/client";
-import type { User } from "@/lib/auth/mock-user";
 import {
   CheckCircle2,
   Circle,
@@ -65,9 +63,8 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
   const { username, slug } = params;
   const router = useRouter();
 
-  // Clerk authentication
-  const { user: clerkUser, isLoaded: isUserLoaded } = useUser();
-  const currentUser = getClientUser(clerkUser);
+  // Authentication (works with Clerk on prod, mock in dev)
+  const { user: currentUser, isLoaded: isUserLoaded } = useAuth();
 
   const [lab, setLab] = useState<Lab | null>(null);
   const [isLoading, setIsLoading] = useState(true);

@@ -1,0 +1,77 @@
+# .github/workflows/nudge-observer.yml
+#
+# Reports CI status and test results to your Nudge Engine
+# after every push to main.
+#
+# Setup:
+#   1. Copy this file to .github/workflows/nudge-observer.yml in your repo
+#   2. Add these secrets to your repo:
+#      - NUDGE_ENGINE_URL: https://your-engine.workers.dev
+#      - NUDGE_WORKER_TOKEN: your-worker-token (from /register)
+
+name: Nudge Observer
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+  schedule:
+    - cron: '*/15 * * * *' # Match the nudge engine cron
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        id: tests
+        continue-on-error: true
+        run: |
+          # Replace with your actual test command
+          npm test 2>&1 | tee test-output.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Report to Nudge Engine
+        env:
+          ENGINE: ${{ secrets.NUDGE_ENGINE_URL }}
+          TOKEN: ${{ secrets.NUDGE_WORKER_TOKEN }}
+        run: |
+          # Report CI status
+          if [ "${{ steps.tests.outcome }}" = "failure" ]; then
+            CI_FAILING=true
+          else
+            CI_FAILING=false
+          fi
+
+          curl -sf -X POST "$ENGINE/observe" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"type\": \"git\",
+              \"data\": {
+                \"repo\": \"${{ github.repository }}\",
+                \"branch\": \"${{ github.ref_name }}\",
+                \"sha\": \"${{ github.sha }}\",
+                \"failingCI\": $CI_FAILING
+              }
+            }"
+
+          # If tests failed, report the failures
+          if [ "$CI_FAILING" = "true" ] && [ -f test-output.txt ]; then
+            # Extract failure lines (adjust grep pattern for your test runner)
+            FAILURES=$(grep -E "FAIL|Error|✗|✘" test-output.txt | head -5 | jq -Rs '.')
+
+            curl -sf -X POST "$ENGINE/observe" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"type\": \"tests\",
+                \"data\": {
+                  \"failures\": [{\"test\": \"ci\", \"error\": $FAILURES}]
+                }
+              }"
+          fi
+
+          echo "Observation posted to Nudge Engine"

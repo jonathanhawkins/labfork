@@ -131,20 +131,6 @@ Rules:
 
 IMPORTANT: Return ONLY valid JSON, no markdown, no explanation.`;
 
-const TASK_CREATION_PROMPT = `You are creating a new task for the LabFork project management system.
-Given the suggested task, create a detailed, actionable task that an AI agent can execute.
-
-Return ONLY a JSON object with:
-{
-  "title": "Clear, concise title",
-  "description": "Detailed description with specific steps",
-  "priority": 1-10,
-  "requires_physical": false,
-  "estimated_steps": ["Step 1", "Step 2", "Step 3"]
-}
-
-IMPORTANT: Return ONLY valid JSON, no markdown, no explanation.`;
-
 // =============================================================================
 // Helper Functions
 // =============================================================================
@@ -208,21 +194,6 @@ async function getProjectAgents(
     return result.results || [];
   } catch (error) {
     console.error(`Failed to get agents for project ${projectId}:`, error);
-    return [];
-  }
-}
-
-/**
- * Get idle agents across all projects
- */
-async function getIdleAgents(db: D1Database): Promise<AgentState[]> {
-  try {
-    const result = await db
-      .prepare("SELECT * FROM agent_state WHERE status = 'idle' AND current_task_id IS NULL")
-      .all<AgentState>();
-    return result.results || [];
-  } catch (error) {
-    console.error('Failed to get idle agents:', error);
     return [];
   }
 }
@@ -298,25 +269,40 @@ async function assignAgentToTask(
   taskId: string
 ): Promise<void> {
   try {
-    // Update task with assigned agent
-    await db
+    // Update task with assigned agent — only if not already assigned (race condition guard)
+    const taskResult = await db
       .prepare(`
         UPDATE tasks
         SET assigned_agent = ?, status = 'in_progress', updated_at = datetime('now')
-        WHERE id = ?
+        WHERE id = ? AND (assigned_agent IS NULL OR assigned_agent = '')
       `)
       .bind(agentId, taskId)
       .run();
 
-    // Update agent state with current task
-    await db
+    if (!taskResult.meta?.changes || taskResult.meta.changes === 0) {
+      console.warn(`Task ${taskId} already assigned, skipping agent ${agentId}`);
+      return;
+    }
+
+    // Update agent state with current task — only if agent is idle (race condition guard)
+    const agentResult = await db
       .prepare(`
         UPDATE agent_state
         SET current_task_id = ?, status = 'working', last_active = datetime('now')
-        WHERE agent_id = ?
+        WHERE agent_id = ? AND status = 'idle'
       `)
       .bind(taskId, agentId)
       .run();
+
+    if (!agentResult.meta?.changes || agentResult.meta.changes === 0) {
+      // Agent was not idle — roll back the task assignment
+      console.warn(`Agent ${agentId} not idle, rolling back task ${taskId} assignment`);
+      await db.prepare(`
+        UPDATE tasks SET assigned_agent = NULL, status = 'pending', updated_at = datetime('now')
+        WHERE id = ? AND assigned_agent = ?
+      `).bind(taskId, agentId).run();
+      return;
+    }
 
     console.log(`Assigned agent ${agentId} to task ${taskId}`);
   } catch (error) {
@@ -526,6 +512,38 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
     const blockedTasks = tasks.filter((t) => t.status === 'blocked').length;
     const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length;
 
+    // Fetch completed compute results to inform assessment
+    let recentComputeResults: { type: string; paperTitle?: string; resultSummary?: string }[] = [];
+    try {
+      // Scope to recent results (last 24h) to keep context relevant
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const computeResults = await this.env.DB
+        .prepare(`
+          SELECT type, input, result FROM compute_tasks
+          WHERE status = 'completed'
+            AND json_extract(result, '$.serverValidated') = 1
+            AND completed_at > ?
+          ORDER BY completed_at DESC
+          LIMIT 10
+        `)
+        .bind(oneDayAgo)
+        .all<{ type: string; input: string; result: string }>();
+
+      if (computeResults.results) {
+        recentComputeResults = computeResults.results.map((r) => {
+          const input = (() => { try { return JSON.parse(r.input); } catch { return {}; } })();
+          const result = (() => { try { return JSON.parse(r.result); } catch { return {}; } })();
+          return {
+            type: r.type,
+            paperTitle: input?.paperTitle,
+            resultSummary: typeof result?.text === 'string' ? result.text.slice(0, 200) : undefined,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('[Manager] Failed to fetch compute results for assessment:', err);
+    }
+
     // Prepare context for assessment
     const projectContext = {
       project: {
@@ -547,6 +565,8 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
         priority: t.priority,
         requires_physical: t.requires_physical === 1,
       })),
+      // Include real compute results to inform assessment decisions
+      recentComputeResults,
     };
 
     try {
@@ -685,8 +705,15 @@ export class ManagerWorkflow extends WorkflowEntrypoint<Env, unknown> {
         elapsed += pollInterval;
       }
 
-      // Timeout - use fallback
+      // Timeout - mark the orphaned compute task and use fallback
       console.warn(`Assessment compute task timed out for project ${project.id}`);
+      try {
+        await this.env.DB.prepare(
+          "UPDATE compute_tasks SET status = 'timeout' WHERE id = ? AND status IN ('pending', 'assigned', 'processing')"
+        ).bind(computeTaskId).run();
+      } catch (cleanupErr) {
+        console.warn('Failed to clean up timed-out assessment task:', cleanupErr);
+      }
       throw new Error('Assessment timeout');
 
     } catch (error) {

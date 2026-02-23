@@ -37,6 +37,7 @@ import {
   Square,
   Activity,
   Trophy,
+  Download,
 } from "lucide-react";
 import {
   detectGPU,
@@ -99,6 +100,9 @@ export default function ContributePage() {
     stop: stopAgent,
     error: agentError,
     clearError,
+    isModelLoaded,
+    loadModel,
+    modelLoadProgress,
   } = useDeviceAgent({
     autoStart: false, // Don't auto-start, let user click button
     autoStop: true,
@@ -555,14 +559,24 @@ export default function ContributePage() {
                       {isContributing ? 'Contributing to Network' : 'Ready to Contribute'}
                     </h2>
                     {isContributing && (
-                      <span className={cn(
-                        "px-2 py-0.5 rounded-full text-xs font-medium",
-                        agentStatus === 'online' ? "bg-green-500/20 text-green-400" :
-                        agentStatus === 'paused' ? "bg-yellow-500/20 text-yellow-400" :
-                        "bg-blue-500/20 text-blue-400"
-                      )}>
-                        {getStatusLabel(agentStatus)}
-                      </span>
+                      <>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-xs font-medium",
+                          agentStatus === 'online' ? "bg-green-500/20 text-green-400" :
+                          agentStatus === 'paused' ? "bg-yellow-500/20 text-yellow-400" :
+                          "bg-blue-500/20 text-blue-400"
+                        )}>
+                          {getStatusLabel(agentStatus)}
+                        </span>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-xs font-medium",
+                          isModelLoaded
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-amber-500/20 text-amber-400"
+                        )}>
+                          {isModelLoaded ? "Real Compute" : "Simulated"}
+                        </span>
+                      </>
                     )}
                   </div>
                   <p className="text-sm text-foreground-muted">
@@ -630,22 +644,66 @@ export default function ContributePage() {
 
               {/* Live Stats when contributing */}
               {isContributing && (
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-background/50 rounded-lg p-3 border border-border">
-                    <p className="text-xs text-foreground-muted mb-1">Tasks Completed</p>
-                    <p className="text-lg font-medium text-foreground">{stats.tasksCompleted}</p>
+                <div className="mt-4 space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-background/50 rounded-lg p-3 border border-border">
+                      <p className="text-xs text-foreground-muted mb-1">Tasks Completed</p>
+                      <p className="text-lg font-medium text-foreground">{stats.tasksCompleted}</p>
+                    </div>
+                    <div className="bg-background/50 rounded-lg p-3 border border-border">
+                      <p className="text-xs text-foreground-muted mb-1">Credits Earned</p>
+                      <p className="text-lg font-medium text-foreground">{formatCredits(stats.creditsEarned)}</p>
+                    </div>
+                    <div className="bg-background/50 rounded-lg p-3 border border-border">
+                      <p className="text-xs text-foreground-muted mb-1">Uptime</p>
+                      <p className="text-lg font-medium text-foreground">{formatUptime(stats.uptimeSeconds)}</p>
+                    </div>
+                    <div className="bg-background/50 rounded-lg p-3 border border-border">
+                      <p className="text-xs text-foreground-muted mb-1">Compute Time</p>
+                      <p className="text-lg font-medium text-foreground">{formatUptime(Math.round(stats.totalComputeTime))}</p>
+                    </div>
                   </div>
-                  <div className="bg-background/50 rounded-lg p-3 border border-border">
-                    <p className="text-xs text-foreground-muted mb-1">Credits Earned</p>
-                    <p className="text-lg font-medium text-foreground">{formatCredits(stats.creditsEarned)}</p>
-                  </div>
-                  <div className="bg-background/50 rounded-lg p-3 border border-border">
-                    <p className="text-xs text-foreground-muted mb-1">Uptime</p>
-                    <p className="text-lg font-medium text-foreground">{formatUptime(stats.uptimeSeconds)}</p>
-                  </div>
-                  <div className="bg-background/50 rounded-lg p-3 border border-border">
-                    <p className="text-xs text-foreground-muted mb-1">Compute Time</p>
-                    <p className="text-lg font-medium text-foreground">{formatUptime(Math.round(stats.totalComputeTime))}</p>
+
+                  {/* Credit rate and model loading */}
+                  <div className={cn(
+                    "p-3 rounded-lg border",
+                    isModelLoaded ? "bg-green-500/5 border-green-500/20" : "bg-amber-500/5 border-amber-500/20"
+                  )}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Zap className={cn("w-4 h-4", isModelLoaded ? "text-green-400" : "text-amber-400")} />
+                        <span className={isModelLoaded ? "text-green-400" : "text-amber-400"}>
+                          {isModelLoaded
+                            ? "1.0 credits/task (real compute)"
+                            : "0.1 credits/task (simulated)"
+                          }
+                        </span>
+                      </div>
+                      {!isModelLoaded && (
+                        <button
+                          onClick={loadModel}
+                          disabled={modelLoadProgress > 0 && modelLoadProgress < 100}
+                          className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 active:bg-amber-500/30 transition-colors text-xs font-medium min-h-[44px]"
+                        >
+                          {modelLoadProgress > 0 && modelLoadProgress < 100 ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              {modelLoadProgress}%
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3 h-3" />
+                              Load AI Model
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {!isModelLoaded && (
+                      <p className="text-xs text-foreground-muted mt-2">
+                        Load a WebLLM model to earn 10x more credits with real AI inference.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

@@ -1,0 +1,49 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      thermophysicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Air properties with Boussinesq approximation for buoyancy
+// Valid for small temperature differences (good for our 70K range)
+
+thermoType
+{
+    type            heRhoThermo;
+    mixture         pureMixture;
+    transport       const;
+    thermo          hConst;
+    equationOfState perfectGas;
+    specie          specie;
+    energy          sensibleEnthalpy;
+}
+
+mixture
+{
+    specie
+    {
+        molWeight   28.9;  // Air molecular weight [g/mol]
+    }
+    thermodynamics
+    {
+        Cp          1005;  // Specific heat [J/(kg·K)]
+        Hf          0;     // Heat of formation
+    }
+    transport
+    {
+        mu          1.8e-5;   // Dynamic viscosity [Pa·s]
+        Pr          0.71;     // Prandtl number
+    }
+}
+
+// ************************************************************************* //

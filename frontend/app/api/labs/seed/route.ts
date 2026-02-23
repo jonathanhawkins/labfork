@@ -1,13 +1,54 @@
 /**
  * Lab Seed API
  *
- * POST /api/labs/seed - Seed demo labs
+ * POST /api/labs/seed - Seed demo labs and sync to Workers
  * GET /api/labs/seed - Check if seed data exists
  */
 
 import { NextResponse } from "next/server";
 import { createLab, listLabs } from "@/lib/labs/repository";
-import type { LabOwner, CreateLabInput } from "@/lib/labs/types";
+import type { LabOwner, CreateLabInput, Lab } from "@/lib/labs/types";
+
+// Workers API URL (uses env var or defaults to production)
+const WORKERS_API_URL = process.env.WORKERS_API_URL || "https://labfork-agents.workers.dev";
+
+/**
+ * Sync labs to Workers compute network for task distribution
+ */
+async function syncLabsToWorkers(labs: Lab[]): Promise<{ synced: number; failed: number }> {
+  try {
+    const response = await fetch(`${WORKERS_API_URL}/api/projects/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        labs: labs.map(lab => ({
+          id: lab.id,
+          slug: lab.slug,
+          name: lab.name,
+          description: lab.description,
+          domainSlug: lab.domainSlug,
+          domainName: lab.domainName,
+          tags: lab.tags,
+          status: lab.status,
+        })),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Seed] Workers sync failed:", response.status, await response.text());
+      return { synced: 0, failed: labs.length };
+    }
+
+    const result = await response.json();
+    return {
+      synced: (result.created || 0) + (result.updated || 0),
+      failed: result.failed || 0,
+    };
+  } catch (error) {
+    console.error("[Seed] Workers sync error:", error);
+    return { synced: 0, failed: labs.length };
+  }
+}
 
 // Demo users (matching activity seed)
 const DEMO_OWNERS: LabOwner[] = [
@@ -133,6 +174,21 @@ const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: numbe
     owner: DEMO_OWNERS[0],
     stats: { stars: 234, forks: 67, tasks: 22, papers: 28 },
   },
+
+  // Sustainability / Water labs
+  {
+    input: {
+      name: "Atmospheric Water Harvester",
+      slug: "water-harvester",
+      description: "Solar-powered water extraction from air using biomimicry, cheap sorbents, and 3D-printable components",
+      domainSlug: "sustainability",
+      visibility: "public",
+      tags: ["water", "solar", "biomimicry", "3d-printing", "mof", "humanitarian"],
+      primaryColor: "#06b6d4",
+    },
+    owner: DEMO_OWNERS[4],
+    stats: { stars: 342, forks: 89, tasks: 7, papers: 7 },
+  },
 ];
 
 /**
@@ -141,20 +197,18 @@ const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: numbe
  */
 export async function POST() {
   try {
-    // Check if we already have labs
-    const existing = await listLabs({ limit: 1 });
-    if (existing.labs.length > 0) {
-      return NextResponse.json({
-        success: true,
-        message: "Seed data already exists",
-        seeded: false,
-        count: 0,
-      });
-    }
+    // Get existing labs to check which ones we need to create
+    const existing = await listLabs({ limit: 100 });
+    const existingSlugs = new Set(existing.labs.map(lab => lab.slug));
 
     let created = 0;
 
     for (const { input, owner, stats } of DEMO_LABS) {
+      // Skip if this lab already exists
+      if (existingSlugs.has(input.slug)) {
+        continue;
+      }
+
       try {
         const lab = await createLab(input, owner);
 
@@ -176,11 +230,20 @@ export async function POST() {
       }
     }
 
+    // Now sync ALL labs to Workers (including existing ones)
+    const allLabs = await listLabs({ limit: 100 });
+    const workerSync = await syncLabsToWorkers(allLabs.labs);
+
     return NextResponse.json({
       success: true,
-      message: `Seeded ${created} labs`,
-      seeded: true,
+      message: created > 0 ? `Seeded ${created} new labs` : "All labs already exist",
+      seeded: created > 0,
       count: created,
+      workersSync: {
+        synced: workerSync.synced,
+        failed: workerSync.failed,
+        total: allLabs.labs.length,
+      },
     });
   } catch (error) {
     console.error("Seed error:", error);

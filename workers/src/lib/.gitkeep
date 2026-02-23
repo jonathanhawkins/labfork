@@ -1,0 +1,4 @@
+# Utility files will be added here
+# - db.ts: Database helpers
+# - ai.ts: Workers AI helpers
+# - types.ts: TypeScript type definitions

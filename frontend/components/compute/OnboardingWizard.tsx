@@ -131,22 +131,22 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
   const canProceed = currentStep === 3 ? !isDetecting && (gpuInfo !== null || error !== null) : true;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/95 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-background/95 backdrop-blur-sm">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="relative w-full max-w-2xl bg-background-card border border-border rounded-xl shadow-2xl overflow-hidden"
+        className="relative w-full sm:max-w-2xl max-h-[100dvh] sm:max-h-[90vh] bg-background-card border border-border sm:rounded-xl rounded-t-xl shadow-2xl flex flex-col"
       >
-        {/* Header */}
-        <div className="relative p-6 border-b border-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+        {/* Header - always visible */}
+        <div className="relative px-4 py-3 sm:p-6 border-b border-border flex-shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center flex-shrink-0">
                 <Network className="w-5 h-5 text-blue-400" />
               </div>
-              <div>
-                <h2 className="text-lg font-medium text-foreground-bright">
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-medium text-foreground-bright truncate">
                   Welcome to LabFork Compute
                 </h2>
                 <p className="text-xs text-foreground-muted">
@@ -157,7 +157,7 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
 
             <button
               onClick={handleSkip}
-              className="p-2 rounded-lg hover:bg-foreground-muted/10 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="p-2 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
               aria-label="Skip onboarding"
             >
               <X className="w-5 h-5 text-foreground-muted" />
@@ -165,7 +165,7 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
           </div>
 
           {/* Progress dots */}
-          <div className="flex items-center gap-2 mt-4">
+          <div className="flex items-center gap-2 mt-3">
             {[1, 2, 3, 4].map((step) => (
               <div
                 key={step}
@@ -178,8 +178,8 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
           </div>
         </div>
 
-        {/* Content */}
-        <div className="relative min-h-[400px]">
+        {/* Content - scrollable */}
+        <div className="relative flex-1 overflow-y-auto overscroll-contain min-h-0">
           <AnimatePresence mode="wait">
             {currentStep === 1 && (
               <StepWelcome key="step1" onNext={handleNext} />
@@ -224,20 +224,20 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="p-6 space-y-6"
+      className="p-4 sm:p-6 space-y-4 sm:space-y-6"
     >
-      <div className="text-center space-y-4">
+      <div className="text-center space-y-3 sm:space-y-4">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.3 }}
-          className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 mb-2"
+          className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 mb-1 sm:mb-2"
         >
-          <Network className="w-10 h-10 text-blue-400" />
+          <Network className="w-8 h-8 sm:w-10 sm:h-10 text-blue-400" />
         </motion.div>
 
-        <h3 className="text-xl font-medium text-foreground-bright">
-          What is LabFork's Distributed Compute Network?
+        <h3 className="text-lg sm:text-xl font-medium text-foreground-bright">
+          Distributed Compute Network
         </h3>
 
         <p className="text-sm text-foreground-muted max-w-md mx-auto leading-relaxed">
@@ -247,16 +247,16 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.3 }}
-          className="p-4 rounded-lg bg-background/50 border border-border text-center"
+          className="p-3 sm:p-4 rounded-lg bg-background/50 border border-border text-center"
         >
-          <Smartphone className="w-6 h-6 text-green-400 mx-auto mb-2" />
-          <p className="text-xs font-medium text-foreground mb-1">Mobile Friendly</p>
-          <p className="text-xxs text-foreground-muted">
+          <Smartphone className="w-5 h-5 sm:w-6 sm:h-6 text-green-400 mx-auto mb-1 sm:mb-2" />
+          <p className="text-xs font-medium text-foreground mb-0.5 sm:mb-1">Mobile</p>
+          <p className="text-xxs text-foreground-muted hidden sm:block">
             Works on phones and tablets
           </p>
         </motion.div>
@@ -265,11 +265,11 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.3 }}
-          className="p-4 rounded-lg bg-background/50 border border-border text-center"
+          className="p-3 sm:p-4 rounded-lg bg-background/50 border border-border text-center"
         >
-          <Laptop className="w-6 h-6 text-blue-400 mx-auto mb-2" />
-          <p className="text-xs font-medium text-foreground mb-1">Desktop Power</p>
-          <p className="text-xxs text-foreground-muted">
+          <Laptop className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400 mx-auto mb-1 sm:mb-2" />
+          <p className="text-xs font-medium text-foreground mb-0.5 sm:mb-1">Desktop</p>
+          <p className="text-xxs text-foreground-muted hidden sm:block">
             Maximize your contribution
           </p>
         </motion.div>
@@ -278,17 +278,18 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.3 }}
-          className="p-4 rounded-lg bg-background/50 border border-border text-center"
+          className="p-3 sm:p-4 rounded-lg bg-background/50 border border-border text-center"
         >
-          <Server className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-          <p className="text-xs font-medium text-foreground mb-1">Global Network</p>
-          <p className="text-xxs text-foreground-muted">
+          <Server className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400 mx-auto mb-1 sm:mb-2" />
+          <p className="text-xs font-medium text-foreground mb-0.5 sm:mb-1">Global</p>
+          <p className="text-xxs text-foreground-muted hidden sm:block">
             Distributed worldwide
           </p>
         </motion.div>
       </div>
 
-      <div className="flex justify-end pt-4">
+      {/* Navigation - sticky at bottom with safe area padding */}
+      <div className="flex justify-end pt-2 sm:pt-4 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={onNext}
           className="flex items-center gap-2 px-6 py-3 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors font-medium min-h-[44px]"
@@ -315,30 +316,29 @@ function StepCredits({ onNext, onBack }: { onNext: () => void; onBack: () => voi
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="p-6 space-y-6"
+      className="p-4 sm:p-6 space-y-4 sm:space-y-6"
     >
-      <div className="text-center space-y-4">
+      <div className="text-center space-y-3 sm:space-y-4">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.3 }}
-          className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 mb-2"
+          className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 mb-1 sm:mb-2"
         >
-          <Coins className="w-10 h-10 text-yellow-400" />
+          <Coins className="w-8 h-8 sm:w-10 sm:h-10 text-yellow-400" />
         </motion.div>
 
-        <h3 className="text-xl font-medium text-foreground-bright">
+        <h3 className="text-lg sm:text-xl font-medium text-foreground-bright">
           How Credits Work
         </h3>
 
         <p className="text-sm text-foreground-muted max-w-md mx-auto leading-relaxed">
           Earn credits by contributing compute power. Use credits to run your own
-          research, train models, or access premium features. The more you contribute,
-          the more you earn.
+          research, train models, or access premium features.
         </p>
       </div>
 
-      <div className="space-y-3 mt-8">
+      <div className="space-y-2 sm:space-y-3">
         {tiers.map((tier, index) => (
           <motion.div
             key={tier.name}
@@ -346,32 +346,32 @@ function StepCredits({ onNext, onBack }: { onNext: () => void; onBack: () => voi
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 + index * 0.1, duration: 0.3 }}
             className={cn(
-              "p-4 rounded-lg border border-border",
+              "p-3 sm:p-4 rounded-lg border border-border",
               tier.bg
             )}
           >
-            <div className="flex items-center gap-4">
-              <div className={cn("w-12 h-12 rounded-lg flex items-center justify-center", tier.bg)}>
-                <tier.icon className={cn("w-6 h-6", tier.color)} />
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className={cn("w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0", tier.bg)}>
+                <tier.icon className={cn("w-5 h-5 sm:w-6 sm:h-6", tier.color)} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className={cn("text-sm font-medium", tier.color)}>{tier.name}</p>
                 <p className="text-xs text-foreground-muted">
-                  {tier.tokens} tokens/hour
+                  {tier.tokens} tokens/hr
                 </p>
               </div>
-              <div className="text-right">
+              <div className="text-right flex-shrink-0">
                 <p className="text-lg font-medium text-foreground-bright">
                   {tier.credits}
                 </p>
-                <p className="text-xxs text-foreground-muted">credits/hour</p>
+                <p className="text-xxs text-foreground-muted">credits/hr</p>
               </div>
             </div>
           </motion.div>
         ))}
       </div>
 
-      <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+      <div className="p-3 sm:p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
         <div className="flex items-start gap-2">
           <Zap className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
           <p className="text-xs text-blue-400">
@@ -380,17 +380,17 @@ function StepCredits({ onNext, onBack }: { onNext: () => void; onBack: () => voi
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center justify-between pt-2 sm:pt-4 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
         <button
           onClick={onNext}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-lg bg-foreground-bright text-background hover:bg-white active:bg-foreground-muted transition-colors font-medium min-h-[44px]"
         >
           Next
           <ArrowRight className="w-4 h-4" />
@@ -432,19 +432,19 @@ function StepDetection({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="p-6 space-y-6"
+      className="p-4 sm:p-6 space-y-4 sm:space-y-6"
     >
-      <div className="text-center space-y-4">
+      <div className="text-center space-y-3 sm:space-y-4">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.3 }}
-          className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500/20 to-blue-500/20 mb-2"
+          className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-green-500/20 to-blue-500/20 mb-1 sm:mb-2"
         >
-          <Cpu className="w-10 h-10 text-green-400" />
+          <Cpu className="w-8 h-8 sm:w-10 sm:h-10 text-green-400" />
         </motion.div>
 
-        <h3 className="text-xl font-medium text-foreground-bright">
+        <h3 className="text-lg sm:text-xl font-medium text-foreground-bright">
           Device Detection
         </h3>
 
@@ -453,16 +453,16 @@ function StepDetection({
         </p>
       </div>
 
-      <div className="space-y-4 mt-8">
+      <div className="space-y-3 sm:space-y-4">
         {isDetecting && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="p-6 rounded-lg bg-background/50 border border-border text-center"
+            className="p-4 sm:p-6 rounded-lg bg-background/50 border border-border text-center"
           >
             <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-3" />
             <p className="text-sm text-foreground-muted">
-              Detecting GPU and running performance benchmark...
+              Detecting GPU and running benchmark...
             </p>
           </motion.div>
         )}
@@ -472,35 +472,28 @@ function StepDetection({
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
-            className="space-y-4"
+            className="space-y-3 sm:space-y-4"
           >
             {/* GPU Info */}
-            <div className="p-4 rounded-lg bg-background/50 border border-border">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle2 className="w-5 h-5 text-green-400" />
+            <div className="p-3 sm:p-4 rounded-lg bg-background/50 border border-border">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
                 <p className="text-sm font-medium text-foreground-bright">
                   GPU Detected
                 </p>
               </div>
               {gpuInfo.adapterInfo && (
-                <div className="space-y-2">
-                  <p className="text-sm text-foreground">
-                    {gpuInfo.adapterInfo.description || gpuInfo.adapterInfo.device ||
-                      `${gpuInfo.adapterInfo.vendor}${gpuInfo.adapterInfo.architecture ? ` (${gpuInfo.adapterInfo.architecture})` : ''}`}
-                  </p>
-                  {(gpuInfo.adapterInfo.description || gpuInfo.adapterInfo.device) && (
-                    <div className="flex items-center gap-2 text-xs text-foreground-muted">
-                      <span>{gpuInfo.adapterInfo.vendor}</span>
-                    </div>
-                  )}
-                </div>
+                <p className="text-sm text-foreground truncate">
+                  {gpuInfo.adapterInfo.description || gpuInfo.adapterInfo.device ||
+                    `${gpuInfo.adapterInfo.vendor}${gpuInfo.adapterInfo.architecture ? ` (${gpuInfo.adapterInfo.architecture})` : ''}`}
+                </p>
               )}
             </div>
 
             {/* Benchmark Results */}
             {benchmarkResult && (
-              <div className="p-4 rounded-lg bg-background/50 border border-border">
-                <p className="text-sm font-medium text-foreground-bright mb-3">
+              <div className="p-3 sm:p-4 rounded-lg bg-background/50 border border-border">
+                <p className="text-sm font-medium text-foreground-bright mb-2 sm:mb-3">
                   Performance Benchmark
                 </p>
                 <div className="grid grid-cols-2 gap-3">
@@ -527,16 +520,16 @@ function StepDetection({
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.2, duration: 0.3 }}
                 className={cn(
-                  "p-4 rounded-lg border",
+                  "p-3 sm:p-4 rounded-lg border",
                   tierInfo.bgColor,
                   `border-${tierInfo.color.replace('text-', '')}/20`
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <div className={cn("w-12 h-12 rounded-lg flex items-center justify-center", tierInfo.bgColor)}>
-                    <Award className={cn("w-6 h-6", tierInfo.color)} />
+                  <div className={cn("w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0", tierInfo.bgColor)}>
+                    <Award className={cn("w-5 h-5 sm:w-6 sm:h-6", tierInfo.color)} />
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <p className={cn("text-sm font-medium", tierInfo.color)}>
                       {tierInfo.name}
                     </p>
@@ -554,7 +547,7 @@ function StepDetection({
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20"
+            className="p-3 sm:p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20"
           >
             <div className="flex items-start gap-2">
               <Zap className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -572,10 +565,10 @@ function StepDetection({
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center justify-between pt-2 sm:pt-4 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
@@ -584,7 +577,7 @@ function StepDetection({
           onClick={onNext}
           disabled={!canProceed}
           className={cn(
-            "flex items-center gap-2 px-6 py-3 rounded-lg font-medium min-h-[44px] transition-colors",
+            "flex items-center gap-2 px-4 sm:px-6 py-3 rounded-lg font-medium min-h-[44px] transition-colors",
             canProceed
               ? "bg-foreground-bright text-background hover:bg-white"
               : "bg-foreground-muted/20 text-foreground-muted cursor-not-allowed"
@@ -621,20 +614,20 @@ function StepReady({ tier, onComplete, onBack }: StepReadyProps) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="p-6 space-y-6"
+      className="p-4 sm:p-6 space-y-4 sm:space-y-6"
     >
-      <div className="text-center space-y-4">
+      <div className="text-center space-y-3 sm:space-y-4">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.3 }}
-          className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 mb-2"
+          className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 mb-1 sm:mb-2"
         >
-          <Rocket className="w-10 h-10 text-purple-400" />
+          <Rocket className="w-8 h-8 sm:w-10 sm:h-10 text-purple-400" />
         </motion.div>
 
-        <h3 className="text-xl font-medium text-foreground-bright">
-          Ready to Start Contributing!
+        <h3 className="text-lg sm:text-xl font-medium text-foreground-bright">
+          Ready to Contribute!
         </h3>
 
         {tierInfo && (
@@ -647,50 +640,49 @@ function StepReady({ tier, onComplete, onBack }: StepReadyProps) {
         )}
       </div>
 
-      <div className="space-y-3 mt-8">
+      <div className="space-y-2 sm:space-y-3">
         {benefits.map((benefit, index) => (
           <motion.div
             key={index}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 + index * 0.1, duration: 0.3 }}
-            className="flex items-start gap-3 p-3 rounded-lg bg-background/50 border border-border"
+            className="flex items-center gap-3 p-2.5 sm:p-3 rounded-lg bg-background/50 border border-border"
           >
             <div className="w-8 h-8 rounded-lg bg-foreground-muted/10 flex items-center justify-center flex-shrink-0">
               <benefit.icon className="w-4 h-4 text-foreground-muted" />
             </div>
-            <p className="text-sm text-foreground pt-1">{benefit.text}</p>
+            <p className="text-sm text-foreground">{benefit.text}</p>
           </motion.div>
         ))}
       </div>
 
-      <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+      <div className="p-3 sm:p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
         <div className="flex items-start gap-2">
           <CheckCircle2 className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-blue-400 space-y-1">
             <p className="font-medium">Privacy & Control</p>
             <p className="text-blue-400/80">
-              You control when to contribute. Your device only processes encrypted
-              tasks - never your personal data. Pause or stop anytime.
+              Your device only processes encrypted tasks - never your personal data. Pause or stop anytime.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4">
+      <div className="flex items-center justify-between pt-2 sm:pt-4 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-lg hover:bg-foreground-muted/10 active:bg-foreground-muted/20 transition-colors font-medium min-h-[44px]"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
         </button>
         <button
           onClick={onComplete}
-          className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 active:from-blue-700 active:to-purple-700 transition-all font-medium min-h-[44px]"
+          className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 active:from-blue-700 active:to-purple-700 transition-all font-medium min-h-[44px]"
         >
           <Rocket className="w-4 h-4" />
-          Start Contributing
+          Start
         </button>
       </div>
     </motion.div>

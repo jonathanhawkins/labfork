@@ -1,0 +1,43 @@
+{
+  "name": "nudge-engine",
+  "version": "0.1.0",
+  "description": "Persistent autonomous task manager for AI CLI tools. A cron loop that keeps your AI agents productive.",
+  "author": "LabFork <hello@labfork.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/labfork/nudge-engine"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "task-manager",
+    "cron",
+    "cloudflare-workers",
+    "claude-code",
+    "codex",
+    "ollama",
+    "autonomous",
+    "nudge-loop"
+  ],
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create nudge-engine-db",
+    "db:migrate": "wrangler d1 execute nudge-engine-db --file=schema.sql",
+    "db:migrate:local": "wrangler d1 execute nudge-engine-db --local --file=schema.sql",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.7.0",
+    "vitest": "~2.1.0",
+    "wrangler": "^3.99.0"
+  }
+}

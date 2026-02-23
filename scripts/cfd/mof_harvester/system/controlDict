@@ -1,0 +1,73 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// MOF Water Harvester CFD Simulation
+// Physics: Buoyancy-driven flow with heat and mass transfer
+// Based on MIT/Berkeley MOF-801 device
+
+application     buoyantSimpleFoam;
+
+startFrom       startTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         500;  // Quick test run (steady state converges fast)
+
+deltaT          1;
+
+writeControl    timeStep;
+
+writeInterval   100;
+
+purgeWrite      3;
+
+writeFormat     ascii;
+
+writePrecision  8;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable true;
+
+functions
+{
+    // Probe temperature at key locations
+    probes
+    {
+        type            probes;
+        libs            (sampling);
+        writeControl    timeStep;
+        writeInterval   10;
+        writeFields     true;
+
+        fields          (T p U);
+
+        probeLocations
+        (
+            (0.15 0.05 0.005)    // Just above sorbent
+            (0.15 0.15 0.005)    // Mid-height
+            (0.15 0.25 0.005)    // Near dome top
+        );
+    }
+}
+
+// ************************************************************************* //

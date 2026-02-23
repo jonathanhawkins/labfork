@@ -134,6 +134,7 @@ CREATE TABLE compute_tasks (
 -- Indexes for compute tables
 CREATE INDEX idx_compute_devices_tier_status ON compute_devices(tier, status);
 CREATE INDEX idx_compute_devices_last_heartbeat ON compute_devices(last_heartbeat);
+CREATE INDEX idx_compute_devices_auth_token ON compute_devices(auth_token);
 CREATE INDEX idx_compute_tasks_status_priority ON compute_tasks(status, priority DESC);
 CREATE INDEX idx_compute_tasks_assigned_device ON compute_tasks(assigned_device_id);
 CREATE INDEX idx_compute_tasks_parent_task ON compute_tasks(parent_task_id);
@@ -179,3 +180,23 @@ CREATE INDEX idx_research_objectives_lab_status ON research_objectives(lab_id, s
 CREATE INDEX idx_research_objectives_priority ON research_objectives(priority DESC);
 CREATE INDEX idx_research_results_lab_created ON research_results(lab_id, created_at DESC);
 CREATE INDEX idx_research_results_device ON research_results(device_id);
+
+-- ============================================================================
+-- SEED PAPERS TABLE
+-- Papers imported from arXiv/Semantic Scholar that feed the compute task queue.
+-- Each paper generates 3-5 crowd-tier compute tasks (summarization, classification,
+-- embedding, assessment).
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS seed_papers (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  abstract TEXT NOT NULL,
+  source_url TEXT,
+  domain TEXT DEFAULT 'general',
+  added_at TEXT DEFAULT (datetime('now')),
+  tasks_generated INTEGER DEFAULT 0
+);
+
+CREATE INDEX idx_seed_papers_domain ON seed_papers(domain);
+CREATE INDEX idx_seed_papers_tasks_generated ON seed_papers(tasks_generated);

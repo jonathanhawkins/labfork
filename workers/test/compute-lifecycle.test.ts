@@ -196,7 +196,7 @@ describe('Task Lifecycle', () => {
       body: JSON.stringify({
         deviceId,
         success: true,
-        result: { text: 'Generated output', metrics: { computeTime: 5000 } },
+        result: { text: 'Generated output', computeMode: 'webllm', metrics: { computeTime: 5000 } },
       }),
     });
     const completeData = await completeRes.json() as Record<string, unknown>;
@@ -204,6 +204,7 @@ describe('Task Lifecycle', () => {
     expect(completeData.success).toBe(true);
     expect(completeData.status).toBe('completed');
     expect(completeData.creditsAwarded).toBe(1);
+    expect(completeData.computeMode).toBe('webllm');
 
     // Verify device is freed
     const deviceRow = await env.DB.prepare(
@@ -217,6 +218,43 @@ describe('Task Lifecycle', () => {
       'SELECT status FROM compute_tasks WHERE id = ?'
     ).bind(taskId).first();
     expect(taskRow!.status).toBe('completed');
+  });
+
+  it('mock computeMode awards 0.1 credits instead of 1.0', async () => {
+    const { data: devData } = await registerDevice();
+    const device = devData.device as Record<string, unknown>;
+    const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
+
+    const { data: taskData } = await createTask();
+    const task = taskData.task as Record<string, unknown>;
+    const taskId = task.id as string;
+
+    // Report success with mock computeMode (no WebLLM model loaded)
+    const completeRes = await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        deviceId,
+        success: true,
+        result: { computeMode: 'mock', metrics: { computeTime: 1200 } },
+      }),
+    });
+    const completeData = await completeRes.json() as Record<string, unknown>;
+    expect(completeRes.status).toBe(200);
+    expect(completeData.success).toBe(true);
+    expect(completeData.status).toBe('completed');
+    expect(completeData.creditsAwarded).toBe(0.1);
+    expect(completeData.computeMode).toBe('mock');
+
+    // Verify credits stored in D1 device stats JSON
+    const deviceRow = await env.DB.prepare(
+      "SELECT json_extract(stats, '$.creditsEarned') as credits FROM compute_devices WHERE id = ?"
+    ).bind(deviceId).first();
+    expect(deviceRow!.credits).toBe(0.1);
   });
 
   it('device reports failure → task failed, device freed', async () => {
@@ -286,6 +324,8 @@ describe('Race Condition Prevention', () => {
     const { data: dev2Data } = await registerDevice({ name: 'GPU-2' });
     const dev1 = dev1Data.device as Record<string, unknown>;
     const dev2 = dev2Data.device as Record<string, unknown>;
+    const token1 = dev1Data.authToken as string;
+    const token2 = dev2Data.authToken as string;
 
     // Manually insert a pending task (bypass auto-assign by inserting directly)
     const taskId = 'ctask_race_test';
@@ -298,12 +338,12 @@ describe('Race Condition Prevention', () => {
     const [claim1, claim2] = await Promise.all([
       SELF.fetch(`https://test.local/api/compute/tasks/${taskId}/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token1}` },
         body: JSON.stringify({ deviceId: dev1.id }),
       }),
       SELF.fetch(`https://test.local/api/compute/tasks/${taskId}/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token2}` },
         body: JSON.stringify({ deviceId: dev2.id }),
       }),
     ]);
@@ -339,10 +379,11 @@ describe('Race Condition Prevention', () => {
     // Register another device and try to claim
     const { data: dev2Data } = await registerDevice({ name: 'GPU-2' });
     const dev2 = dev2Data.device as Record<string, unknown>;
+    const token2 = dev2Data.authToken as string;
 
     const res = await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}/claim`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token2}` },
       body: JSON.stringify({ deviceId: dev2.id }),
     });
     expect(res.status).toBe(409);
@@ -361,6 +402,7 @@ describe('Device Heartbeat', () => {
     const { data: devData } = await registerDevice();
     const device = devData.device as Record<string, unknown>;
     const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
 
     // Manually insert a pending task (not auto-assigned since device was busy being created)
     const taskId = 'ctask_heartbeat_test';
@@ -372,7 +414,7 @@ describe('Device Heartbeat', () => {
     // Send heartbeat — device is online, no current task, should get assigned
     const hbRes = await SELF.fetch(`https://test.local/api/compute/devices/${deviceId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
       body: JSON.stringify({ status: 'online' }),
     });
     const hbData = await hbRes.json() as Record<string, unknown>;
@@ -535,7 +577,9 @@ describe('Full Round-Trip', () => {
         deviceId,
         success: true,
         result: {
+          text: 'Project assessment complete with detailed analysis of current state',
           output: 'Project assessment complete',
+          computeMode: 'mock',
           metrics: { computeTime: 12000 },
         },
       }),
@@ -554,5 +598,289 @@ describe('Full Round-Trip', () => {
     ).bind(taskId).first();
     expect(finalTask!.status).toBe('completed');
     expect(finalTask!.completed_at).toBeDefined();
+  });
+});
+
+// ============================================================================
+// Result Validation (Phase 2)
+// ============================================================================
+
+describe('Result Validation', () => {
+  beforeEach(cleanTables);
+
+  it('rejects summarization result with empty text', async () => {
+    // Register device and create a summarization task
+    const { data: devData } = await registerDevice();
+    const device = devData.device as Record<string, unknown>;
+    const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
+
+    const { data: taskData } = await createTask({ type: 'summarization', input: { text: 'Summarize this paper about TTS' } });
+    const task = taskData.task as Record<string, unknown>;
+    const taskId = task.id as string;
+
+    // Report with empty result text
+    const completeRes = await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        deviceId,
+        success: true,
+        result: { text: '', computeMode: 'mock', metrics: { computeTime: 2000 } },
+      }),
+    });
+    expect(completeRes.status).toBe(422);
+    const errData = await completeRes.json() as Record<string, unknown>;
+    expect((errData.error as string)).toContain('Summarization');
+  });
+
+  it('rejects classification result with invalid category', async () => {
+    const { data: devData } = await registerDevice();
+    const device = devData.device as Record<string, unknown>;
+    const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
+
+    const { data: taskData } = await createTask({
+      type: 'classification',
+      input: { text: 'Classify this', categories: ['positive', 'negative', 'neutral'] },
+    });
+    const task = taskData.task as Record<string, unknown>;
+    const taskId = task.id as string;
+
+    const completeRes = await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        deviceId,
+        success: true,
+        result: { text: 'completely_wrong_category', computeMode: 'mock', metrics: { computeTime: 1500 } },
+      }),
+    });
+    expect(completeRes.status).toBe(422);
+  });
+
+  it('accepts valid summarization result', async () => {
+    const { data: devData } = await registerDevice();
+    const device = devData.device as Record<string, unknown>;
+    const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
+
+    const { data: taskData } = await createTask({ type: 'summarization', input: { text: 'A long paper about voice synthesis techniques and approaches.' } });
+    const task = taskData.task as Record<string, unknown>;
+    const taskId = task.id as string;
+
+    const completeRes = await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        deviceId,
+        success: true,
+        result: {
+          text: 'This paper explores novel voice synthesis techniques using neural approaches for improved naturalness.',
+          computeMode: 'mock',
+          metrics: { computeTime: 3000 },
+        },
+      }),
+    });
+    expect(completeRes.status).toBe(200);
+    const data = await completeRes.json() as Record<string, unknown>;
+    expect(data.success).toBe(true);
+  });
+
+  it('server downgrades computeMode when device has no models', async () => {
+    // Register a CPU device with no models
+    const { data: devData } = await registerDevice({
+      name: 'CPU Device',
+      platform: 'cpu',
+      capabilities: { compute: 1, memory: 4, models: [] },
+    });
+    const device = devData.device as Record<string, unknown>;
+    const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
+
+    const { data: taskData } = await createTask();
+    const task = taskData.task as Record<string, unknown>;
+    const taskId = task.id as string;
+
+    // Client claims webllm but device is CPU with no models
+    const completeRes = await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        deviceId,
+        success: true,
+        result: { text: 'output', computeMode: 'webllm', metrics: { computeTime: 5000 } },
+      }),
+    });
+    expect(completeRes.status).toBe(200);
+    const data = await completeRes.json() as Record<string, unknown>;
+    // Server should downgrade to mock pricing
+    expect(data.computeMode).toBe('mock');
+    expect(data.creditsAwarded).toBe(0.1);
+  });
+});
+
+// ============================================================================
+// Admin Auth (Phase 3)
+// ============================================================================
+
+describe('Admin Auth', () => {
+  beforeEach(cleanTables);
+
+  // Note: In dev mode with no ADMIN_API_KEY set, all admin endpoints are open.
+  // These tests verify the endpoints work without auth (dev mode behavior).
+  // When ADMIN_API_KEY is set in production, requests without it get 401.
+
+  it('POST /tasks works in dev mode (no ADMIN_API_KEY configured)', async () => {
+    const { res } = await createTask();
+    expect(res.status).toBe(200);
+  });
+
+  it('POST /tasks/generate-crowd works in dev mode', async () => {
+    const res = await SELF.fetch('https://test.local/api/compute/tasks/generate-crowd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count: 2 }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as Record<string, unknown>;
+    expect(data.success).toBe(true);
+    expect(data.generated).toBe(2);
+  });
+
+  it('DELETE /tasks/:id deletes a task', async () => {
+    const { data: taskData } = await createTask();
+    const task = taskData.task as Record<string, unknown>;
+    const taskId = task.id as string;
+
+    const res = await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(200);
+
+    // Verify task is gone
+    const row = await env.DB.prepare('SELECT id FROM compute_tasks WHERE id = ?').bind(taskId).first();
+    expect(row).toBeNull();
+  });
+
+  it('DELETE /tasks/:id returns 404 for missing task', async () => {
+    const res = await SELF.fetch('https://test.local/api/compute/tasks/nonexistent', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+// ============================================================================
+// Paper Task Generation (Phase 1)
+// ============================================================================
+
+describe('Paper Task Generation', () => {
+  beforeEach(async () => {
+    await cleanTables();
+    // Also clean seed_papers
+    await env.DB.exec('DELETE FROM seed_papers').catch(() => {});
+  });
+
+  it('POST /tasks/from-paper generates tasks from a paper', async () => {
+    const res = await SELF.fetch('https://test.local/api/compute/tasks/from-paper', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paperId: 'arxiv-2401.12345',
+        title: 'Neural Voice Cloning with Zero-Shot Transfer',
+        abstract: 'We present a novel approach to voice cloning that achieves zero-shot transfer learning using a modified transformer architecture with prosody-aware attention mechanisms.',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as Record<string, unknown>;
+    expect(data.success).toBe(true);
+    expect(data.generated).toBeGreaterThanOrEqual(4); // At least 4 tasks (summary, class, embed, assess)
+
+    const tasks = data.tasks as { id: string; type: string; section?: string }[];
+    const types = tasks.map((t) => t.type);
+    expect(types).toContain('summarization');
+    expect(types).toContain('classification');
+    expect(types).toContain('embedding');
+    expect(types).toContain('assessment');
+
+    // Verify tasks are in D1
+    const count = await env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM compute_tasks WHERE json_extract(input, '$.source.paperId') = ?"
+    ).bind('arxiv-2401.12345').first<{ cnt: number }>();
+    expect(count!.cnt).toBeGreaterThanOrEqual(4);
+
+    // Verify seed_papers entry
+    const paper = await env.DB.prepare('SELECT * FROM seed_papers WHERE id = ?').bind('arxiv-2401.12345').first();
+    expect(paper).not.toBeNull();
+    expect(paper!.title).toBe('Neural Voice Cloning with Zero-Shot Transfer');
+  });
+
+  it('POST /tasks/from-paper returns 400 with missing fields', async () => {
+    const res = await SELF.fetch('https://test.local/api/compute/tasks/from-paper', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paperId: 'test' }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ============================================================================
+// Results API (Phase 4)
+// ============================================================================
+
+describe('Results API', () => {
+  beforeEach(cleanTables);
+
+  it('GET /results returns aggregated stats (public)', async () => {
+    const res = await SELF.fetch('https://test.local/api/compute/results');
+    expect(res.status).toBe(200);
+    const data = await res.json() as Record<string, unknown>;
+    expect(data.totalResults).toBeDefined();
+    expect(data.byType).toBeDefined();
+  });
+
+  it('GET /results?aggregated=false returns full results in dev mode', async () => {
+    // Create and complete a task to have results
+    const { data: devData } = await registerDevice();
+    const device = devData.device as Record<string, unknown>;
+    const deviceId = device.id as string;
+    const authToken = devData.authToken as string;
+
+    const { data: taskData } = await createTask();
+    const task = taskData.task as Record<string, unknown>;
+    const taskId = task.id as string;
+
+    await SELF.fetch(`https://test.local/api/compute/tasks/${taskId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        deviceId,
+        success: true,
+        result: { text: 'Result text', computeMode: 'mock', metrics: { computeTime: 2000 } },
+      }),
+    });
+
+    const res = await SELF.fetch('https://test.local/api/compute/results?aggregated=false');
+    expect(res.status).toBe(200);
+    const data = await res.json() as Record<string, unknown>;
+    expect(data.results).toBeDefined();
+    expect((data.results as unknown[]).length).toBeGreaterThanOrEqual(1);
   });
 });

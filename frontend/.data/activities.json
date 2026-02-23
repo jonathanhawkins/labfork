@@ -1,209 +1,65 @@
 [
   {
-    "id": "act_ml0jolplbewwxp",
-    "type": "result_created",
-    "actor": {
-      "id": "user_demo1",
-      "username": "spark_research",
-      "displayName": "Spark Research",
-      "avatar": ""
-    },
-    "target": {
-      "type": "result",
-      "id": "result_1",
-      "title": "MPPT Algorithm v2"
-    },
-    "context": {
-      "metadata": {
-        "resultType": "model"
-      }
-    },
-    "labId": "lab_firefly",
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.753Z"
-  },
-  {
-    "id": "act_ml0jolpmjsuykq",
-    "type": "result_published",
-    "actor": {
-      "id": "user_demo2",
-      "username": "voice_pioneer",
-      "displayName": "Voice Pioneer",
-      "avatar": ""
-    },
-    "target": {
-      "type": "result",
-      "id": "result_2",
-      "title": "Voice Emotion Model"
-    },
-    "labId": "lab_voice",
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.754Z"
-  },
-  {
-    "id": "act_ml0jolpmfmu9uy",
-    "type": "task_created",
-    "actor": {
-      "id": "user_demo3",
-      "username": "firefly_dev",
-      "displayName": "Firefly Developer",
-      "avatar": ""
-    },
-    "target": {
-      "type": "task",
-      "id": "task_1",
-      "title": "Implement Thread mesh protocol"
-    },
-    "labId": "lab_firefly",
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.754Z"
-  },
-  {
-    "id": "act_ml0jolpmm9s6hi",
-    "type": "task_completed",
-    "actor": {
-      "id": "user_demo4",
-      "username": "ai_researcher",
-      "displayName": "AI Researcher",
-      "avatar": ""
-    },
-    "target": {
-      "type": "task",
-      "id": "task_2",
-      "title": "Train emotion recognition model"
-    },
-    "labId": "lab_voice",
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.754Z"
-  },
-  {
-    "id": "act_ml0jolpmmedrsq",
-    "type": "paper_added",
-    "actor": {
-      "id": "user_demo5",
-      "username": "open_hardware",
-      "displayName": "Open Hardware",
-      "avatar": ""
-    },
-    "target": {
-      "type": "paper",
-      "id": "paper_1",
-      "title": "Efficient MPPT for Low-Power Applications"
-    },
-    "labId": "lab_firefly",
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.754Z"
-  },
-  {
-    "id": "act_ml0jolpnwiur1t",
-    "type": "paper_added",
-    "actor": {
-      "id": "user_demo1",
-      "username": "spark_research",
-      "displayName": "Spark Research",
-      "avatar": ""
-    },
-    "target": {
-      "type": "paper",
-      "id": "paper_2",
-      "title": "Neural Codec Language Models for Speech"
-    },
-    "labId": "lab_voice",
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.755Z"
-  },
-  {
-    "id": "act_ml0jolpnc42yvb",
-    "type": "comment_added",
-    "actor": {
-      "id": "user_demo2",
-      "username": "voice_pioneer",
-      "displayName": "Voice Pioneer",
-      "avatar": ""
-    },
-    "target": {
-      "type": "result",
-      "id": "result_1",
-      "title": "MPPT Algorithm v2"
-    },
-    "context": {
-      "snippet": "Great progress! The efficiency improvements look promising."
-    },
-    "labId": "lab_firefly",
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.755Z"
-  },
-  {
-    "id": "act_ml0jolpnpx5nfg",
-    "type": "lab_starred",
-    "actor": {
-      "id": "user_demo3",
-      "username": "firefly_dev",
-      "displayName": "Firefly Developer",
-      "avatar": ""
-    },
-    "target": {
-      "type": "lab",
-      "id": "lab_voice",
-      "title": "Voice Clone Lab"
-    },
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.755Z"
-  },
-  {
-    "id": "act_ml0jolposlw8nm",
-    "type": "lab_forked",
-    "actor": {
-      "id": "user_demo4",
-      "username": "ai_researcher",
-      "displayName": "AI Researcher",
-      "avatar": ""
-    },
-    "target": {
-      "type": "lab",
-      "id": "lab_firefly",
-      "title": "Firefly Network"
-    },
-    "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.756Z"
-  },
-  {
-    "id": "act_ml0jolpoidgyvo",
-    "type": "agent_spawned",
+    "id": "act_ml8hdsdagaglc1",
+    "type": "simulation_completed",
     "actor": {
       "id": "system",
       "username": "system",
-      "displayName": "System",
-      "avatar": ""
+      "displayName": "Compute Network"
     },
     "target": {
-      "type": "agent",
-      "id": "agent_spark",
-      "title": "Spark (Synergy Detector)"
+      "type": "simulation",
+      "id": "sim_ml8hdsda_nq2h204zz",
+      "title": "water_harvester simulation",
+      "url": "/labs/water-harvester?tab=simulate"
     },
-    "labId": "lab_firefly",
+    "context": {
+      "metrics": [
+        {
+          "name": "Daily Yield",
+          "value": 0.89,
+          "unit": "L/day"
+        },
+        {
+          "name": "Efficiency",
+          "value": 95,
+          "unit": "%"
+        }
+      ]
+    },
+    "labId": "lab_water-harvester",
     "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.756Z"
+    "createdAt": "2026-02-04T20:29:25.342Z"
   },
   {
-    "id": "act_ml0jolpocxskvp",
-    "type": "agent_completed",
+    "id": "act_ml8hizmdsm26of",
+    "type": "simulation_started",
     "actor": {
       "id": "system",
       "username": "system",
-      "displayName": "System",
-      "avatar": ""
+      "displayName": "Compute Network"
     },
     "target": {
-      "type": "agent",
-      "id": "agent_mesh",
-      "title": "Mesh (Pattern Recognizer)"
+      "type": "simulation",
+      "id": "sim_ml8hizmd_e459bv8v0",
+      "title": "water_harvester simulation",
+      "url": "/labs/water-harvester?tab=simulate"
     },
-    "context": {
-      "summary": "Identified 3 optimization patterns in MPPT implementation"
-    },
-    "labId": "lab_firefly",
+    "labId": "lab_water-harvester",
     "isPublic": true,
-    "createdAt": "2026-01-30T07:11:39.756Z"
+    "createdAt": "2026-02-04T20:33:28.021Z"
+  }
+]         "unit": "L/day"
+        },
+        {
+          "name": "Efficiency",
+          "value": 97,
+          "unit": "%"
+        }
+      ]
+    },
+    "labId": "lab_water-harvester",
+    "isPublic": true,
+    "createdAt": "2026-02-04T20:33:28.021Z"
   }
 ]

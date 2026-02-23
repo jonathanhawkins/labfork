@@ -50,6 +50,12 @@ For multi-step work, use Claude Code's native Tasks system to track progress and
 TaskUpdate({ taskId: "2", addBlockedBy: ["1"] })  // Task 2 waits for Task 1
 ```
 
+### 5. Shell Script Safety
+- **`set -euo pipefail` is for setup scripts only.** Never use `set -e` inside long-running daemon loops (`while true`). A stray non-zero exit code (`grep` no match, `jq` on bad input, `curl` timeout) will kill the daemon silently.
+- **Pattern for daemon scripts:** `set -euo pipefail` at the top for validation, then `set +e` before the `while true` loop.
+- **Python daemons:** Wrap `while True` in `try/except Exception`.
+- **Setup scripts** (run-once) should keep `set -e` — fail fast is correct there.
+
 ---
 
 ## Project Overview

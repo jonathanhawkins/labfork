@@ -2,7 +2,7 @@
  * Labs API - List and Create
  *
  * GET /api/labs - List labs with filtering
- * POST /api/labs - Create a new lab
+ * POST /api/labs - Create a new lab (and sync to Workers)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +14,42 @@ import {
 import type { Lab, LabListOptions, CreateLabInput } from "@/lib/labs/types";
 import { getServerUser } from "@/lib/auth/server";
 import { userToLabOwner } from "@/lib/auth/mock-user";
+
+// Workers API URL (uses env var or defaults to production)
+const WORKERS_API_URL = process.env.WORKERS_API_URL || "https://labfork-agents.workers.dev";
+
+/**
+ * Sync a single lab to Workers compute network
+ */
+async function syncLabToWorkers(lab: Lab): Promise<boolean> {
+  try {
+    const response = await fetch(`${WORKERS_API_URL}/api/projects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: lab.id,
+        slug: lab.slug,
+        name: lab.name,
+        description: lab.description,
+        domainSlug: lab.domainSlug,
+        domainName: lab.domainName,
+        tags: lab.tags,
+        status: lab.status === "active" ? "active" : "paused",
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Labs] Workers sync failed:", response.status);
+      return false;
+    }
+
+    console.log(`[Labs] Synced lab ${lab.slug} to Workers`);
+    return true;
+  } catch (error) {
+    console.error("[Labs] Workers sync error:", error);
+    return false;
+  }
+}
 
 /**
  * GET /api/labs
@@ -156,6 +192,11 @@ export async function POST(request: NextRequest) {
 
     // Create lab
     const lab = await createLab(input, owner);
+
+    // Sync to Workers compute network (non-blocking, don't fail if this fails)
+    syncLabToWorkers(lab).catch((err) => {
+      console.error("[Labs] Background sync failed:", err);
+    });
 
     return NextResponse.json({
       success: true,

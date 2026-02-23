@@ -1,0 +1,81 @@
+#!/bin/bash
+#------------------------------------------------------------------------------
+# MOF Water Harvester CFD Simulation
+# Run script for OpenFOAM
+#------------------------------------------------------------------------------
+
+cd "${0%/*}" || exit 1
+
+echo "=============================================="
+echo "MOF Water Harvester CFD Simulation"
+echo "=============================================="
+echo "Physics: Natural convection with heat transfer"
+echo "Sorbent temperature: 100°C (373 K)"
+echo "Dome temperature: 30°C (303 K)"
+echo "=============================================="
+
+# Clean previous results
+echo "Cleaning previous results..."
+rm -rf 0.[0-9]* [1-9]* processor* log.* postProcessing
+
+# Generate mesh
+echo "Generating mesh..."
+blockMesh > log.blockMesh 2>&1
+if [ $? -ne 0 ]; then
+    echo "ERROR: blockMesh failed. Check log.blockMesh"
+    exit 1
+fi
+echo "  Mesh generated: $(grep 'cells:' log.blockMesh | tail -1)"
+
+# Check mesh quality
+echo "Checking mesh quality..."
+checkMesh > log.checkMesh 2>&1
+if grep -q "FAILED" log.checkMesh; then
+    echo "WARNING: Mesh quality issues detected. Check log.checkMesh"
+fi
+
+# Run solver
+echo "Running buoyantSimpleFoam..."
+echo "  This may take a few minutes..."
+buoyantSimpleFoam > log.buoyantSimpleFoam 2>&1 &
+SOLVER_PID=$!
+
+# Monitor progress
+while kill -0 $SOLVER_PID 2>/dev/null; do
+    if [ -f log.buoyantSimpleFoam ]; then
+        ITER=$(grep "Time = " log.buoyantSimpleFoam | tail -1 | awk '{print $3}')
+        RESIDUAL=$(grep "Solving for T" log.buoyantSimpleFoam | tail -1 | awk -F'residual = ' '{print $2}' | awk -F',' '{print $1}')
+        echo -ne "\r  Time: ${ITER:-0}, T residual: ${RESIDUAL:-N/A}         "
+    fi
+    sleep 2
+done
+echo ""
+
+# Check if solver completed successfully
+if grep -q "End" log.buoyantSimpleFoam; then
+    echo "Simulation completed successfully!"
+else
+    echo "WARNING: Solver may not have completed. Check log.buoyantSimpleFoam"
+fi
+
+# Post-processing
+echo "=============================================="
+echo "Results Summary"
+echo "=============================================="
+
+# Extract final temperature range
+if [ -d "postProcessing" ]; then
+    echo "Probe data written to postProcessing/"
+fi
+
+# Calculate heat flux (rough estimate from temperature gradient)
+echo ""
+echo "To visualize results:"
+echo "  paraFoam  (or export to VTK)"
+echo ""
+echo "Key output files:"
+echo "  log.buoyantSimpleFoam - Solver log"
+echo "  postProcessing/ - Probe and flux data"
+echo "  [time]/ directories - Field data"
+
+#------------------------------------------------------------------------------

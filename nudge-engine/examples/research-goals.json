@@ -1,0 +1,53 @@
+{
+  "_description": "Research goal library for Nudge Engine. Each goal is designed to produce real research value when decomposed into subtasks. Send via: POST /observe { type: 'goals', data: { objectives: [goal] } }",
+  "goals": [
+    {
+      "id": "prosody-feature-extraction",
+      "title": "Build prosody feature extraction pipeline",
+      "difficulty": "medium",
+      "objective": "Create a prosody feature extraction module at scripts/prosody_features.py that uses librosa to extract pitch (f0), energy, and speech rate from WAV files in data/voice_samples/. Functions: extract_f0(wav_path) returns numpy array of f0 values using librosa.pyin, extract_energy(wav_path) returns RMS energy array, extract_speech_rate(wav_path) returns syllables-per-second estimate. Each function loads audio with librosa.load at 24000 Hz and returns numpy arrays. Test against real WAV files in data/voice_samples/session/."
+    },
+    {
+      "id": "spectral-analysis",
+      "title": "Spectral analysis toolkit for voice quality",
+      "difficulty": "medium",
+      "objective": "Create scripts/spectral_analysis.py with functions for voice quality analysis using scipy and numpy. Functions: compute_spectral_centroid(signal, sr) returns float centroid in Hz, compute_spectral_tilt(signal, sr) returns slope of log-magnitude spectrum in dB/octave using scipy.signal and numpy.polyfit, compute_hnr(signal, sr) returns harmonics-to-noise ratio in dB using autocorrelation. All functions take numpy arrays and sample rate as input. Test with synthetic sine waves (known spectral properties) and real audio from data/voice_samples/."
+    },
+    {
+      "id": "audio-augmentation",
+      "title": "Audio data augmentation for training",
+      "difficulty": "medium",
+      "objective": "Create backend/augmentation.py with audio augmentation functions for TTS training data. Functions: add_noise(signal, snr_db) adds Gaussian noise at specified SNR using numpy, time_stretch(signal, rate) stretches audio using scipy.signal.resample, pitch_shift_semitones(signal, sr, semitones) shifts pitch by resampling and interpolation with scipy. Each takes a numpy array, returns augmented numpy array of same dtype. Test by verifying output shapes, energy preservation (within 3dB), and that augmented signal differs from input."
+    },
+    {
+      "id": "mel-spectrogram",
+      "title": "Mel spectrogram computation for voice analysis",
+      "difficulty": "easy",
+      "objective": "Create scripts/mel_features.py with mel spectrogram functions using librosa. Functions: compute_mel_spectrogram(wav_path, n_mels=80) returns (n_mels, time_frames) numpy array, compute_mfcc(wav_path, n_mfcc=13) returns (n_mfcc, time_frames) array, mel_to_audio(mel_spec, sr=24000) inverts mel back to audio using librosa.feature.inverse.mel_to_audio. Load audio at 24000 Hz. Test: verify output shapes (n_mels=80 for mel, n_mfcc=13 for mfcc), verify mel values are finite, verify round-trip (audio->mel->audio) produces non-silent output."
+    },
+    {
+      "id": "voice-similarity",
+      "title": "Voice similarity scoring between audio samples",
+      "difficulty": "hard",
+      "objective": "Create scripts/voice_similarity.py that computes similarity between voice samples for clone quality evaluation. Functions: extract_speaker_embedding(wav_path) returns a 128-dim numpy vector by averaging MFCCs over time and PCA-reducing with sklearn or manual SVD using numpy.linalg.svd, cosine_similarity(emb1, emb2) returns float 0-1, compare_voices(wav_path_1, wav_path_2) returns dict with similarity_score, shared_formant_count, pitch_correlation. Use librosa for features, numpy for math. Test: same speaker samples should have similarity > 0.7, different synthetic signals should have similarity < 0.5."
+    },
+    {
+      "id": "emotion-detection",
+      "title": "Rule-based emotion detection from audio features",
+      "difficulty": "medium",
+      "objective": "Create scripts/emotion_detector.py with rule-based emotion detection using acoustic features. Functions: extract_emotion_features(wav_path) returns dict with mean_f0, f0_std, energy_mean, speech_rate, spectral_centroid using librosa, classify_emotion(features) returns one of ['neutral','happy','sad','angry'] based on feature thresholds (high f0+energy=happy, low f0+energy=sad, high f0+high_rate=angry, else neutral), detect_emotion(wav_path) combines both. Test: verify features dict has all expected keys with float values, verify classify_emotion returns valid emotion string for various synthetic feature combinations."
+    },
+    {
+      "id": "silence-detection",
+      "title": "Silence and pause detection for speech segmentation",
+      "difficulty": "easy",
+      "objective": "Create scripts/silence_detector.py for detecting silence/pauses in speech audio. Functions: detect_silences(wav_path, threshold_db=-40, min_duration_ms=200) returns list of (start_sec, end_sec) tuples using librosa and numpy, split_on_silence(wav_path, threshold_db=-40) returns list of numpy arrays (speech segments), compute_pause_statistics(wav_path) returns dict with total_pauses, mean_pause_duration, speech_ratio. Load at 24000 Hz. Test: create a synthetic signal with known silence gaps and verify detection accuracy, verify speech_ratio is between 0 and 1."
+    },
+    {
+      "id": "pitch-contour-analysis",
+      "title": "Pitch contour extraction and analysis",
+      "difficulty": "medium",
+      "objective": "Create scripts/pitch_contour.py for detailed pitch trajectory analysis. Functions: extract_pitch_contour(wav_path) returns dict with f0_values (numpy array), timestamps, voiced_mask using librosa.pyin at 24000 Hz, smooth_contour(f0_values, window=5) applies median filter using scipy.signal.medfilt, classify_intonation(contour) returns 'rising'/'falling'/'flat'/'question' based on slope of last 20% of voiced frames using numpy.polyfit. Test: verify contour length > 0, verify smooth_contour removes outliers (inject spike, verify smoothed), verify 'rising' for ascending synthetic f0."
+    }
+  ]
+}

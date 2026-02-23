@@ -33,3 +33,7 @@ crons = ["*/15 * * * *"]  # Every 15 minutes - orchestration only
 # Environment variables (override in wrangler.toml or dashboard)
 [vars]
 ENVIRONMENT = "development"
+
+# Secrets (set via: npx wrangler secret put ADMIN_API_KEY)
+# ADMIN_API_KEY: Required for admin endpoints (POST /tasks, GET /devices, DELETE /tasks/:id)
+# When not set, admin endpoints are open (dev mode)

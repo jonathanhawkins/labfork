@@ -1,0 +1,51 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Temperature field
+// Sorbent: 373 K (100°C) - solar heated
+// Dome: 303 K (30°C) - ambient/cool
+// Initial: 323 K (50°C) - ambient start
+
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform 323;
+
+boundaryField
+{
+    sorbent
+    {
+        type            fixedValue;
+        value           uniform 343;  // 70°C - hot sorbent (more stable)
+    }
+
+    dome
+    {
+        type            fixedValue;
+        value           uniform 303;  // 30°C - cool condenser
+    }
+
+    sides
+    {
+        type            zeroGradient;  // Insulated
+    }
+
+    frontAndBack
+    {
+        type            empty;
+    }
+}
+
+// ************************************************************************* //
