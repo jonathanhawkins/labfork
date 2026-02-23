@@ -76,7 +76,7 @@ backend/checkpoints/
 # Generated Outputs
 # ===================
 outputs/
-results/
+/results/
 logs/
 *.log
 wandb/

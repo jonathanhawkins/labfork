@@ -160,7 +160,7 @@ describe("LandingFooter", () => {
     it("should render tech stack mention", () => {
       render(<LandingFooter />);
 
-      expect(screen.getByText(/Built with Next\.js, Three\.js, Claude/i)).toBeInTheDocument();
+      expect(screen.getByText(/Built with trusted open-source technology/i)).toBeInTheDocument();
     });
 
     it("should render Star on GitHub link", () => {

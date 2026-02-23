@@ -90,7 +90,7 @@ describe("LabCard", () => {
     const onStarClick = vi.fn();
     render(<LabCard lab={mockLab} onStarClick={onStarClick} />);
 
-    const starButton = screen.getByTitle(/star/i);
+    const starButton = screen.getByLabelText(/star/i);
     fireEvent.click(starButton);
 
     expect(onStarClick).toHaveBeenCalledTimes(1);
@@ -144,7 +144,7 @@ describe("LabCard", () => {
   it("hides star button when showStar is false", () => {
     render(<LabCard lab={mockLab} showStar={false} />);
 
-    expect(screen.queryByTitle(/star/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/star/i)).not.toBeInTheDocument();
   });
 
   it("shows viewers count when greater than 0", () => {
