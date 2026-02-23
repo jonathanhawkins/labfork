@@ -118,6 +118,8 @@ export interface TaskInput {
   tokens?: number[];
   /** Text prompt */
   prompt?: string;
+  /** Raw text input (for embeddings) */
+  text?: string;
   /** Input embedding */
   embedding?: number[];
   /** Model shard index for pipeline parallel */
@@ -212,11 +214,12 @@ export interface TaskResult {
   /** Output logits (for verification) */
   logits?: number[];
   /** Whether result came from real WebLLM or mock execution */
-  computeMode?: 'webllm' | 'mock';
+  computeMode?: 'webllm' | 'mock' | 'transformers';
   /** Execution metrics */
   metrics: {
     computeTime: number; // ms
     tokensPerSecond?: number;
+    embeddingDimension?: number;
   };
 }
 

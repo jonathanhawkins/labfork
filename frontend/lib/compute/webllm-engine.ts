@@ -436,7 +436,6 @@ export class WebLLMEngine {
     // Try Transformers.js embedding model (loaded lazily)
     try {
       if (!WebLLMEngine.embeddingPipeline) {
-        // Dynamically import Transformers.js — webpackIgnore prevents SSR bundling
         // Dynamic import to avoid SSR bundling
         const mod = await (Function('return import("@huggingface/transformers")')() as Promise<{ pipeline: Function }>);
         const { pipeline } = mod;
