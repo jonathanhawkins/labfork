@@ -35,6 +35,7 @@ import {
   Sun,
   Network,
   Zap,
+  Lightbulb,
 } from "lucide-react";
 import type { Lab } from "@/lib/labs/types";
 import { getLabPath } from "@/lib/labs/types";
@@ -161,6 +162,8 @@ export function LabHeader({
   const DomainIcon = getDomainIcon(lab.domainSlug);
   const domainColor = getDomainColor(lab.domainSlug);
   const VisibilityIcon = getVisibilityIcon(lab.visibility);
+  const isIdea = lab.status === "idea";
+  const allStatsZero = lab.stats.stars === 0 && lab.stats.forks === 0 && lab.stats.tasks === 0 && lab.stats.papers === 0;
 
   return (
     <div className={cn("border-b border-border", className)}>
@@ -222,6 +225,14 @@ export function LabHeader({
                 {lab.isFeatured && (
                   <span className="px-2 py-0.5 rounded text-xs bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 border border-yellow-500/20">
                     Featured
+                  </span>
+                )}
+
+                {/* Idea badge */}
+                {isIdea && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20">
+                    <Lightbulb className="w-3 h-3" />
+                    Idea
                   </span>
                 )}
               </div>
@@ -292,7 +303,7 @@ export function LabHeader({
                 ) : (
                   <GitFork className="w-4 h-4" />
                 )}
-                <span className="font-medium">Fork & Launch</span>
+                <span className="font-medium">{isIdea ? "Start This Research" : "Fork & Launch"}</span>
               </button>
 
               {/* Fork count / dialog trigger */}
@@ -384,36 +395,50 @@ export function LabHeader({
 
         {/* Stats row */}
         <div className="flex items-center gap-6 mt-6 pt-4 border-t border-border/50">
-          <div className="flex items-center gap-2 text-sm">
-            <Star className="w-4 h-4 text-yellow-400" />
-            <span className="font-medium text-foreground">{lab.stats.stars}</span>
-            <span className="text-foreground-muted">stars</span>
-          </div>
+          {allStatsZero ? (
+            <span className="text-sm text-foreground-subtle">No activity yet</span>
+          ) : (
+            <>
+              {lab.stats.stars > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Star className="w-4 h-4 text-yellow-400" />
+                  <span className="font-medium text-foreground">{lab.stats.stars}</span>
+                  <span className="text-foreground-muted">stars</span>
+                </div>
+              )}
 
-          <div className="flex items-center gap-2 text-sm">
-            <GitFork className="w-4 h-4 text-foreground-subtle" />
-            <span className="font-medium text-foreground">{lab.stats.forks}</span>
-            <span className="text-foreground-muted">forks</span>
-          </div>
+              {lab.stats.forks > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <GitFork className="w-4 h-4 text-foreground-subtle" />
+                  <span className="font-medium text-foreground">{lab.stats.forks}</span>
+                  <span className="text-foreground-muted">forks</span>
+                </div>
+              )}
 
-          <div className="flex items-center gap-2 text-sm">
-            <Activity className="w-4 h-4 text-foreground-subtle" />
-            <span className="font-medium text-foreground">{lab.stats.tasks}</span>
-            <span className="text-foreground-muted">tasks</span>
-          </div>
+              {lab.stats.tasks > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Activity className="w-4 h-4 text-foreground-subtle" />
+                  <span className="font-medium text-foreground">{lab.stats.tasks}</span>
+                  <span className="text-foreground-muted">tasks</span>
+                </div>
+              )}
 
-          <div className="flex items-center gap-2 text-sm">
-            <FileText className="w-4 h-4 text-foreground-subtle" />
-            <span className="font-medium text-foreground">{lab.stats.papers}</span>
-            <span className="text-foreground-muted">papers</span>
-          </div>
+              {lab.stats.papers > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="w-4 h-4 text-foreground-subtle" />
+                  <span className="font-medium text-foreground">{lab.stats.papers}</span>
+                  <span className="text-foreground-muted">papers</span>
+                </div>
+              )}
 
-          {lab.stats.viewers > 0 && (
-            <div className="flex items-center gap-2 text-sm">
-              <Eye className="w-4 h-4 text-green-400" />
-              <span className="font-medium text-green-400">{lab.stats.viewers}</span>
-              <span className="text-foreground-muted">watching</span>
-            </div>
+              {lab.stats.viewers > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Eye className="w-4 h-4 text-green-400" />
+                  <span className="font-medium text-green-400">{lab.stats.viewers}</span>
+                  <span className="text-foreground-muted">watching</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

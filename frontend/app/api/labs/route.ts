@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     }
 
     const status = searchParams.get("status");
-    if (status === "active" || status === "archived" || status === "suspended") {
+    if (status === "active" || status === "idea" || status === "archived" || status === "suspended") {
       options.status = status;
     }
 

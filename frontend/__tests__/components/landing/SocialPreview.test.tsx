@@ -72,55 +72,13 @@ describe("SocialPreview", () => {
       render(<SocialPreview />);
 
       expect(screen.getByText("Live Activity")).toBeInTheDocument();
-      expect(screen.getByText("Global Feed")).toBeInTheDocument();
     });
 
-    it("should render activity items", () => {
-      render(<SocialPreview />);
-
-      expect(screen.getByText("MIT Lab")).toBeInTheDocument();
-      expect(screen.getByText("Stanford NLP")).toBeInTheDocument();
-      expect(screen.getByText("DeepMind")).toBeInTheDocument();
-      expect(screen.getByText("OpenAI")).toBeInTheDocument();
-      expect(screen.getByText("Berkeley AI")).toBeInTheDocument();
-    });
-
-    it("should show activity types", () => {
-      render(<SocialPreview />);
-
-      expect(screen.getByText("discovery")).toBeInTheDocument();
-      expect(screen.getByText("star")).toBeInTheDocument();
-      expect(screen.getByText("fork")).toBeInTheDocument();
-      expect(screen.getByText("collaboration")).toBeInTheDocument();
-      expect(screen.getByText("comment")).toBeInTheDocument();
-    });
-
-    it("should show activity targets", () => {
+    it("should show empty state when no activities", () => {
       render(<SocialPreview />);
 
       expect(
-        screen.getByText("Voice emotion transfer without paired data")
-      ).toBeInTheDocument();
-      expect(screen.getByText("Quant Trading Lab")).toBeInTheDocument();
-      expect(screen.getByText("Game AI Lab")).toBeInTheDocument();
-    });
-
-    it("should show activity timestamps", () => {
-      render(<SocialPreview />);
-
-      expect(screen.getByText("2 min ago")).toBeInTheDocument();
-      expect(screen.getByText("5 min ago")).toBeInTheDocument();
-      expect(screen.getByText("12 min ago")).toBeInTheDocument();
-    });
-
-    it("should show activity details when available", () => {
-      render(<SocialPreview />);
-
-      expect(
-        screen.getByText("Using contrastive learning to align prosody embeddings")
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText("Adapting for multi-agent environments")
+        screen.getByText("Activity will appear here as research progresses")
       ).toBeInTheDocument();
     });
   });

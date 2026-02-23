@@ -39,12 +39,9 @@
   "hero": {
     "featuredProject": "精选项目：萤火虫网络",
     "fireflyTagline": "为10亿人带来光明",
-    "labsResearching": "{count}个实验室正在积极研究",
+    "openResearchPlatform": "开放研究平台",
     "headline": "分叉。观看。发现。",
     "subheadline": "分叉研究实验室。实时观看AI代理实现论文。发现跨领域的协同效应。全球协作。",
-    "activeLabs": "活跃实验室",
-    "synergiesFound": "发现的协同效应",
-    "domains": "领域",
     "forkLab": "分叉实验室",
     "inSeconds": "60秒内",
     "explorePublicLabs": "探索公共实验室",
@@ -78,8 +75,6 @@
   "domains": {
     "title": "选择您的研究领域",
     "subtitle": "9个专业实验室，配备预配置的工具、指标和论文来源。几分钟内开始研究。",
-    "agents": "个代理",
-    "papers": "篇论文",
     "latestBreakthrough": "最新突破",
     "viewLab": "查看实验室",
     "customDomainCTA": "没看到您的领域？创建自定义领域。",

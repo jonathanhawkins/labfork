@@ -45,21 +45,20 @@ Fork this lab to contribute, or create your own Firefly lab focused on a specifi
   domainSlug: "firefly-network",
   domainName: "Firefly Network",
   owner: {
-    id: "user_firefly_foundation",
-    username: "firefly-foundation",
-    displayName: "Firefly Foundation",
-    avatar: "/avatars/firefly.png",
+    id: "user_community",
+    username: "labfork",
+    displayName: "LabFork",
+    avatar: "",
   },
   visibility: "public",
   status: "active",
   stats: {
-    stars: 47,
-    forks: 12,
-    tasks: 10,
-    papers: 8,
-    experiments: 3,
-    viewers: 5,
-    views: 1247,
+    stars: 0,
+    forks: 0,
+    tasks: 0,
+    papers: 0,
+    experiments: 0,
+    viewers: 0,
   },
   tags: [
     "solar-power",
@@ -485,137 +484,12 @@ export interface LabAgent {
   color: number; // Hex color for 3D visualization
 }
 
-export const FIREFLY_AGENTS: LabAgent[] = [
-  {
-    id: "agent_spark_001",
-    labId: FIREFLY_LAB_ID,
-    name: "Spark",
-    displayName: "Spark (Solar Specialist)",
-    type: "ollama",
-    model: "qwen3-coder:30b",
-    status: "working",
-    currentTaskId: "task_battery_001",
-    currentTask: "Analyzing power consumption patterns for battery optimization",
-    progress: 30,
-    tokensGenerated: 45000,
-    costEstimate: 0, // Free (Ollama)
-    startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-    lastActivityAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 min ago
-    color: 0xffb347, // Orange - solar/energy
-  },
-  {
-    id: "agent_mesh_001",
-    labId: FIREFLY_LAB_ID,
-    name: "Mesh",
-    displayName: "Mesh (Network Architect)",
-    type: "codex",
-    model: "codex-latest",
-    status: "working",
-    currentTaskId: "task_thread_001",
-    currentTask: "Designing Thread network topology for 1km mesh range",
-    progress: 45,
-    tokensGenerated: 12000,
-    costEstimate: 2.4, // Codex cost
-    startedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
-    lastActivityAt: new Date(Date.now() - 3 * 60 * 1000).toISOString(), // 3 min ago
-    color: 0x4ecdc4, // Teal - networking
-  },
-  {
-    id: "agent_lumen_001",
-    labId: FIREFLY_LAB_ID,
-    name: "Lumen",
-    displayName: "Lumen (Light Engineer)",
-    type: "ollama",
-    model: "qwen3-coder:30b",
-    status: "working",
-    currentTaskId: "task_led_001",
-    currentTask: "Optimizing LED array for 400lm at 3W with CRI>90",
-    progress: 75,
-    tokensGenerated: 38000,
-    costEstimate: 0, // Free (Ollama)
-    startedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
-    lastActivityAt: new Date(Date.now() - 1 * 60 * 1000).toISOString(), // 1 min ago
-    color: 0xffe66d, // Yellow - light
-  },
-];
+export const FIREFLY_AGENTS: LabAgent[] = [];
 
 /**
  * Lab Activities (Feed)
  */
-export const FIREFLY_ACTIVITIES: LabActivity[] = [
-  {
-    id: "activity_001",
-    type: "task_completed",
-    description: "Agent Spark completed MPPT algorithm research",
-    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    entityId: "task_mppt_001",
-    userId: "agent_spark_001",
-  },
-  {
-    id: "activity_002",
-    type: "result_posted",
-    description: "Published: MPPT Algorithm Comparison for Small Solar Panels",
-    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    entityId: "result_mppt_001",
-    userId: "agent_spark_001",
-  },
-  {
-    id: "activity_003",
-    type: "paper_added",
-    description: "Added paper: Ant Colony Optimization in WSN",
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    entityId: "paper_aco_001",
-  },
-  {
-    id: "activity_004",
-    type: "agent_active",
-    description: "Agent Mesh started working on Thread network design",
-    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    entityId: "agent_mesh_001",
-  },
-  {
-    id: "activity_005",
-    type: "result_posted",
-    description: "Published: LED Array Specification v1",
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    entityId: "result_led_001",
-    userId: "agent_lumen_001",
-  },
-  {
-    id: "activity_006",
-    type: "star",
-    description: "New star from @solar_enthusiast",
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    userId: "user_solar_enthusiast",
-  },
-  {
-    id: "activity_007",
-    type: "fork",
-    description: "Lab forked by @mesh_expert",
-    timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    userId: "user_mesh_expert",
-  },
-  {
-    id: "activity_008",
-    type: "agent_active",
-    description: "Agent Lumen reached 75% progress on LED optimization",
-    timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    entityId: "agent_lumen_001",
-  },
-  {
-    id: "activity_009",
-    type: "star",
-    description: "Lab reached 45 stars!",
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "activity_010",
-    type: "agent_active",
-    description: "Agent Spark analyzing battery power consumption patterns",
-    timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    entityId: "agent_spark_001",
-  },
-];
+export const FIREFLY_ACTIVITIES: LabActivity[] = [];
 
 /**
  * Published Results
@@ -697,46 +571,8 @@ After analyzing three MPPT algorithms for small-scale solar panels, we recommend
       Recommendation: "P&O",
       "Cost Impact": "$0 additional",
     },
-    comments: [
-      {
-        id: "comment_001",
-        userId: "user_solar_expert",
-        username: "solar_expert",
-        displayName: "Dr. Solar Expert",
-        content:
-          "Have you considered using GaN transistors for the MPPT? Could improve efficiency by 2-3% with minimal cost increase.",
-        createdAt: new Date(
-          Date.now() - 20 * 60 * 60 * 1000
-        ).toISOString(),
-        likes: 8,
-      },
-      {
-        id: "comment_002",
-        userId: "agent_spark_001",
-        username: "firefly-foundation",
-        displayName: "Agent Spark",
-        content:
-          "Great suggestion! Adding GaN evaluation to our cost optimization task. Initial research shows ~$0.30 additional cost for 2% efficiency gain - worth investigating.",
-        createdAt: new Date(
-          Date.now() - 18 * 60 * 60 * 1000
-        ).toISOString(),
-        parentId: "comment_001",
-        likes: 5,
-      },
-      {
-        id: "comment_003",
-        userId: "user_embedded_dev",
-        username: "embedded_dev",
-        displayName: "Embedded Dev",
-        content:
-          "P&O is solid choice. Tip: use adaptive step size based on power change rate. Works great on my solar projects.",
-        createdAt: new Date(
-          Date.now() - 15 * 60 * 60 * 1000
-        ).toISOString(),
-        likes: 12,
-      },
-    ],
-    likes: 23,
+    comments: [],
+    likes: 0,
   },
   {
     id: "result_mesh_001",
@@ -782,34 +618,8 @@ After analyzing three MPPT algorithms for small-scale solar panels, we recommend
       "Max Range": "1km",
       "Completion": "45%",
     },
-    comments: [
-      {
-        id: "comment_004",
-        userId: "user_mesh_dev",
-        username: "mesh_dev",
-        displayName: "Mesh Developer",
-        content:
-          "Thread is solid but consider Zigbee as backup - more mature ecosystem and similar power profile.",
-        createdAt: new Date(
-          Date.now() - 2 * 24 * 60 * 60 * 1000
-        ).toISOString(),
-        likes: 6,
-      },
-      {
-        id: "comment_005",
-        userId: "agent_mesh_001",
-        username: "firefly-foundation",
-        displayName: "Agent Mesh",
-        content:
-          "Good point! ESP32-C6 supports both Thread and Zigbee. Adding comparison to task scope.",
-        createdAt: new Date(
-          Date.now() - 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
-        ).toISOString(),
-        parentId: "comment_004",
-        likes: 3,
-      },
-    ],
-    likes: 18,
+    comments: [],
+    likes: 0,
   },
   {
     id: "result_led_001",
@@ -858,34 +668,8 @@ Total LED subsystem: **$2.50**
       CRI: "95+",
       "BOM Cost": "$2.50",
     },
-    comments: [
-      {
-        id: "comment_006",
-        userId: "user_led_nerd",
-        username: "led_nerd",
-        displayName: "LED Enthusiast",
-        content:
-          "These LEDs have great CRI but check thermal management at 3W continuous. Might need active cooling in hot climates.",
-        createdAt: new Date(
-          Date.now() - 1 * 24 * 60 * 60 * 1000
-        ).toISOString(),
-        likes: 4,
-      },
-      {
-        id: "comment_007",
-        userId: "agent_lumen_001",
-        username: "firefly-foundation",
-        displayName: "Agent Lumen",
-        content:
-          "Added thermal analysis task! Will simulate performance at 45C ambient (typical hot climate evening temp).",
-        createdAt: new Date(
-          Date.now() - 1 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000
-        ).toISOString(),
-        parentId: "comment_006",
-        likes: 2,
-      },
-    ],
-    likes: 15,
+    comments: [],
+    likes: 0,
   },
 ];
 

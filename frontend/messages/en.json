@@ -39,12 +39,9 @@
   "hero": {
     "featuredProject": "Featured Project: The Firefly Network",
     "fireflyTagline": "Bringing light to 1B people",
-    "labsResearching": "{count} labs actively researching",
+    "openResearchPlatform": "Open Research Platform",
     "headline": "Fork. Watch. Discover.",
     "subheadline": "Fork research labs. Watch AI agents implement papers in real-time. Discover synergies across domains. Collaborate globally.",
-    "activeLabs": "Active Labs",
-    "synergiesFound": "Synergies Found",
-    "domains": "Domains",
     "forkLab": "Fork a Lab",
     "inSeconds": "in 60 seconds",
     "explorePublicLabs": "Explore Public Labs",
@@ -78,8 +75,6 @@
   "domains": {
     "title": "Choose Your Research Domain",
     "subtitle": "9 specialized labs with pre-configured tools, metrics, and paper sources. Start researching in minutes.",
-    "agents": "agents",
-    "papers": "papers",
     "latestBreakthrough": "Latest Breakthrough",
     "viewLab": "View Lab",
     "customDomainCTA": "Don't see your domain? Create a custom one.",

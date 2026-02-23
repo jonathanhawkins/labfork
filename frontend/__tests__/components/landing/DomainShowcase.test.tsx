@@ -44,22 +44,6 @@ describe("DomainShowcase", () => {
   });
 
   describe("Domain Cards", () => {
-    it("should show agent count for each domain", () => {
-      render(<DomainShowcase domains={defaultDomains} />);
-
-      // Multiple domains have 3 agents (Voice Clone, Robotics ML)
-      expect(screen.getAllByText("3 agents").length).toBeGreaterThanOrEqual(1);
-      // Quant Trading and NLP have 5 agents
-      expect(screen.getAllByText("5 agents").length).toBeGreaterThanOrEqual(1);
-    });
-
-    it("should show paper count for each domain", () => {
-      render(<DomainShowcase domains={defaultDomains} />);
-
-      // Voice Clone has 127 papers
-      expect(screen.getByText("127 papers")).toBeInTheDocument();
-    });
-
     it("should show domain descriptions", () => {
       render(<DomainShowcase domains={defaultDomains} />);
 
@@ -116,8 +100,6 @@ describe("DomainShowcase", () => {
           primaryColor: "#ff0000",
           accentColor: "#00ff00",
           icon: null,
-          activeAgents: 2,
-          papersProcessed: 50,
           tags: ["custom", "test"],
         },
       ];
@@ -127,8 +109,6 @@ describe("DomainShowcase", () => {
       // When translation key doesn't exist, it falls back to the key name
       expect(screen.getByText("customDomainName")).toBeInTheDocument();
       expect(screen.getByText("customDomainDesc")).toBeInTheDocument();
-      expect(screen.getByText("2 agents")).toBeInTheDocument();
-      expect(screen.getByText("50 papers")).toBeInTheDocument();
     });
 
     it("should handle empty domains array", () => {

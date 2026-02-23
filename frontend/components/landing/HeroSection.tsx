@@ -11,15 +11,7 @@ import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-interface HeroSectionProps {
-  labCount?: number;
-  discoveryCount?: number;
-}
-
-export function HeroSection({
-  labCount = 1247,
-  discoveryCount = 89,
-}: HeroSectionProps) {
+export function HeroSection() {
   const t = useTranslations("hero");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -159,11 +151,10 @@ export function HeroSection({
           </svg>
         </Link>
 
-        {/* Active Labs Badge */}
+        {/* Platform Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8 ms-3">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
           <span className="text-sm text-gray-300">
-            {t("labsResearching", { count: labCount.toLocaleString() })}
+            {t("openResearchPlatform")}
           </span>
         </div>
 
@@ -182,24 +173,6 @@ export function HeroSection({
         <p className="text-xl md:text-2xl text-gray-400 mb-10 max-w-3xl mx-auto leading-relaxed">
           {t("subheadline")}
         </p>
-
-        {/* Stats */}
-        <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mb-10 px-4">
-          <div className="text-center min-w-[80px]">
-            <div className="text-2xl sm:text-3xl font-bold text-white">{labCount.toLocaleString()}</div>
-            <div className="text-xs sm:text-sm text-gray-500">{t("activeLabs")}</div>
-          </div>
-          <div className="hidden sm:block w-px h-12 bg-gray-700" />
-          <div className="text-center min-w-[80px]">
-            <div className="text-2xl sm:text-3xl font-bold text-white">{discoveryCount}</div>
-            <div className="text-xs sm:text-sm text-gray-500">{t("synergiesFound")}</div>
-          </div>
-          <div className="hidden sm:block w-px h-12 bg-gray-700" />
-          <div className="text-center min-w-[80px]">
-            <div className="text-2xl sm:text-3xl font-bold text-white">9</div>
-            <div className="text-xs sm:text-sm text-gray-500">{t("domains")}</div>
-          </div>
-        </div>
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 px-4">

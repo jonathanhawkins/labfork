@@ -18,53 +18,6 @@ interface ActivityItem {
   details?: string;
 }
 
-// Fallback demo activities when no real data available
-const demoActivities: ActivityItem[] = [
-  {
-    id: "1",
-    type: "discovery",
-    user: "MIT Lab",
-    avatar: "M",
-    target: "Voice emotion transfer without paired data",
-    time: "2 min ago",
-    details: "Using contrastive learning to align prosody embeddings",
-  },
-  {
-    id: "2",
-    type: "star",
-    user: "Stanford NLP",
-    avatar: "S",
-    target: "Quant Trading Lab",
-    time: "5 min ago",
-  },
-  {
-    id: "3",
-    type: "fork",
-    user: "DeepMind",
-    avatar: "D",
-    target: "Game AI Lab",
-    time: "12 min ago",
-    details: "Adapting for multi-agent environments",
-  },
-  {
-    id: "4",
-    type: "collaboration",
-    user: "OpenAI",
-    avatar: "O",
-    target: "NLP Research Lab",
-    time: "18 min ago",
-    details: "Joint research on efficient inference",
-  },
-  {
-    id: "5",
-    type: "comment",
-    user: "Berkeley AI",
-    avatar: "B",
-    target: "Robotics ML Lab",
-    time: "25 min ago",
-    details: "Have you tried combining this with hierarchical RL?",
-  },
-];
 
 // Map activity types from API to display types
 function mapActivityType(apiType: string): ActivityItem["type"] {
@@ -167,7 +120,7 @@ function ActivityCard({ item }: { item: ActivityItem }) {
 }
 
 export function SocialPreview() {
-  const [activities, setActivities] = useState<ActivityItem[]>(demoActivities);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
 
   // Fetch real activity data
   const fetchActivities = useCallback(async () => {
@@ -195,9 +148,8 @@ export function SocialPreview() {
         }));
         setActivities(mapped);
       }
-    } catch (error) {
-      console.error("Failed to fetch activities:", error);
-      // Keep using demo data on error
+    } catch {
+      // Activity fetch failed — keep empty state
     }
   }, []);
 
@@ -302,9 +254,20 @@ export function SocialPreview() {
               <span className="text-sm text-gray-500">Global Feed</span>
             </div>
             <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
-              {activities.map((item) => (
-                <ActivityCard key={item.id} item={item} />
-              ))}
+              {activities.length > 0 ? (
+                activities.map((item) => (
+                  <ActivityCard key={item.id} item={item} />
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <svg className="w-8 h-8 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-gray-500">
+                    Activity will appear here as research progresses
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

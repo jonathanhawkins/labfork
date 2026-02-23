@@ -1,12 +1,12 @@
 /**
  * Lab Seed API
  *
- * POST /api/labs/seed - Seed demo labs and sync to Workers
+ * POST /api/labs/seed - Seed labs and sync to Workers
  * GET /api/labs/seed - Check if seed data exists
  */
 
 import { NextResponse } from "next/server";
-import { createLab, listLabs } from "@/lib/labs/repository";
+import { createLab, updateLab, listLabs } from "@/lib/labs/repository";
 import type { LabOwner, CreateLabInput, Lab } from "@/lib/labs/types";
 
 // Workers API URL (uses env var or defaults to production)
@@ -50,18 +50,17 @@ async function syncLabsToWorkers(labs: Lab[]): Promise<{ synced: number; failed:
   }
 }
 
-// Demo users (matching activity seed)
-const DEMO_OWNERS: LabOwner[] = [
-  { id: "user_demo1", username: "spark_research", displayName: "Spark Research", avatar: "" },
-  { id: "user_demo2", username: "voice_pioneer", displayName: "Voice Pioneer", avatar: "" },
-  { id: "user_demo3", username: "firefly_dev", displayName: "Firefly Developer", avatar: "" },
-  { id: "user_demo4", username: "ai_researcher", displayName: "AI Researcher", avatar: "" },
-  { id: "user_demo5", username: "open_hardware", displayName: "Open Hardware", avatar: "" },
-];
+// Community owner for all seed labs
+const COMMUNITY_OWNER: LabOwner = {
+  id: "user_community",
+  username: "labfork",
+  displayName: "LabFork",
+  avatar: "",
+};
 
-// Demo labs data
-const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: number; forks: number; tasks: number; papers: number } }[] = [
-  // Firefly Network labs
+// Seed labs data
+const SEED_LABS: { input: CreateLabInput; status: "active" | "idea" }[] = [
+  // Active labs (real research)
   {
     input: {
       name: "Firefly Core",
@@ -72,8 +71,7 @@ const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: numbe
       tags: ["mppt", "solar", "mesh", "hardware"],
       primaryColor: "#f59e0b",
     },
-    owner: DEMO_OWNERS[0],
-    stats: { stars: 128, forks: 34, tasks: 12, papers: 8 },
+    status: "active",
   },
   {
     input: {
@@ -85,11 +83,8 @@ const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: numbe
       tags: ["thread", "mesh", "iot", "protocol"],
       primaryColor: "#f59e0b",
     },
-    owner: DEMO_OWNERS[2],
-    stats: { stars: 67, forks: 18, tasks: 8, papers: 4 },
+    status: "active",
   },
-
-  // Voice Clone labs
   {
     input: {
       name: "Emotion TTS Research",
@@ -100,8 +95,7 @@ const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: numbe
       tags: ["tts", "prosody", "emotion", "neural"],
       primaryColor: "#3b82f6",
     },
-    owner: DEMO_OWNERS[1],
-    stats: { stars: 89, forks: 27, tasks: 15, papers: 12 },
+    status: "active",
   },
   {
     input: {
@@ -113,69 +107,8 @@ const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: numbe
       tags: ["zero-shot", "vall-e", "speaker-adaptation"],
       primaryColor: "#3b82f6",
     },
-    owner: DEMO_OWNERS[3],
-    stats: { stars: 156, forks: 42, tasks: 9, papers: 7 },
+    status: "active",
   },
-
-  // Quant Trading labs
-  {
-    input: {
-      name: "Transformer Signals",
-      slug: "transformer-signals",
-      description: "Momentum signal generation using transformer architectures for algorithmic trading",
-      domainSlug: "quant-trading",
-      visibility: "public",
-      tags: ["transformer", "momentum", "signals", "ml"],
-      primaryColor: "#22c55e",
-    },
-    owner: DEMO_OWNERS[3],
-    stats: { stars: 203, forks: 56, tasks: 18, papers: 15 },
-  },
-  {
-    input: {
-      name: "Portfolio Optimization",
-      slug: "portfolio-opt",
-      description: "Deep reinforcement learning for dynamic portfolio rebalancing",
-      domainSlug: "quant-trading",
-      visibility: "public",
-      tags: ["rl", "portfolio", "optimization"],
-      primaryColor: "#22c55e",
-    },
-    owner: DEMO_OWNERS[4],
-    stats: { stars: 78, forks: 21, tasks: 6, papers: 9 },
-  },
-
-  // Robotics lab
-  {
-    input: {
-      name: "Sim2Real Transfer",
-      slug: "sim2real",
-      description: "Domain randomization and transfer learning for robotic manipulation",
-      domainSlug: "robotics",
-      visibility: "public",
-      tags: ["sim2real", "manipulation", "transfer-learning"],
-      primaryColor: "#a855f7",
-    },
-    owner: DEMO_OWNERS[4],
-    stats: { stars: 112, forks: 31, tasks: 11, papers: 14 },
-  },
-
-  // Biotech lab
-  {
-    input: {
-      name: "Protein Folding Explorer",
-      slug: "protein-folding",
-      description: "AlphaFold-based analysis and prediction for novel protein structures",
-      domainSlug: "biotech",
-      visibility: "public",
-      tags: ["alphafold", "protein", "structure"],
-      primaryColor: "#ec4899",
-    },
-    owner: DEMO_OWNERS[0],
-    stats: { stars: 234, forks: 67, tasks: 22, papers: 28 },
-  },
-
-  // Sustainability / Water labs
   {
     input: {
       name: "Atmospheric Water Harvester",
@@ -186,8 +119,57 @@ const DEMO_LABS: { input: CreateLabInput; owner: LabOwner; stats: { stars: numbe
       tags: ["water", "solar", "biomimicry", "3d-printing", "mof", "humanitarian"],
       primaryColor: "#06b6d4",
     },
-    owner: DEMO_OWNERS[4],
-    stats: { stars: 342, forks: 89, tasks: 7, papers: 7 },
+    status: "active",
+  },
+
+  // Idea labs (open invitations)
+  {
+    input: {
+      name: "Transformer Signals",
+      slug: "transformer-signals",
+      description: "An open research idea: momentum signal generation using transformer architectures. Fork this lab to start building.",
+      domainSlug: "quant-trading",
+      visibility: "public",
+      tags: ["transformer", "momentum", "signals", "ml"],
+      primaryColor: "#22c55e",
+    },
+    status: "idea",
+  },
+  {
+    input: {
+      name: "Portfolio Optimization",
+      slug: "portfolio-opt",
+      description: "An open research idea: deep reinforcement learning for dynamic portfolio rebalancing. Fork this lab to start building.",
+      domainSlug: "quant-trading",
+      visibility: "public",
+      tags: ["rl", "portfolio", "optimization"],
+      primaryColor: "#22c55e",
+    },
+    status: "idea",
+  },
+  {
+    input: {
+      name: "Sim2Real Transfer",
+      slug: "sim2real",
+      description: "An open research idea: domain randomization and transfer learning for robotic manipulation. Fork this lab to start building.",
+      domainSlug: "robotics",
+      visibility: "public",
+      tags: ["sim2real", "manipulation", "transfer-learning"],
+      primaryColor: "#a855f7",
+    },
+    status: "idea",
+  },
+  {
+    input: {
+      name: "Protein Folding Explorer",
+      slug: "protein-folding",
+      description: "An open research idea: AlphaFold-based analysis and prediction for novel protein structures. Fork this lab to start building.",
+      domainSlug: "biotech",
+      visibility: "public",
+      tags: ["alphafold", "protein", "structure"],
+      primaryColor: "#ec4899",
+    },
+    status: "idea",
   },
 ];
 
@@ -203,26 +185,19 @@ export async function POST() {
 
     let created = 0;
 
-    for (const { input, owner, stats } of DEMO_LABS) {
+    for (const { input, status } of SEED_LABS) {
       // Skip if this lab already exists
       if (existingSlugs.has(input.slug)) {
         continue;
       }
 
       try {
-        const lab = await createLab(input, owner);
+        const lab = await createLab(input, COMMUNITY_OWNER);
 
-        // Update stats manually (createLab uses defaults)
-        // We'll update via the store directly since updateLabStats needs the lab to exist
-        const { updateLabStats } = await import("@/lib/labs/repository");
-        await updateLabStats(lab.id, {
-          stars: stats.stars,
-          forks: stats.forks,
-          tasks: stats.tasks,
-          papers: stats.papers,
-          experiments: Math.floor(stats.tasks * 0.7),
-          viewers: Math.floor(Math.random() * 5),
-        });
+        // Set status to "idea" for idea labs (createLab defaults to "active")
+        if (status === "idea") {
+          await updateLab(lab.id, { status: "idea" });
+        }
 
         created++;
       } catch (err) {

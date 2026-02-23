@@ -22,6 +22,7 @@ import {
   Dna,
   Sparkles,
   Loader2,
+  Lightbulb,
 } from "lucide-react";
 import type { Lab } from "@/lib/labs/types";
 import { getLabPath, formatLabStats } from "@/lib/labs/types";
@@ -120,15 +121,19 @@ export function LabCard({
   const DomainIcon = getDomainIcon(lab.domainSlug);
   const domainColor = getDomainColor(lab.domainSlug);
   const labPath = getLabPath(lab.owner.username, lab.slug);
+  const isIdea = lab.status === "idea";
+  const allStatsZero = lab.stats.stars === 0 && lab.stats.forks === 0 && lab.stats.tasks === 0;
 
   const CardContent = (
     <div
       className={cn(
         "group relative flex flex-col rounded-lg border transition-all duration-200",
+        isIdea ? "border-dashed" : "",
         isSelected
           ? "border-foreground-bright ring-2 ring-foreground-bright/20"
           : "border-border hover:border-foreground-muted",
         isHovered && !isSelected && "shadow-lg",
+        isIdea && "opacity-80",
         compact ? "p-3" : "p-4",
         className
       )}
@@ -159,9 +164,17 @@ export function LabCard({
             >
               {lab.name}
             </h3>
-            <p className="text-xs text-foreground-muted truncate">
-              {lab.owner.displayName}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-foreground-muted truncate">
+                {lab.owner.displayName}
+              </p>
+              {isIdea && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20">
+                  <Lightbulb className="w-2.5 h-2.5" />
+                  Idea
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -203,36 +216,44 @@ export function LabCard({
         </p>
       )}
 
-      {/* Stats */}
-      <div
-        className={cn(
-          "flex items-center gap-4 text-xs text-foreground-subtle",
-          compact ? "mt-2" : "mt-4"
-        )}
-      >
-        <span className="flex items-center gap-1">
-          <Star className="w-3.5 h-3.5" />
-          {lab.stats.stars}
-        </span>
-        <span className="flex items-center gap-1">
-          <GitFork className="w-3.5 h-3.5" />
-          {lab.stats.forks}
-        </span>
-        {!compact && (
-          <>
+      {/* Stats - hidden when all are zero */}
+      {!allStatsZero && (
+        <div
+          className={cn(
+            "flex items-center gap-4 text-xs text-foreground-subtle",
+            compact ? "mt-2" : "mt-4"
+          )}
+        >
+          {lab.stats.stars > 0 && (
             <span className="flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5" />
-              {lab.stats.tasks}
+              <Star className="w-3.5 h-3.5" />
+              {lab.stats.stars}
             </span>
-            {lab.stats.viewers > 0 && (
-              <span className="flex items-center gap-1 text-green-400">
-                <Eye className="w-3.5 h-3.5" />
-                {lab.stats.viewers}
-              </span>
-            )}
-          </>
-        )}
-      </div>
+          )}
+          {lab.stats.forks > 0 && (
+            <span className="flex items-center gap-1">
+              <GitFork className="w-3.5 h-3.5" />
+              {lab.stats.forks}
+            </span>
+          )}
+          {!compact && (
+            <>
+              {lab.stats.tasks > 0 && (
+                <span className="flex items-center gap-1">
+                  <Activity className="w-3.5 h-3.5" />
+                  {lab.stats.tasks}
+                </span>
+              )}
+              {lab.stats.viewers > 0 && (
+                <span className="flex items-center gap-1 text-green-400">
+                  <Eye className="w-3.5 h-3.5" />
+                  {lab.stats.viewers}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Tags (not in compact mode) */}
       {!compact && lab.tags.length > 0 && (

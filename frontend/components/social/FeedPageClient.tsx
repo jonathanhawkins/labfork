@@ -27,13 +27,6 @@ const FILTER_TABS: { id: FilterTab; label: string; types?: ActivityType[] }[] = 
   { id: "labs", label: "Labs", types: ["lab_starred", "lab_forked", "lab_created"] },
 ];
 
-// Fallback demo data for suggested labs
-const DEMO_LABS = [
-  { id: "1", name: "Firefly Network", owner: "spark_research", stars: 128, slug: "firefly-network" },
-  { id: "2", name: "Voice Clone Lab", owner: "voice_pioneer", stars: 89, slug: "voice-clone" },
-  { id: "3", name: "Quant Trading", owner: "ai_researcher", stars: 67, slug: "quant-trading" },
-];
-
 /**
  * Suggested labs sidebar
  */
@@ -52,7 +45,7 @@ function SuggestedLabs() {
       try {
         const response = await fetch("/api/labs?sortBy=stars&limit=3&visibility=public");
         if (!response.ok) {
-          setSuggestedLabs(DEMO_LABS);
+          setSuggestedLabs([]);
           return;
         }
 
@@ -73,11 +66,11 @@ function SuggestedLabs() {
           }));
           setSuggestedLabs(mapped);
         } else {
-          setSuggestedLabs(DEMO_LABS);
+          setSuggestedLabs([]);
         }
       } catch (error) {
         console.error("Failed to fetch suggested labs:", error);
-        setSuggestedLabs(DEMO_LABS);
+        setSuggestedLabs([]);
       } finally {
         setIsLoading(false);
       }
@@ -105,7 +98,11 @@ function SuggestedLabs() {
         Suggested Labs
       </h3>
       <div className="space-y-3">
-        {suggestedLabs.map((lab) => (
+        {suggestedLabs.length === 0 ? (
+          <p className="text-sm text-foreground-muted py-4 text-center">
+            No labs yet
+          </p>
+        ) : suggestedLabs.map((lab) => (
           <a
             key={`${lab.owner}/${lab.slug}`}
             href={`/labs/${lab.owner}/${lab.slug}`}
@@ -141,42 +138,18 @@ function SuggestedLabs() {
 
 /**
  * Trending topics sidebar
- * NOTE: These are curated editorial topics until we have enough real activity
- * to compute trending tags dynamically from lab tags and activity data.
+ * TODO: Replace with API call once we have /api/topics/trending
+ * which aggregates tags from recent labs, results, and activity
  */
 function TrendingTopics() {
-  // Curated trending topics (editorial)
-  // TODO: Replace with API call once we have /api/topics/trending
-  // which aggregates tags from recent labs, results, and activity
-  const topics = [
-    { tag: "mppt-algorithm", count: 34 },
-    { tag: "mesh-networking", count: 28 },
-    { tag: "voice-cloning", count: 23 },
-    { tag: "emotion-tts", count: 18 },
-    { tag: "zero-shot", count: 12 },
-  ];
-
   return (
     <div className="p-4 rounded-lg border border-border">
       <h3 className="text-sm font-medium text-foreground mb-3">
         Trending Topics
       </h3>
-      <div className="space-y-2">
-        {topics.map((topic) => (
-          <a
-            key={topic.tag}
-            href={`/explore?tag=${topic.tag}`}
-            className="flex items-center justify-between text-sm hover:bg-foreground-muted/5 px-2 py-1 rounded -mx-2 transition-colors"
-          >
-            <span className="text-foreground-muted hover:text-foreground transition-colors">
-              #{topic.tag}
-            </span>
-            <span className="text-xs text-foreground-subtle">
-              {topic.count} posts
-            </span>
-          </a>
-        ))}
-      </div>
+      <p className="text-sm text-foreground-muted py-4 text-center">
+        Trending topics will appear as more labs are created
+      </p>
     </div>
   );
 }

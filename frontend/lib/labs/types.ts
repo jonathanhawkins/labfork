@@ -12,7 +12,7 @@ export type LabVisibility = "public" | "private" | "unlisted";
 /**
  * Lab status
  */
-export type LabStatus = "active" | "archived" | "suspended";
+export type LabStatus = "active" | "idea" | "archived" | "suspended";
 
 /**
  * Lab statistics

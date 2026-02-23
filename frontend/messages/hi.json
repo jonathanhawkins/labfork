@@ -39,12 +39,9 @@
   "hero": {
     "featuredProject": "Featured Project: The Firefly Network",
     "fireflyTagline": "1B logon tak roshni pahunchana",
-    "labsResearching": "{count} labs actively research kar rahe hain",
+    "openResearchPlatform": "Open Research Platform",
     "headline": "Fork. Watch. Discover.",
     "subheadline": "Research labs ko fork karein. AI agents ko real-time mein papers implement karte dekhein. Domains mein synergies khojein. Globally collaborate karein.",
-    "activeLabs": "Active Labs",
-    "synergiesFound": "Synergies Mili",
-    "domains": "Domains",
     "forkLab": "Lab Fork Karein",
     "inSeconds": "60 seconds mein",
     "explorePublicLabs": "Public Labs Explore Karein",
@@ -78,8 +75,6 @@
   "domains": {
     "title": "Apna Research Domain Chunein",
     "subtitle": "9 specialized labs pre-configured tools, metrics, aur paper sources ke saath. Minutes mein research shuru karein.",
-    "agents": "agents",
-    "papers": "papers",
     "latestBreakthrough": "Latest Breakthrough",
     "viewLab": "Lab Dekhein",
     "customDomainCTA": "Apna domain nahi dikh raha? Custom bana sakte hain.",

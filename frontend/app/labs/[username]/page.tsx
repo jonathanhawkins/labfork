@@ -122,14 +122,24 @@ export default function UserLabsPage({ params }: UserLabsPageProps) {
                   <Layers className="w-4 h-4" />
                   {labs.length} labs
                 </span>
-                <span className="flex items-center gap-1">
-                  <Star className="w-4 h-4" />
-                  {totalStars} stars
-                </span>
-                <span className="flex items-center gap-1">
-                  <GitFork className="w-4 h-4" />
-                  {totalForks} forks
-                </span>
+                {totalStars === 0 && totalForks === 0 ? (
+                  <span className="text-foreground-subtle">New researcher</span>
+                ) : (
+                  <>
+                    {totalStars > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Star className="w-4 h-4" />
+                        {totalStars} stars
+                      </span>
+                    )}
+                    {totalForks > 0 && (
+                      <span className="flex items-center gap-1">
+                        <GitFork className="w-4 h-4" />
+                        {totalForks} forks
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>

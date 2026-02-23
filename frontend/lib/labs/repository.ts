@@ -93,6 +93,7 @@ function getDomainName(slug: string): string {
     "solar-energy": "Solar Energy",
     "mesh-networking": "Mesh Networking",
     "swarm-intelligence": "Swarm Intelligence",
+    sustainability: "Sustainability",
   };
   return names[slug] || slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

@@ -38,32 +38,11 @@ describe("HeroSection", () => {
     });
   });
 
-  describe("Stats Display", () => {
-    it("should show default lab count", () => {
+  describe("Platform Badge", () => {
+    it("should show open research platform text", () => {
       render(<HeroSection />);
 
-      expect(screen.getByText("1,247")).toBeInTheDocument();
-      expect(screen.getByText("Active Labs")).toBeInTheDocument();
-    });
-
-    it("should show custom lab count when provided", () => {
-      render(<HeroSection labCount={5000} />);
-
-      expect(screen.getByText("5,000")).toBeInTheDocument();
-    });
-
-    it("should show discovery count", () => {
-      render(<HeroSection discoveryCount={150} />);
-
-      expect(screen.getByText("150")).toBeInTheDocument();
-      expect(screen.getByText("Synergies Found")).toBeInTheDocument();
-    });
-
-    it("should show domain count", () => {
-      render(<HeroSection />);
-
-      expect(screen.getByText("9")).toBeInTheDocument();
-      expect(screen.getByText("Domains")).toBeInTheDocument();
+      expect(screen.getByText("Open Research Platform")).toBeInTheDocument();
     });
   });
 
@@ -83,11 +62,4 @@ describe("HeroSection", () => {
     });
   });
 
-  describe("Activity Badge", () => {
-    it("should show labs actively researching message", () => {
-      render(<HeroSection labCount={1000} />);
-
-      expect(screen.getByText(/1,000 labs actively researching/i)).toBeInTheDocument();
-    });
-  });
 });

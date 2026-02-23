@@ -19,8 +19,6 @@ export interface DomainInfo {
   primaryColor: string;
   accentColor: string;
   icon: React.ReactNode;
-  activeAgents: number;
-  papersProcessed: number;
   recentBreakthrough?: string;
   tags: string[];
 }
@@ -87,8 +85,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#4ecdc4",
     accentColor: "#66ffaa",
     icon: domainIcons["voice-clone"],
-    activeAgents: 3,
-    papersProcessed: 127,
     recentBreakthrough: "Emotion transfer without paired data",
     tags: ["TTS", "Prosody", "Emotion"],
   },
@@ -99,8 +95,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#10b981",
     accentColor: "#f59e0b",
     icon: domainIcons["quant-trading"],
-    activeAgents: 5,
-    papersProcessed: 203,
     recentBreakthrough: "Transformer-based momentum signals",
     tags: ["Finance", "RL", "Time Series"],
   },
@@ -111,8 +105,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#ec4899",
     accentColor: "#8b5cf6",
     icon: domainIcons["game-ai"],
-    activeAgents: 4,
-    papersProcessed: 156,
     recentBreakthrough: "Zero-shot transfer to new game genres",
     tags: ["RL", "Games", "Multi-Agent"],
   },
@@ -123,8 +115,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#f97316",
     accentColor: "#06b6d4",
     icon: domainIcons["robotics-ml"],
-    activeAgents: 3,
-    papersProcessed: 89,
     recentBreakthrough: "Sim-to-real with 10x less data",
     tags: ["Robotics", "Manipulation", "Sim2Real"],
   },
@@ -135,8 +125,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#14b8a6",
     accentColor: "#f43f5e",
     icon: domainIcons["drug-discovery"],
-    activeAgents: 2,
-    papersProcessed: 112,
     recentBreakthrough: "Novel EGFR inhibitor candidates",
     tags: ["Molecules", "Proteins", "Graph NN"],
   },
@@ -147,8 +135,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#0ea5e9",
     accentColor: "#22c55e",
     icon: domainIcons["climate-modeling"],
-    activeAgents: 2,
-    papersProcessed: 78,
     recentBreakthrough: "10-day forecast matching ECMWF",
     tags: ["Climate", "Weather", "Geospatial"],
   },
@@ -159,8 +145,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#6366f1",
     accentColor: "#f59e0b",
     icon: domainIcons["nlp-research"],
-    activeAgents: 5,
-    papersProcessed: 234,
     recentBreakthrough: "Reasoning chains with 3x fewer tokens",
     tags: ["LLMs", "RAG", "Transformers"],
   },
@@ -171,8 +155,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#ef4444",
     accentColor: "#3b82f6",
     icon: domainIcons["computer-vision"],
-    activeAgents: 4,
-    papersProcessed: 189,
     recentBreakthrough: "Real-time segmentation at 60fps",
     tags: ["Detection", "Segmentation", "ViT"],
   },
@@ -183,8 +165,6 @@ export const defaultDomains: DomainInfo[] = [
     primaryColor: "#8b5cf6",
     accentColor: "#22c55e",
     icon: domainIcons["biotech-nlp"],
-    activeAgents: 2,
-    papersProcessed: 95,
     recentBreakthrough: "98% NER accuracy on clinical notes",
     tags: ["BioNLP", "Drug Discovery", "Clinical"],
   },
@@ -226,10 +206,6 @@ function DomainCard({ domain }: { domain: DomainInfo }) {
             >
               <div style={{ color: domain.primaryColor }}>{domain.icon}</div>
             </div>
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-400 text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              {domain.activeAgents} {t("agents")}
-            </div>
           </div>
 
           {/* Title & Description */}
@@ -263,10 +239,7 @@ function DomainCard({ domain }: { domain: DomainInfo }) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-500">
-              {domain.papersProcessed} {t("papers")}
-            </span>
+          <div className="flex items-center justify-end text-sm">
             <span
               className="font-medium transition-colors"
               style={{ color: isHovered ? domain.primaryColor : "#9ca3af" }}

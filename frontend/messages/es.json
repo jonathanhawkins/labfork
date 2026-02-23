@@ -39,12 +39,9 @@
   "hero": {
     "featuredProject": "Proyecto Destacado: La Red Firefly",
     "fireflyTagline": "Llevando luz a 1B personas",
-    "labsResearching": "{count} laboratorios investigando activamente",
+    "openResearchPlatform": "Plataforma de Investigacion Abierta",
     "headline": "Bifurca. Observa. Descubre.",
     "subheadline": "Bifurca laboratorios de investigacion. Observa agentes de IA implementar articulos en tiempo real. Descubre sinergias entre dominios. Colabora globalmente.",
-    "activeLabs": "Laboratorios Activos",
-    "synergiesFound": "Sinergias Encontradas",
-    "domains": "Dominios",
     "forkLab": "Bifurcar un Laboratorio",
     "inSeconds": "en 60 segundos",
     "explorePublicLabs": "Explorar Laboratorios Publicos",
@@ -78,8 +75,6 @@
   "domains": {
     "title": "Elige Tu Dominio de Investigacion",
     "subtitle": "9 laboratorios especializados con herramientas, metricas y fuentes de articulos preconfiguradas. Comienza a investigar en minutos.",
-    "agents": "agentes",
-    "papers": "articulos",
     "latestBreakthrough": "Ultimo Avance",
     "viewLab": "Ver Laboratorio",
     "customDomainCTA": "No ves tu dominio? Crea uno personalizado.",

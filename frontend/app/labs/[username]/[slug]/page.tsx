@@ -24,9 +24,11 @@ import {
   MessageSquare,
   Settings,
   Terminal,
+  Lightbulb,
 } from "lucide-react";
 import { LabHeader } from "@/components/labs/LabHeader";
 import { ShareDialog } from "@/components/labs/ShareDialog";
+import { quickForkLab } from "@/components/labs/ForkDialog";
 import { FireflyLabContent } from "@/components/labs/FireflyLabContent";
 import { LiveLabViewer } from "@/components/labs/LiveLabViewer";
 import { ActivityFeed } from "@/components/social/ActivityFeed";
@@ -171,14 +173,6 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
     router.push(`/labs/${forkedLab.owner.username}/${forkedLab.slug}`);
   };
 
-  // Tab content
-  const tabs: { id: TabId; label: string; icon: typeof Activity }[] = [
-    { id: "overview", label: "Overview", icon: FileText },
-    { id: "tasks", label: "Tasks", icon: ListTodo },
-    { id: "activity", label: "Activity", icon: Activity },
-    ...(isOwner ? [{ id: "settings" as const, label: "Settings", icon: Settings }] : []),
-  ];
-
   // Show loading state while user auth or lab data is loading
   if (!isUserLoaded || isLoading) {
     return (
@@ -206,6 +200,17 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
       </div>
     );
   }
+
+  const isIdea = lab.status === "idea";
+  const allStatsZero = lab.stats.stars === 0 && lab.stats.forks === 0 && lab.stats.tasks === 0 && lab.stats.papers === 0 && lab.stats.experiments === 0;
+
+  // Tab content
+  const tabs: { id: TabId; label: string; icon: typeof Activity }[] = [
+    { id: "overview", label: "Overview", icon: FileText },
+    { id: "tasks", label: "Tasks", icon: ListTodo },
+    ...(isIdea ? [] : [{ id: "activity" as const, label: "Activity", icon: Activity }]),
+    ...(isOwner ? [{ id: "settings" as const, label: "Settings", icon: Settings }] : []),
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -261,6 +266,31 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
               </div>
             )}
 
+            {/* Idea CTA */}
+            {isIdea && (
+              <div className="p-6 rounded-lg border border-dashed border-amber-500/30 bg-amber-500/5 text-center">
+                <Lightbulb className="w-10 h-10 mx-auto text-amber-400 mb-3" />
+                <h3 className="text-lg font-medium text-foreground-bright mb-2">
+                  This is an open research idea
+                </h3>
+                <p className="text-sm text-foreground-muted mb-4 max-w-md mx-auto">
+                  Fork this lab to start building. Your work will contribute to solving real problems.
+                </p>
+                <button
+                  onClick={async () => {
+                    const result = await quickForkLab(lab);
+                    if (result.success && result.lab) {
+                      handleForkSuccess(result.lab);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-foreground text-background hover:bg-foreground-bright transition-colors font-medium text-sm"
+                >
+                  <GitFork className="w-4 h-4" />
+                  Fork this lab to start building
+                </button>
+              </div>
+            )}
+
             {/* Standard lab content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Main content */}
@@ -302,30 +332,38 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
 
               {/* Sidebar */}
               <div className="space-y-6">
-                {/* Quick Stats */}
-                <div className="p-4 rounded-lg border border-border">
-                  <h3 className="text-sm font-medium text-foreground-bright mb-3">Stats</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-foreground-muted">Tasks</span>
-                      <span className="text-foreground">{lab.stats.tasks}</span>
+                {/* Quick Stats - hidden when all are zero */}
+                {!allStatsZero && (
+                  <div className="p-4 rounded-lg border border-border">
+                    <h3 className="text-sm font-medium text-foreground-bright mb-3">Stats</h3>
+                    <div className="space-y-3">
+                      {lab.stats.tasks > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-foreground-muted">Tasks</span>
+                          <span className="text-foreground">{lab.stats.tasks}</span>
+                        </div>
+                      )}
+                      {lab.stats.papers > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-foreground-muted">Papers</span>
+                          <span className="text-foreground">{lab.stats.papers}</span>
+                        </div>
+                      )}
+                      {lab.stats.experiments > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-foreground-muted">Experiments</span>
+                          <span className="text-foreground">{lab.stats.experiments}</span>
+                        </div>
+                      )}
+                      {lab.stats.viewers > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-foreground-muted">Viewers</span>
+                          <span className="text-green-400">{lab.stats.viewers} watching</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-foreground-muted">Papers</span>
-                      <span className="text-foreground">{lab.stats.papers}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-foreground-muted">Experiments</span>
-                      <span className="text-foreground">{lab.stats.experiments}</span>
-                    </div>
-                    {lab.stats.viewers > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-foreground-muted">Viewers</span>
-                        <span className="text-green-400">{lab.stats.viewers} watching</span>
-                      </div>
-                    )}
                   </div>
-                </div>
+                )}
 
                 {/* Activity Summary */}
                 <div className="p-4 rounded-lg border border-border">
