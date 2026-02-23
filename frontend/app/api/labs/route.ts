@@ -65,6 +65,9 @@ export async function GET(request: NextRequest) {
     const owner = searchParams.get("owner");
     if (owner) options.owner = owner;
 
+    const slug = searchParams.get("slug");
+    if (slug) options.slug = slug;
+
     const domain = searchParams.get("domain");
     if (domain) options.domain = domain;
 

@@ -192,6 +192,8 @@ export interface UpdateLabInput {
 export interface LabListOptions {
   /** Filter by owner username */
   owner?: string;
+  /** Filter by slug */
+  slug?: string;
   /** Filter by domain */
   domain?: string;
   /** Filter by visibility */

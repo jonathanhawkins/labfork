@@ -186,6 +186,9 @@ export async function listLabs(options: LabListOptions = {}): Promise<LabListRes
     // Owner filter
     if (options.owner && lab.owner.username !== options.owner) return false;
 
+    // Slug filter
+    if (options.slug && lab.slug !== options.slug) return false;
+
     // Domain filter
     if (options.domain && lab.domainSlug !== options.domain) return false;
 
