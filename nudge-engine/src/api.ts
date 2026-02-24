@@ -152,7 +152,7 @@ api.post('/poll', async (c) => {
   //   - worker's capabilities contain the required one
   // Skip parent tasks (they have children and are just tracking containers)
   const task = await c.env.DB.prepare(`
-    SELECT t.id, t.action, t.description, t.context, t.constraints, t.priority, t.parent_task_id
+    SELECT t.id, t.action, t.description, t.context, t.constraints, t.priority, t.parent_task_id, t.lab_id
     FROM tasks t
     WHERE t.status = 'pending'
       AND (t.required_capability IS NULL OR ? = '[]' OR instr(?, '"' || t.required_capability || '"') > 0)
@@ -196,6 +196,7 @@ api.post('/poll', async (c) => {
       constraints: parseJson(task.constraints as string | null, null),
       priority: task.priority,
       parent_task_id: (task as Record<string, unknown>).parent_task_id || null,
+      lab_id: (task as Record<string, unknown>).lab_id || null,
     },
   });
 });
@@ -328,7 +329,7 @@ api.post('/tasks', async (c) => {
 
   const body = await c.req.json().catch(() => null);
   if (!body) return c.json({ error: 'Invalid JSON body' }, 400);
-  const { action, description, context, constraints, priority, required_capability, parent_task_id } = body;
+  const { action, description, context, constraints, priority, required_capability, parent_task_id, lab_id } = body;
 
   if (!action || !description) {
     return c.json({ error: 'action and description are required' }, 400);
@@ -353,8 +354,8 @@ api.post('/tasks', async (c) => {
   const ts = now();
 
   await c.env.DB.prepare(`
-    INSERT INTO tasks (id, action, description, context, constraints, status, priority, required_capability, source, parent_task_id, created_at)
-    VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+    INSERT INTO tasks (id, action, description, context, constraints, status, priority, required_capability, source, parent_task_id, lab_id, created_at)
+    VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
   `).bind(
     id, action, description,
     context ? JSON.stringify(context) : null,
@@ -363,6 +364,7 @@ api.post('/tasks', async (c) => {
     required_capability || null,
     taskSource,
     parent_task_id || null,
+    lab_id || null,
     ts
   ).run();
 
@@ -370,7 +372,7 @@ api.post('/tasks', async (c) => {
     INSERT INTO work_log (id, event, detail, created_at) VALUES (?, 'created', ?, ?)
   `).bind(generateId('log'), JSON.stringify({ taskId: id, action, source: taskSource, parentTaskId: parent_task_id || null }), ts).run();
 
-  return c.json({ success: true, task: { id, action, status: 'pending', priority: priority || 5, parent_task_id: parent_task_id || null } });
+  return c.json({ success: true, task: { id, action, status: 'pending', priority: priority || 5, parent_task_id: parent_task_id || null, lab_id: lab_id || null } });
 });
 
 /**
@@ -381,10 +383,11 @@ api.post('/tasks', async (c) => {
 api.get('/tasks', async (c) => {
   const status = c.req.query('status');
   const parentId = c.req.query('parent_task_id');
+  const labId = c.req.query('lab_id');
   const limit = Math.min(parseInt(c.req.query('limit') || '50', 10), 200);
   const offset = parseInt(c.req.query('offset') || '0', 10);
 
-  let query = 'SELECT id, action, description, status, priority, required_capability, assigned_worker_id, result, source, attempts, error, parent_task_id, created_at, assigned_at, completed_at FROM tasks';
+  let query = 'SELECT id, action, description, status, priority, required_capability, assigned_worker_id, result, source, attempts, error, parent_task_id, lab_id, created_at, assigned_at, completed_at FROM tasks';
   const conditions: string[] = [];
   const params: (string | number)[] = [];
 
@@ -395,6 +398,10 @@ api.get('/tasks', async (c) => {
   if (parentId) {
     conditions.push('parent_task_id = ?');
     params.push(parentId);
+  }
+  if (labId) {
+    conditions.push('lab_id = ?');
+    params.push(labId);
   }
 
   if (conditions.length > 0) {
@@ -417,7 +424,7 @@ api.get('/tasks/:id', async (c) => {
   const task = await c.env.DB.prepare(`
     SELECT id, action, description, context, constraints, status, priority,
            required_capability, assigned_worker_id, result, error, source, attempts,
-           timeout_minutes, parent_task_id, created_at, assigned_at, completed_at
+           timeout_minutes, parent_task_id, lab_id, created_at, assigned_at, completed_at
     FROM tasks WHERE id = ?
   `).bind(taskId).first();
 

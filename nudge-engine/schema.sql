@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   attempts INTEGER DEFAULT 0,
   timeout_minutes INTEGER DEFAULT 30,
   parent_task_id TEXT,                    -- NULL = top-level task, or: parent task ID for subtasks
+  lab_id TEXT,                            -- NULL = no lab, or: lab ID for lab-scoped tasks
   created_at TEXT DEFAULT (datetime('now')),
   assigned_at TEXT,
   completed_at TEXT,
@@ -68,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status_priority ON tasks(status, priority D
 CREATE INDEX IF NOT EXISTS idx_tasks_assigned_worker ON tasks(assigned_worker_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_lab_id ON tasks(lab_id);
 CREATE INDEX IF NOT EXISTS idx_observations_type_created ON observations(type, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_work_log_created ON work_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_work_log_task ON work_log(task_id);

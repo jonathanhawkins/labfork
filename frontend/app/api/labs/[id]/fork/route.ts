@@ -16,6 +16,8 @@ import {
 import { canViewLab } from "@/lib/labs/types";
 import { getServerUser } from "@/lib/auth/server";
 import { userToLabOwner } from "@/lib/auth/mock-user";
+import { activateResearch } from "@/lib/labs/research";
+import { logLabForked } from "@/lib/social/activity/service";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -134,6 +136,28 @@ export async function POST(
     // Fork the lab
     const owner = userToLabOwner(user);
     const forkedLab = await forkLab(id, owner, newSlug);
+
+    // Fire-and-forget: activate AI research agents
+    activateResearch(forkedLab)
+      .then((r) => {
+        if (r.activated) {
+          console.log(`Research activated for lab ${forkedLab.id}: parent=${r.parentTaskId}, subtasks=${r.subtaskIds?.length}`);
+        }
+      })
+      .catch((err) => console.error("Failed to activate research:", err));
+
+    // Fire-and-forget: log the fork activity
+    const actor = {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName || user.username,
+      avatar: user.avatar,
+    };
+    logLabForked(
+      actor,
+      { id: lab.id, name: lab.name },
+      { id: forkedLab.id, name: forkedLab.name, slug: forkedLab.slug, ownerUsername: owner.username }
+    ).catch((err) => console.error("Failed to log fork activity:", err));
 
     return NextResponse.json({
       success: true,

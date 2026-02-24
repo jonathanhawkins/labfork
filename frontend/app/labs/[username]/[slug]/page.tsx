@@ -50,6 +50,29 @@ interface Task {
   activeForm?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** Summary from Nudge Engine result */
+  resultSummary?: string;
+  /** When the task completed */
+  completedAt?: string;
+  /** Whether the task failed (shown as completed with error) */
+  isFailed?: boolean;
+  /** Nudge Engine task ID */
+  nudgeTaskId?: string;
+  /** Parent task ID (subtask indicator) */
+  parentTaskId?: string;
+}
+
+/** Format relative time, e.g. "5m ago", "2h ago" */
+function relativeTime(iso: string | undefined): string {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
 }
 
 interface LabPortalPageProps {
@@ -130,31 +153,44 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
     }
   }, [isUserLoaded, fetchLab]);
 
-  // Fetch tasks for this lab
+  // Fetch research tasks for this lab from Nudge Engine
   const fetchTasks = useCallback(async () => {
     if (!lab) return;
 
     try {
       setTasksLoading(true);
-      const response = await fetch("/api/tasks");
+      const response = await fetch(`/api/labs/${lab.id}/research`);
       const data = await response.json();
 
-      if (data.tasks) {
-        // Filter tasks for this lab owner (since tasks don't have labId yet)
-        // For now, show all tasks - in the future, filter by labId
+      if (data.success && data.tasks) {
         setTasks(data.tasks);
+        // Update sidebar stats with real task count
+        if (data.total !== undefined) {
+          setLab((prev) =>
+            prev
+              ? { ...prev, stats: { ...prev.stats, tasks: data.total } }
+              : prev
+          );
+        }
       }
     } catch (err) {
       console.error("Failed to fetch tasks:", err);
     } finally {
       setTasksLoading(false);
     }
-  }, [lab]);
+  }, [lab?.id]);
 
   useEffect(() => {
     if (activeTab === "tasks" && lab) {
       fetchTasks();
     }
+  }, [activeTab, lab, fetchTasks]);
+
+  // Poll for live task updates every 10 seconds
+  useEffect(() => {
+    if (activeTab !== "tasks" || !lab) return;
+    const interval = setInterval(fetchTasks, 10_000);
+    return () => clearInterval(interval);
   }, [activeTab, lab, fetchTasks]);
 
   // Handle star toggle
@@ -434,44 +470,70 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
                 {tasks.map((task) => (
                   <div
                     key={task.id}
-                    className="p-4 rounded-lg border border-border hover:border-foreground-muted/50 transition-colors"
+                    className={cn(
+                      "p-4 rounded-lg border transition-colors",
+                      task.status === "in_progress"
+                        ? "border-blue-500/40 bg-blue-500/5"
+                        : task.isFailed
+                          ? "border-red-500/30 bg-red-500/5"
+                          : task.status === "completed"
+                            ? "border-green-500/20"
+                            : "border-border hover:border-foreground-muted/50"
+                    )}
                   >
                     <div className="flex items-start gap-3">
                       {/* Status Icon */}
                       <div className="mt-0.5">
-                        {task.status === "completed" && (
+                        {task.isFailed ? (
+                          <AlertCircle className="w-5 h-5 text-red-400" />
+                        ) : task.status === "completed" ? (
                           <CheckCircle2 className="w-5 h-5 text-green-400" />
-                        )}
-                        {task.status === "in_progress" && (
-                          <AlertCircle className="w-5 h-5 text-blue-400 animate-pulse" />
-                        )}
-                        {task.status === "pending" && (
+                        ) : task.status === "in_progress" ? (
+                          <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                        ) : (
                           <Circle className="w-5 h-5 text-foreground-subtle" />
                         )}
                       </div>
 
                       {/* Task Content */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium text-foreground-bright mb-1">
-                          {task.subject}
-                        </h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-sm font-medium text-foreground-bright">
+                            {task.subject}
+                          </h3>
+                          {task.parentTaskId && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-foreground-subtle/20 text-foreground-muted">
+                              Subtask
+                            </span>
+                          )}
+                        </div>
                         {task.description && (
                           <p className="text-xs text-foreground-muted mb-2 line-clamp-2">
                             {task.description}
                           </p>
                         )}
-                        {task.activeForm && task.status === "in_progress" && (
+                        {task.status === "in_progress" && (
                           <p className="text-xs text-blue-400 italic">
-                            {task.activeForm}
+                            AI agent working...
                           </p>
                         )}
+                        {task.resultSummary && task.status === "completed" && !task.isFailed && (
+                          <div className="mt-2 p-2 rounded bg-green-500/10 border border-green-500/20">
+                            <p className="text-xs text-green-300 line-clamp-3">
+                              {task.resultSummary}
+                            </p>
+                          </div>
+                        )}
                         <div className="flex items-center gap-3 mt-2 text-xs text-foreground-subtle">
-                          <span className="capitalize">{task.status.replace("_", " ")}</span>
-                          {task.owner && <span>By {task.owner}</span>}
-                          {task.blockedBy && task.blockedBy.length > 0 && (
-                            <span className="text-amber-400">
-                              Blocked by {task.blockedBy.length} task(s)
-                            </span>
+                          <span className={cn(
+                            "capitalize",
+                            task.isFailed && "text-red-400"
+                          )}>
+                            {task.isFailed ? "failed" : task.status.replace("_", " ")}
+                          </span>
+                          {task.owner && <span>{task.owner}</span>}
+                          {(task.createdAt || task.completedAt) && (
+                            <span>{relativeTime(task.completedAt || task.createdAt)}</span>
                           )}
                         </div>
                       </div>
@@ -480,13 +542,13 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 border border-border rounded-lg">
+              <div className="text-center py-12 border border-dashed border-border rounded-lg">
                 <ListTodo className="w-12 h-12 mx-auto text-foreground-subtle mb-3" />
                 <p className="text-sm text-foreground-muted">
-                  No tasks yet
+                  No research tasks yet
                 </p>
                 <p className="text-xs text-foreground-subtle mt-1">
-                  Tasks will appear here when created
+                  Fork this lab to activate AI research agents
                 </p>
               </div>
             )}
