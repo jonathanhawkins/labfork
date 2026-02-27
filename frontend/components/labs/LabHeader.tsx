@@ -186,23 +186,23 @@ export function LabHeader({
         )}
 
         {/* Main header row */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           {/* Left side: Icon, name, owner, domain */}
-          <div className="flex items-start gap-4 min-w-0 flex-1">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
             {/* Domain Icon */}
             <div
               className={cn(
-                "flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center border",
+                "flex-shrink-0 w-10 h-10 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl flex items-center justify-center border",
                 domainColor
               )}
             >
-              <DomainIcon className="w-7 h-7" />
+              <DomainIcon className="w-5 h-5 sm:w-7 sm:h-7" />
             </div>
 
             {/* Name and meta */}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl font-semibold text-foreground-bright truncate">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-semibold text-foreground-bright truncate">
                   {lab.name}
                 </h1>
 
@@ -276,7 +276,7 @@ export function LabHeader({
           </div>
 
           {/* Right side: Actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             {/* Star button */}
             <StarButton
               labId={lab.id}
@@ -303,7 +303,8 @@ export function LabHeader({
                 ) : (
                   <GitFork className="w-4 h-4" />
                 )}
-                <span className="font-medium">{isIdea ? "Start This Research" : "Fork & Launch"}</span>
+                <span className="font-medium hidden sm:inline">{isIdea ? "Start This Research" : "Fork & Launch"}</span>
+                <span className="font-medium sm:hidden">Fork</span>
               </button>
 
               {/* Fork count / dialog trigger */}
@@ -331,20 +332,6 @@ export function LabHeader({
               <Share2 className="w-4 h-4" />
             </button>
 
-            {/* Settings (owner only) */}
-            {isOwner && (
-              <button
-                onClick={onSettingsClick}
-                className={cn(
-                  "p-2 rounded-lg border transition-colors",
-                  "border-border hover:bg-foreground-muted/10 text-foreground-muted hover:text-foreground"
-                )}
-                title="Lab settings"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
-
             {/* More dropdown */}
             <div className="relative">
               <button
@@ -365,6 +352,18 @@ export function LabHeader({
                   />
                   <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-border bg-background-elevated shadow-lg z-20">
                     <div className="py-1">
+                      {isOwner && (
+                        <button
+                          onClick={() => {
+                            onSettingsClick?.();
+                            setShowDropdown(false);
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left text-foreground-muted hover:bg-foreground-muted/10 flex items-center gap-2"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Settings
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(window.location.href);
@@ -394,7 +393,7 @@ export function LabHeader({
         </div>
 
         {/* Stats row */}
-        <div className="flex items-center gap-6 mt-6 pt-4 border-t border-border/50">
+        <div className="flex items-center gap-4 sm:gap-6 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-border/50 flex-wrap">
           {allStatsZero ? (
             <span className="text-sm text-foreground-subtle">No activity yet</span>
           ) : (

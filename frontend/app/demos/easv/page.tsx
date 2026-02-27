@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import Link from "next/link";
 import {
-  ArrowLeft,
   Play,
   Loader2,
   Download,
@@ -11,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DemoBreadcrumb } from "@/components/demos";
 
 // Emotions supported by EASV
 const EMOTIONS = [
@@ -71,13 +70,7 @@ export default function EASVDemoPage() {
     <div className="min-h-screen bg-background p-8">
       <div className="max-w-2xl mx-auto">
         {/* Back Link */}
-        <Link
-          href="/demos"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-8"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Demos
-        </Link>
+        <DemoBreadcrumb demoId="easv" />
 
         {/* Header */}
         <div className="mb-8">

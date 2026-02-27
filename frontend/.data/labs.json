@@ -22,7 +22,12 @@
       "experiments": 0,
       "viewers": 0
     },
-    "tags": ["mppt", "solar", "mesh", "hardware"],
+    "tags": [
+      "mppt",
+      "solar",
+      "mesh",
+      "hardware"
+    ],
     "primaryColor": "#f59e0b",
     "createdAt": "2026-02-23T00:00:00.000Z",
     "updatedAt": "2026-02-23T00:00:00.000Z",
@@ -49,12 +54,18 @@
       "tasks": 0,
       "papers": 0,
       "experiments": 0,
-      "viewers": 0
+      "viewers": 0,
+      "views": 806
     },
-    "tags": ["thread", "mesh", "iot", "protocol"],
+    "tags": [
+      "thread",
+      "mesh",
+      "iot",
+      "protocol"
+    ],
     "primaryColor": "#f59e0b",
     "createdAt": "2026-02-23T00:00:00.000Z",
-    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-27T10:13:30.836Z",
     "lastActivityAt": "2026-02-23T00:00:00.000Z"
   },
   {
@@ -78,12 +89,18 @@
       "tasks": 0,
       "papers": 0,
       "experiments": 0,
-      "viewers": 0
+      "viewers": 0,
+      "views": 11
     },
-    "tags": ["tts", "prosody", "emotion", "neural"],
+    "tags": [
+      "tts",
+      "prosody",
+      "emotion",
+      "neural"
+    ],
     "primaryColor": "#3b82f6",
     "createdAt": "2026-02-23T00:00:00.000Z",
-    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-27T10:41:38.430Z",
     "lastActivityAt": "2026-02-23T00:00:00.000Z"
   },
   {
@@ -109,7 +126,11 @@
       "experiments": 0,
       "viewers": 0
     },
-    "tags": ["zero-shot", "vall-e", "speaker-adaptation"],
+    "tags": [
+      "zero-shot",
+      "vall-e",
+      "speaker-adaptation"
+    ],
     "primaryColor": "#3b82f6",
     "createdAt": "2026-02-23T00:00:00.000Z",
     "updatedAt": "2026-02-23T00:00:00.000Z",
@@ -138,7 +159,14 @@
       "experiments": 0,
       "viewers": 0
     },
-    "tags": ["water", "solar", "biomimicry", "3d-printing", "mof", "humanitarian"],
+    "tags": [
+      "water",
+      "solar",
+      "biomimicry",
+      "3d-printing",
+      "mof",
+      "humanitarian"
+    ],
     "primaryColor": "#06b6d4",
     "createdAt": "2026-02-23T00:00:00.000Z",
     "updatedAt": "2026-02-23T00:00:00.000Z",
@@ -167,7 +195,12 @@
       "experiments": 0,
       "viewers": 0
     },
-    "tags": ["transformer", "momentum", "signals", "ml"],
+    "tags": [
+      "transformer",
+      "momentum",
+      "signals",
+      "ml"
+    ],
     "primaryColor": "#22c55e",
     "createdAt": "2026-02-23T00:00:00.000Z",
     "updatedAt": "2026-02-23T00:00:00.000Z",
@@ -196,7 +229,11 @@
       "experiments": 0,
       "viewers": 0
     },
-    "tags": ["rl", "portfolio", "optimization"],
+    "tags": [
+      "rl",
+      "portfolio",
+      "optimization"
+    ],
     "primaryColor": "#22c55e",
     "createdAt": "2026-02-23T00:00:00.000Z",
     "updatedAt": "2026-02-23T00:00:00.000Z",
@@ -225,7 +262,11 @@
       "experiments": 0,
       "viewers": 0
     },
-    "tags": ["sim2real", "manipulation", "transfer-learning"],
+    "tags": [
+      "sim2real",
+      "manipulation",
+      "transfer-learning"
+    ],
     "primaryColor": "#a855f7",
     "createdAt": "2026-02-23T00:00:00.000Z",
     "updatedAt": "2026-02-23T00:00:00.000Z",
@@ -254,7 +295,11 @@
       "experiments": 0,
       "viewers": 0
     },
-    "tags": ["alphafold", "protein", "structure"],
+    "tags": [
+      "alphafold",
+      "protein",
+      "structure"
+    ],
     "primaryColor": "#ec4899",
     "createdAt": "2026-02-23T00:00:00.000Z",
     "updatedAt": "2026-02-23T00:00:00.000Z",

@@ -10,7 +10,7 @@
  * - Tasks list
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/hooks";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,7 @@ import { quickForkLab } from "@/components/labs/ForkDialog";
 import { FireflyLabContent } from "@/components/labs/FireflyLabContent";
 import { LiveLabViewer } from "@/components/labs/LiveLabViewer";
 import { ActivityFeed } from "@/components/social/ActivityFeed";
+import { LabDemosSection } from "@/components/demos";
 import type { Lab } from "@/lib/labs/types";
 import {
   CheckCircle2,
@@ -90,6 +91,8 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
 
   // Authentication (works with Clerk on prod, mock in dev)
   const { user: currentUser, isLoaded: isUserLoaded } = useAuth();
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
 
   const [lab, setLab] = useState<Lab | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,10 +106,9 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
 
-  // Fetch lab data
+  // Fetch lab data (stable callback — uses ref for currentUser to avoid re-fetches)
   const fetchLab = useCallback(async () => {
     try {
-      setIsLoading(true);
       setError(null);
 
       // First, find the lab by username/slug
@@ -132,8 +134,8 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
         setLab(detailData.lab);
         setIsStarred(detailData.social?.isStarred || false);
 
-        // Check if current user is owner using proper auth
-        setIsOwner(currentUser?.id === detailData.lab.owner.id);
+        // Check if current user is owner using ref (avoids callback invalidation)
+        setIsOwner(currentUserRef.current?.id === detailData.lab.owner.id);
       } else {
         setError(detailData.error || "Failed to load lab");
       }
@@ -143,11 +145,10 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [username, slug, currentUser]);
+  }, [username, slug]);
 
-  // Wait for both user and lab data to load
+  // Fetch lab once auth is ready (stable deps — won't re-fire on currentUser change)
   useEffect(() => {
-    // Only fetch lab once user auth is loaded
     if (isUserLoaded) {
       fetchLab();
     }
@@ -180,13 +181,14 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
     }
   }, [lab?.id]);
 
+  // Always fetch tasks on initial load (needed for Overview + Tasks tab)
   useEffect(() => {
-    if (activeTab === "tasks" && lab) {
+    if (lab) {
       fetchTasks();
     }
-  }, [activeTab, lab, fetchTasks]);
+  }, [lab, fetchTasks]);
 
-  // Poll for live task updates every 10 seconds
+  // Poll for live task updates every 10 seconds when on Tasks tab
   useEffect(() => {
     if (activeTab !== "tasks" || !lab) return;
     const interval = setInterval(fetchTasks, 10_000);
@@ -209,11 +211,45 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
     router.push(`/labs/${forkedLab.owner.username}/${forkedLab.slug}`);
   };
 
-  // Show loading state while user auth or lab data is loading
+  // Skeleton layout while loading — matches final page structure to prevent flash
   if (!isUserLoaded || isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-foreground-muted" />
+      <div className="min-h-screen bg-background">
+        {/* Header skeleton */}
+        <div className="border-b border-border">
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl bg-foreground-muted/10 animate-pulse" />
+              <div className="flex-1 space-y-2">
+                <div className="h-6 sm:h-7 w-48 bg-foreground-muted/10 rounded animate-pulse" />
+                <div className="h-4 w-32 bg-foreground-muted/10 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Tab bar skeleton */}
+        <div className="border-b border-border">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex gap-4 py-3">
+              <div className="h-4 w-20 bg-foreground-muted/10 rounded animate-pulse" />
+              <div className="h-4 w-16 bg-foreground-muted/10 rounded animate-pulse" />
+              <div className="h-4 w-18 bg-foreground-muted/10 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        {/* Content skeleton */}
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="h-[200px] sm:h-[280px] lg:h-[400px] rounded-lg bg-foreground-muted/10 animate-pulse" />
+              <div className="h-32 rounded-lg bg-foreground-muted/10 animate-pulse" />
+            </div>
+            <div className="space-y-6">
+              <div className="h-24 rounded-lg bg-foreground-muted/10 animate-pulse" />
+              <div className="h-16 rounded-lg bg-foreground-muted/10 animate-pulse" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -328,10 +364,13 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
             )}
 
             {/* Standard lab content */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
               {/* Main content */}
               <div className="lg:col-span-2 space-y-6">
-                {/* Lab 3D Viewer */}
+                {/* Research Demos — primary content above the 3D viewer */}
+                <LabDemosSection labSlug={lab.slug} />
+
+                {/* Lab 3D Viewer — compact on mobile, full on desktop */}
                 <div className="rounded-lg border border-border bg-background-elevated overflow-hidden">
                   <LiveLabViewer
                     lab={lab}
@@ -339,14 +378,81 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
                     showViewers={true}
                     showActivity={true}
                     allowFullscreen={true}
-                    className="h-[400px]"
+                    compact={true}
+                    className="h-[200px] sm:h-[280px] lg:h-[400px]"
                   />
                 </div>
 
+                {/* Recent Research Tasks (on Overview) */}
+                {tasks.length > 0 && (
+                  <div className="p-4 sm:p-6 rounded-lg border border-border">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-base sm:text-lg font-medium text-foreground-bright">
+                        Research Progress
+                      </h3>
+                      <button
+                        onClick={() => setActiveTab("tasks")}
+                        className="text-xs text-foreground-muted hover:text-foreground transition-colors"
+                      >
+                        View all ({tasks.length})
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {tasks.slice(0, 5).map((task) => (
+                        <div
+                          key={task.id}
+                          className={cn(
+                            "p-3 rounded-lg border transition-colors",
+                            task.status === "in_progress"
+                              ? "border-blue-500/40 bg-blue-500/5"
+                              : task.isFailed
+                                ? "border-red-500/30 bg-red-500/5"
+                                : task.status === "completed"
+                                  ? "border-green-500/20 bg-green-500/5"
+                                  : "border-border"
+                          )}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <div className="mt-0.5 flex-shrink-0">
+                              {task.isFailed ? (
+                                <AlertCircle className="w-4 h-4 text-red-400" />
+                              ) : task.status === "completed" ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                              ) : task.status === "in_progress" ? (
+                                <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                              ) : (
+                                <Circle className="w-4 h-4 text-foreground-subtle" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-medium text-foreground-bright truncate">
+                                {task.subject}
+                              </h4>
+                              {task.resultSummary && task.status === "completed" && !task.isFailed && (
+                                <p className="text-xs text-green-300/80 mt-1 line-clamp-2">
+                                  {task.resultSummary}
+                                </p>
+                              )}
+                              {task.status === "in_progress" && (
+                                <p className="text-xs text-blue-400/80 mt-1 italic">
+                                  AI agent working...
+                                </p>
+                              )}
+                              <span className="text-[11px] text-foreground-subtle mt-1 block">
+                                {relativeTime(task.completedAt || task.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* README/Description */}
                 {lab.description && (
-                  <div className="p-6 rounded-lg border border-border">
-                    <h3 className="text-lg font-medium text-foreground-bright mb-4">About</h3>
+                  <div className="p-4 sm:p-6 rounded-lg border border-border">
+                    <h3 className="text-base sm:text-lg font-medium text-foreground-bright mb-3 sm:mb-4">About</h3>
                     <p className="text-sm text-foreground-muted whitespace-pre-wrap">
                       {lab.description}
                     </p>
@@ -355,8 +461,8 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
 
                 {/* README (if available) */}
                 {lab.readme && (
-                  <div className="p-6 rounded-lg border border-border">
-                    <h3 className="text-lg font-medium text-foreground-bright mb-4">README</h3>
+                  <div className="p-4 sm:p-6 rounded-lg border border-border">
+                    <h3 className="text-base sm:text-lg font-medium text-foreground-bright mb-3 sm:mb-4">README</h3>
                     <div className="prose prose-sm prose-invert max-w-none">
                       <pre className="text-sm text-foreground-muted whitespace-pre-wrap font-sans">
                         {lab.readme}
@@ -368,7 +474,7 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
 
               {/* Sidebar */}
               <div className="space-y-6">
-                {/* Quick Stats - hidden when all are zero */}
+                {/* Quick Stats */}
                 {!allStatsZero && (
                   <div className="p-4 rounded-lg border border-border">
                     <h3 className="text-sm font-medium text-foreground-bright mb-3">Stats</h3>
