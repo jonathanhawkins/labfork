@@ -223,20 +223,25 @@ describe("Enhanced Semantic Scholar Client", () => {
 
   describe("getCitationNetwork", () => {
     it("should build complete citation network", async () => {
-      // Mock paper fetch
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockPaperResponse),
-      });
-      // Mock citations
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockCitationResponse),
-      });
-      // Mock references
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockReferenceResponse),
+      // Use URL-based mock to avoid flaky ordering with Promise.all + rate limiter
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("/citations")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockCitationResponse),
+          });
+        }
+        if (url.includes("/references")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockReferenceResponse),
+          });
+        }
+        // Paper fetch
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockPaperResponse),
+        });
       });
 
       const network = await getCitationNetwork("abc123");
