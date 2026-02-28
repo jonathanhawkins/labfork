@@ -163,11 +163,17 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
 
       if (data.success && data.tasks) {
         setTasks(data.tasks);
-        // Update sidebar stats with real task count
+        // Update stats with real task count and latest activity
         if (data.total !== undefined) {
           setLab((prev) =>
             prev
-              ? { ...prev, stats: { ...prev.stats, tasks: data.total } }
+              ? {
+                  ...prev,
+                  stats: { ...prev.stats, tasks: data.total },
+                  ...(data.latestActivity
+                    ? { lastActivityAt: data.latestActivity, updatedAt: data.latestActivity }
+                    : {}),
+                }
               : prev
           );
         }

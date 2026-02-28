@@ -155,7 +155,7 @@
     "stats": {
       "stars": 0,
       "forks": 0,
-      "tasks": 0,
+      "tasks": 15,
       "papers": 0,
       "experiments": 0,
       "viewers": 0,
@@ -171,8 +171,8 @@
     ],
     "primaryColor": "#06b6d4",
     "createdAt": "2026-02-23T00:00:00.000Z",
-    "updatedAt": "2026-02-28T00:32:04.454Z",
-    "lastActivityAt": "2026-02-23T00:00:00.000Z"
+    "updatedAt": "2026-02-28T08:30:19.000Z",
+    "lastActivityAt": "2026-02-28T08:30:19.000Z"
   },
   {
     "id": "lab_seed_transformer_signals",

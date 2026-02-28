@@ -81,31 +81,60 @@ function mapTask(task: NudgeTask) {
   };
 }
 
+/** Actions that are infrastructure noise, not research tasks */
+const NOISE_ACTIONS = new Set([
+  "check-health",
+  "investigate-failures",
+]);
+
+/** Check if a task is a research task (goal-based, not infra noise) */
+function isResearchTask(task: NudgeTask): boolean {
+  if (NOISE_ACTIONS.has(task.action)) return false;
+  return true;
+}
+
 /**
  * GET /api/labs/[id]/research
- * Fetch research tasks from Nudge Engine filtered by lab_id
+ * Fetch research tasks from Nudge Engine.
+ * First tries lab-specific tasks; falls back to all research tasks
+ * (global tasks created by the cron/goals pipeline).
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id: labId } = await params;
+    const headers = NUDGE_ENGINE_API_KEY
+      ? { Authorization: `Bearer ${NUDGE_ENGINE_API_KEY}` }
+      : {};
 
-    const url = `${NUDGE_ENGINE_URL}/tasks?lab_id=${encodeURIComponent(labId)}&limit=50`;
-    const res = await fetch(url, {
-      headers: NUDGE_ENGINE_API_KEY
-        ? { Authorization: `Bearer ${NUDGE_ENGINE_API_KEY}` }
-        : {},
-      next: { revalidate: 0 },
-    });
+    // Try lab-specific tasks first
+    const labUrl = `${NUDGE_ENGINE_URL}/tasks?lab_id=${encodeURIComponent(labId)}&limit=50`;
+    const labRes = await fetch(labUrl, { headers, next: { revalidate: 0 } });
 
-    if (!res.ok) {
-      return NextResponse.json(
-        { success: false, error: "Failed to fetch research tasks" },
-        { status: res.status }
-      );
+    let allTasks: NudgeTask[] = [];
+
+    if (labRes.ok) {
+      const labData = await labRes.json();
+      allTasks = (labData.tasks || []) as NudgeTask[];
     }
 
-    const data = await res.json();
-    const allTasks: NudgeTask[] = data.tasks || [];
+    // Fallback: if no lab-specific tasks, fetch all tasks from the engine.
+    // Research tasks created via cron/goals don't have lab_id but are still
+    // relevant to the primary research lab.
+    if (allTasks.length === 0) {
+      const globalUrl = `${NUDGE_ENGINE_URL}/tasks?limit=50`;
+      const globalRes = await fetch(globalUrl, {
+        headers,
+        next: { revalidate: 0 },
+      });
+
+      if (globalRes.ok) {
+        const globalData = await globalRes.json();
+        allTasks = (globalData.tasks || []) as NudgeTask[];
+      }
+    }
+
+    // Filter out infrastructure noise (health checks, failure investigations)
+    allTasks = allTasks.filter(isResearchTask);
 
     // Separate parent tasks and leaf tasks
     const parentIds = new Set(
@@ -117,10 +146,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Show leaf tasks only (filter out parents that have children)
     const leafTasks = allTasks.filter((t) => !parentIds.has(t.id));
 
+    // Find latest activity timestamp
+    const latestActivity = allTasks.reduce((latest, t) => {
+      const ts = t.completed_at || t.assigned_at || t.created_at;
+      return ts > latest ? ts : latest;
+    }, "");
+
     return NextResponse.json({
       success: true,
       tasks: leafTasks.map(mapTask),
       total: leafTasks.length,
+      latestActivity: latestActivity || undefined,
     });
   } catch (error) {
     console.error("Failed to fetch research tasks:", error);
