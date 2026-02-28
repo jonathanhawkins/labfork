@@ -21,6 +21,7 @@ import {
   Activity,
   FileText,
   Eye,
+  Clock,
   Settings,
   MoreHorizontal,
   ExternalLink,
@@ -437,6 +438,17 @@ export function LabHeader({
                   <span className="text-foreground-muted">watching</span>
                 </div>
               )}
+            </>
+          )}
+
+          {/* Last updated — subtle trailing detail */}
+          {lab.updatedAt && (
+            <>
+              <span className="text-foreground-subtle hidden sm:inline">·</span>
+              <span className="flex items-center gap-1.5 text-xs text-foreground-subtle">
+                <Clock className="w-3 h-3" />
+                Updated {new Date(lab.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
             </>
           )}
         </div>

@@ -11,6 +11,7 @@ import {
   animateMOFHarvester,
   disposeMOFHarvester,
   updateParticlesFromGPU,
+  updateMirrorCount,
   MOFHarvesterProps,
   MOFHarvesterRefs,
 } from "./lab/props/domains/MOFWaterHarvester3D";
@@ -19,6 +20,7 @@ import { useWarpParticles } from "@/lib/simulations/use-warp-particles";
 interface MOFHarvesterSceneProps {
   // Design parameters
   humidity: number;
+  mirrorCount?: number;       // Number of solar concentrator mirrors (2-8), default 4
 
   // Simulation results
   dailyYield?: number;
@@ -30,6 +32,7 @@ interface MOFHarvesterSceneProps {
 
 export default function MOFHarvesterScene({
   humidity,
+  mirrorCount = 4,
   dailyYield,
   sorbentTemp,
   className = "",
@@ -41,7 +44,7 @@ export default function MOFHarvesterScene({
   const controlsRef = useRef<OrbitControls | null>(null);
   const animationRef = useRef<number>(0);
   const harvesterRef = useRef<MOFHarvesterRefs | null>(null);
-  const timeRef = useRef(0);
+  const timeRef = useRef(30); // Start at ~noon (0.5 * 60s cycle)
 
   // Time of day cycles automatically (0-1)
   const [timeOfDay, setTimeOfDay] = useState(0.5); // Start at noon
@@ -51,6 +54,7 @@ export default function MOFHarvesterScene({
     domeRadius: 60,
     sorbentMass: 1,
     humidity,
+    mirrorCount,
     timeOfDay,
     dailyYield,
     sorbentTemp,
@@ -80,11 +84,19 @@ export default function MOFHarvesterScene({
       domeRadius: 60,
       sorbentMass: 1,
       humidity,
+      mirrorCount,
       timeOfDay,
       dailyYield,
       sorbentTemp,
     };
-  }, [humidity, timeOfDay, dailyYield, sorbentTemp]);
+  }, [humidity, mirrorCount, timeOfDay, dailyYield, sorbentTemp]);
+
+  // Hot-swap mirrors when mirror count changes
+  useEffect(() => {
+    if (harvesterRef.current) {
+      updateMirrorCount(harvesterRef.current, mirrorCount);
+    }
+  }, [mirrorCount]);
 
   // Handle resize
   const handleResize = useCallback(() => {
@@ -111,10 +123,10 @@ export default function MOFHarvesterScene({
     scene.background = new THREE.Color(0x1a1a2e);
     sceneRef.current = scene;
 
-    // Camera
+    // Camera - pulled back to show mirrors around dome
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
-    camera.position.set(1.5, 0.8, 1.5);
-    camera.lookAt(0, 0, 0);
+    camera.position.set(2.0, 1.0, 2.0);
+    camera.lookAt(0, -0.1, 0);
     cameraRef.current = camera;
 
     // Renderer
@@ -125,6 +137,8 @@ export default function MOFHarvesterScene({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -132,9 +146,9 @@ export default function MOFHarvesterScene({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 1;
-    controls.maxDistance = 5;
-    controls.target.set(0, 0, 0);
+    controls.minDistance = 1.5;
+    controls.maxDistance = 6;
+    controls.target.set(0, -0.1, 0);
     controlsRef.current = controls;
 
     // Create harvester
@@ -144,6 +158,8 @@ export default function MOFHarvesterScene({
     // Add lights to scene
     scene.add(harvester.environment.sun);
     scene.add(harvester.environment.ambient);
+    scene.add(harvester.environment.hemisphere);
+    scene.add(harvester.environment.fill);
 
     harvesterRef.current = harvester;
 
@@ -203,7 +219,7 @@ export default function MOFHarvesterScene({
         adsorbing: "NIGHT: Adsorbing moisture from air",
         heating: "DAWN: Heating sorbent with sunlight",
         releasing: "DAY: Releasing water vapor",
-        condensing: "DAY: Condensing on dome walls",
+        condensing: "DAY: Condensing in dish",
         dripping: "DAY: Water dripping to collector",
       };
       return phaseLabels[gpuParticles.phase] || `Phase: ${gpuParticles.phase}`;
@@ -214,7 +230,7 @@ export default function MOFHarvesterScene({
     if (isNight) return "NIGHT: Adsorbing moisture";
     if (timeOfDay < 0.35) return "DAWN: Heating sorbent";
     if (timeOfDay < 0.5) return "MORNING: Releasing vapor";
-    if (timeOfDay < 0.65) return "NOON: Condensing on dome";
+    if (timeOfDay < 0.65) return "NOON: Condensing in dish";
     return "AFTERNOON: Collecting water";
   };
 
@@ -279,11 +295,15 @@ export default function MOFHarvesterScene({
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-cyan-400" />
-          <span>Condensation (on dome)</span>
+          <span>Condensation (on dish)</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-blue-500" />
           <span>Water Droplets (falling)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-slate-300" />
+          <span>Solar Mirrors (concentrating)</span>
         </div>
       </div>
 

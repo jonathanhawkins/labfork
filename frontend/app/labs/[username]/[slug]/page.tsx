@@ -16,14 +16,11 @@ import { useAuth } from "@/lib/auth/hooks";
 import { cn } from "@/lib/utils";
 import {
   Activity,
-  Clock,
   FileText,
   GitFork,
   ListTodo,
   Loader2,
-  MessageSquare,
   Settings,
-  Terminal,
   Lightbulb,
 } from "lucide-react";
 import { LabHeader } from "@/components/labs/LabHeader";
@@ -33,6 +30,7 @@ import { FireflyLabContent } from "@/components/labs/FireflyLabContent";
 import { LiveLabViewer } from "@/components/labs/LiveLabViewer";
 import { ActivityFeed } from "@/components/social/ActivityFeed";
 import { LabDemosSection } from "@/components/demos";
+import { LabShowcase } from "@/components/labs/LabShowcase";
 import type { Lab } from "@/lib/labs/types";
 import {
   CheckCircle2,
@@ -239,15 +237,9 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
         </div>
         {/* Content skeleton */}
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="h-[200px] sm:h-[280px] lg:h-[400px] rounded-lg bg-foreground-muted/10 animate-pulse" />
-              <div className="h-32 rounded-lg bg-foreground-muted/10 animate-pulse" />
-            </div>
-            <div className="space-y-6">
-              <div className="h-24 rounded-lg bg-foreground-muted/10 animate-pulse" />
-              <div className="h-16 rounded-lg bg-foreground-muted/10 animate-pulse" />
-            </div>
+          <div className="space-y-6">
+            <div className="h-[200px] sm:h-[280px] lg:h-[400px] rounded-lg bg-foreground-muted/10 animate-pulse" />
+            <div className="h-32 rounded-lg bg-foreground-muted/10 animate-pulse" />
           </div>
         </div>
       </div>
@@ -274,7 +266,13 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
   }
 
   const isIdea = lab.status === "idea";
-  const allStatsZero = lab.stats.stars === 0 && lab.stats.forks === 0 && lab.stats.tasks === 0 && lab.stats.papers === 0 && lab.stats.experiments === 0;
+
+  // Sidebar only renders when it has genuinely unique content that isn't
+  // already shown elsewhere (header stats row, Research Progress, etc.).
+  // Stats-only sidebar is redundant — those numbers appear in the header.
+  const hasSidebarContent =
+    !!lab.forkedFrom ||
+    lab.domainSlug === "firefly-network";
 
   // Tab content
   const tabs: { id: TabId; label: string; icon: typeof Activity }[] = [
@@ -364,9 +362,18 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
             )}
 
             {/* Standard lab content */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+            <div className={cn(
+              "grid grid-cols-1 gap-6",
+              hasSidebarContent && "lg:grid-cols-3 lg:gap-8"
+            )}>
               {/* Main content */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className={cn(
+                "space-y-6",
+                hasSidebarContent ? "lg:col-span-2" : "lg:col-span-full"
+              )}>
+                {/* Interactive Showcase — domain-specific simulator/demo */}
+                <LabShowcase lab={lab} />
+
                 {/* Research Demos — primary content above the 3D viewer */}
                 <LabDemosSection labSlug={lab.slug} />
 
@@ -472,83 +479,40 @@ export default function LabPortalPage({ params }: LabPortalPageProps) {
                 )}
               </div>
 
-              {/* Sidebar */}
-              <div className="space-y-6">
-                {/* Quick Stats */}
-                {!allStatsZero && (
-                  <div className="p-4 rounded-lg border border-border">
-                    <h3 className="text-sm font-medium text-foreground-bright mb-3">Stats</h3>
-                    <div className="space-y-3">
-                      {lab.stats.tasks > 0 && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-foreground-muted">Tasks</span>
-                          <span className="text-foreground">{lab.stats.tasks}</span>
-                        </div>
-                      )}
-                      {lab.stats.papers > 0 && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-foreground-muted">Papers</span>
-                          <span className="text-foreground">{lab.stats.papers}</span>
-                        </div>
-                      )}
-                      {lab.stats.experiments > 0 && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-foreground-muted">Experiments</span>
-                          <span className="text-foreground">{lab.stats.experiments}</span>
-                        </div>
-                      )}
-                      {lab.stats.viewers > 0 && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-foreground-muted">Viewers</span>
-                          <span className="text-green-400">{lab.stats.viewers} watching</span>
-                        </div>
-                      )}
+              {/* Sidebar — only rendered for forked labs or domain-specific info */}
+              {hasSidebarContent && (
+                <div className="space-y-6">
+                  {/* Forked from */}
+                  {lab.forkedFrom && (
+                    <div className="p-4 rounded-lg border border-border">
+                      <h3 className="text-sm font-medium text-foreground-bright mb-3">Forked from</h3>
+                      <a
+                        href={`/labs/${lab.forkedFrom.sourceOwner}/${lab.forkedFrom.sourceSlug}`}
+                        className="flex items-center gap-2 text-sm text-foreground-muted hover:text-foreground transition-colors"
+                      >
+                        <GitFork className="w-4 h-4" />
+                        {lab.forkedFrom.sourceOwner}/{lab.forkedFrom.sourceSlug}
+                      </a>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Activity Summary */}
-                <div className="p-4 rounded-lg border border-border">
-                  <h3 className="text-sm font-medium text-foreground-bright mb-3">Activity</h3>
-                  <div className="flex items-center gap-2 text-sm text-foreground-muted">
-                    <Clock className="w-4 h-4" />
-                    <span>
-                      Last updated{" "}
-                      {new Date(lab.lastActivityAt).toLocaleDateString()}
-                    </span>
-                  </div>
+                  {/* Domain-specific info for Firefly */}
+                  {lab.domainSlug === "firefly-network" && (
+                    <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/5">
+                      <h3 className="text-sm font-medium text-amber-400 mb-3">Firefly Network</h3>
+                      <p className="text-xs text-foreground-muted mb-3">
+                        This lab is part of the Firefly Network project, bringing solar-powered mesh lights to 1 billion people.
+                      </p>
+                      <a
+                        href="/projects/firefly-network"
+                        className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        Learn more about the project
+                      </a>
+                    </div>
+                  )}
                 </div>
-
-                {/* Forked from */}
-                {lab.forkedFrom && (
-                  <div className="p-4 rounded-lg border border-border">
-                    <h3 className="text-sm font-medium text-foreground-bright mb-3">Forked from</h3>
-                    <a
-                      href={`/labs/${lab.forkedFrom.sourceOwner}/${lab.forkedFrom.sourceSlug}`}
-                      className="flex items-center gap-2 text-sm text-foreground-muted hover:text-foreground transition-colors"
-                    >
-                      <GitFork className="w-4 h-4" />
-                      {lab.forkedFrom.sourceOwner}/{lab.forkedFrom.sourceSlug}
-                    </a>
-                  </div>
-                )}
-
-                {/* Domain-specific info for Firefly */}
-                {lab.domainSlug === "firefly-network" && (
-                  <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/5">
-                    <h3 className="text-sm font-medium text-amber-400 mb-3">Firefly Network</h3>
-                    <p className="text-xs text-foreground-muted mb-3">
-                      This lab is part of the Firefly Network project, bringing solar-powered mesh lights to 1 billion people.
-                    </p>
-                    <a
-                      href="/projects/firefly-network"
-                      className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
-                    >
-                      Learn more about the project
-                    </a>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
         )}

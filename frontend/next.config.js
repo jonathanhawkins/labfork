@@ -5,6 +5,11 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Include .data/*.json in serverless function bundles so fs.readFile
+  // can access seed data (labs, activities, etc.) at runtime on Vercel.
+  outputFileTracingIncludes: {
+    '/api/**': ['./.data/**/*.json'],
+  },
   async rewrites() {
     return [
       // Proxy compute network API to Workers backend

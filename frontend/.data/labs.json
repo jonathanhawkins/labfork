@@ -90,7 +90,7 @@
       "papers": 0,
       "experiments": 0,
       "viewers": 0,
-      "views": 11
+      "views": 15
     },
     "tags": [
       "tts",
@@ -100,7 +100,7 @@
     ],
     "primaryColor": "#3b82f6",
     "createdAt": "2026-02-23T00:00:00.000Z",
-    "updatedAt": "2026-02-27T10:41:38.430Z",
+    "updatedAt": "2026-02-28T00:29:16.459Z",
     "lastActivityAt": "2026-02-23T00:00:00.000Z"
   },
   {
@@ -124,7 +124,8 @@
       "tasks": 0,
       "papers": 0,
       "experiments": 0,
-      "viewers": 0
+      "viewers": 0,
+      "views": 1
     },
     "tags": [
       "zero-shot",
@@ -133,7 +134,7 @@
     ],
     "primaryColor": "#3b82f6",
     "createdAt": "2026-02-23T00:00:00.000Z",
-    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-28T00:29:06.185Z",
     "lastActivityAt": "2026-02-23T00:00:00.000Z"
   },
   {
@@ -157,7 +158,8 @@
       "tasks": 0,
       "papers": 0,
       "experiments": 0,
-      "viewers": 0
+      "viewers": 0,
+      "views": 49
     },
     "tags": [
       "water",
@@ -169,7 +171,7 @@
     ],
     "primaryColor": "#06b6d4",
     "createdAt": "2026-02-23T00:00:00.000Z",
-    "updatedAt": "2026-02-23T00:00:00.000Z",
+    "updatedAt": "2026-02-28T00:32:04.454Z",
     "lastActivityAt": "2026-02-23T00:00:00.000Z"
   },
   {
