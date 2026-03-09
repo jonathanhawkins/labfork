@@ -45,7 +45,8 @@
     "forkLab": "Bifurcar un Laboratorio",
     "inSeconds": "en 60 segundos",
     "explorePublicLabs": "Explorar Laboratorios Publicos",
-    "contributeGPU": "O contribuye el poder GPU de tu dispositivo"
+    "contributeGPU": "O contribuye el poder GPU de tu dispositivo",
+    "sponsorOnGitHub": "Patrocinar en GitHub"
   },
   "howItWorks": {
     "title": "Como Funciona",
@@ -118,6 +119,7 @@
     "github": "GitHub",
     "twitter": "Twitter",
     "newsletter": "Boletin",
+    "sponsor": "Patrocinar",
     "company": "Compania",
     "about": "Acerca de",
     "contact": "Contacto",

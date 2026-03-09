@@ -47,6 +47,7 @@ const footerSections: FooterSection[] = [
       { labelKey: "github", href: "https://github.com/jonathanhawkins/labfork" },
       { labelKey: "twitter", href: "https://twitter.com/labfork" },
       { labelKey: "newsletter", href: "/newsletter" },
+      { labelKey: "sponsor", href: "https://github.com/sponsors/jonathanhawkins" },
     ],
   },
   {

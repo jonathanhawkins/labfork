@@ -45,7 +45,8 @@
     "forkLab": "انسخ مختبرا",
     "inSeconds": "في 60 ثانية",
     "explorePublicLabs": "استكشف المختبرات العامة",
-    "contributeGPU": "او ساهم بقوة GPU لجهازك"
+    "contributeGPU": "او ساهم بقوة GPU لجهازك",
+    "sponsorOnGitHub": "ادعم على GitHub"
   },
   "howItWorks": {
     "title": "كيف يعمل",
@@ -118,6 +119,7 @@
     "github": "GitHub",
     "twitter": "Twitter",
     "newsletter": "النشرة الإخبارية",
+    "sponsor": "ادعم",
     "company": "الشركة",
     "about": "حول",
     "contact": "اتصل",

@@ -45,7 +45,8 @@
     "forkLab": "分叉实验室",
     "inSeconds": "60秒内",
     "explorePublicLabs": "探索公共实验室",
-    "contributeGPU": "或贡献您设备的GPU算力"
+    "contributeGPU": "或贡献您设备的GPU算力",
+    "sponsorOnGitHub": "在GitHub上赞助"
   },
   "howItWorks": {
     "title": "工作原理",
@@ -118,6 +119,7 @@
     "github": "GitHub",
     "twitter": "Twitter",
     "newsletter": "通讯",
+    "sponsor": "赞助",
     "company": "公司",
     "about": "关于",
     "contact": "联系",

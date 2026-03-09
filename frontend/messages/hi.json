@@ -45,7 +45,8 @@
     "forkLab": "Lab Fork Karein",
     "inSeconds": "60 seconds mein",
     "explorePublicLabs": "Public Labs Explore Karein",
-    "contributeGPU": "Ya apne device ki GPU power contribute karein"
+    "contributeGPU": "Ya apne device ki GPU power contribute karein",
+    "sponsorOnGitHub": "GitHub par sponsor karein"
   },
   "howItWorks": {
     "title": "Yeh Kaise Kaam Karta Hai",
@@ -118,6 +119,7 @@
     "github": "GitHub",
     "twitter": "Twitter",
     "newsletter": "Newsletter",
+    "sponsor": "Sponsor",
     "company": "Company",
     "about": "About",
     "contact": "Contact",

@@ -45,7 +45,8 @@
     "forkLab": "Fork a Lab",
     "inSeconds": "in 60 seconds",
     "explorePublicLabs": "Explore Public Labs",
-    "contributeGPU": "Or contribute your device's GPU power"
+    "contributeGPU": "Or contribute your device's GPU power",
+    "sponsorOnGitHub": "Sponsor on GitHub"
   },
   "howItWorks": {
     "title": "How It Works",
@@ -118,6 +119,7 @@
     "github": "GitHub",
     "twitter": "Twitter",
     "newsletter": "Newsletter",
+    "sponsor": "Sponsor",
     "company": "Company",
     "about": "About",
     "contact": "Contact",
