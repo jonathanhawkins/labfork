@@ -17,25 +17,25 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "LabFork - Open Platform for AI Research",
-  description: "Fork research labs, watch AI agents implement papers, discover synergies across domains. The open platform for collective AI research.",
-  icons: {
-    icon: [
-      {
-        url: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%233b82f6'/><stop offset='100%25' stop-color='%238b5cf6'/></linearGradient></defs><rect fill='url(%23g)' rx='20' width='100' height='100'/><path d='M50 20 L50 45 M35 55 L50 45 L65 55 M35 55 L35 75 M65 55 L65 75' stroke='white' stroke-width='8' stroke-linecap='round' fill='none'/><circle cx='35' cy='78' r='6' fill='white'/><circle cx='65' cy='78' r='6' fill='white'/></svg>",
-        type: "image/svg+xml",
-      },
-    ],
-  },
+  description:
+    "Fork research labs, watch AI agents implement papers, discover synergies across domains. The open platform for collective AI research.",
+  metadataBase: new URL("https://labfork.com"),
   openGraph: {
     title: "LabFork - Open Platform for AI Research",
-    description: "Fork research labs, watch AI agents implement papers, discover synergies across domains.",
+    description:
+      "Fork research labs, watch AI agents implement papers, discover synergies across domains.",
     siteName: "LabFork",
     url: "https://labfork.com",
+    type: "website",
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
     title: "LabFork - Open Platform for AI Research",
-    description: "Fork research labs, watch AI agents implement papers, discover synergies across domains.",
+    description:
+      "Fork research labs, watch AI agents implement papers, discover synergies across domains.",
+    site: "@labfork",
+    creator: "@labfork",
   },
 };
 

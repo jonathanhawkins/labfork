@@ -219,7 +219,7 @@ export async function GET(
             fontSize: "16px",
           }}
         >
-          voiceclone.lab
+          labfork.com
         </div>
       </div>
     ),
