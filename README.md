@@ -126,6 +126,10 @@ We welcome contributions! Please see:
 - Issues for current tasks
 - PRs welcome for bug fixes and new domains
 
+## Support This Project
+
+If LabFork is useful to you, consider [sponsoring the project on GitHub](https://github.com/sponsors/jonathanhawkins). Your support helps keep this open source and actively maintained.
+
 ## License
 
 MIT License
